@@ -1,0 +1,11 @@
+# secrets / local config
+.env
+.env.*
+.nebius_api_key
+.token_factory_api_key
+
+# run outputs
+out/
+*.egg-info/
+.pytest_cache/
+__pycache__/

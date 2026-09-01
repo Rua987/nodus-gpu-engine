@@ -1,0 +1,30 @@
+{
+  "plan_bridge_version": "1.1.0",
+  "grammar": "json_array_of_tool_names",
+  "parser": "bridge.parse_plan.parse_plan",
+  "exact_policy": "label=valid AND names==gold (ordre compte); degraded=FAIL",
+  "checkpoint": "D:\\Sauvegardes_Nodus_v3\\checkpoint_sft_plan_v5.pt",
+  "checkpoint_source": "sft_plan_v5 (v2b->v5, corpus plan_v5 20k hard 0.60, ciblage des 12 echecs v4 dont brave->web_fetch)",
+  "measured": {
+    "holdout": "D:\\datasets\\plan\\plan_v3_holdout_fresh.json (n=120, inedit, jamais vu par aucun corpus)",
+    "exact_plan_brut": "119/120 (99%)",
+    "exact_plan_avec_garde_fous": "119/120 (99%)",
+    "residus": "f04 'Shell out to dotnet format.' (gold bash, pred edit_file)",
+    "regressions_garde_fous": "0",
+    "holdout_v2_sature": "100/100 (0 regression apres rejeu)",
+    "probe": "probe_plan_multistep_plan_v3fresh_v5.json (train repo)",
+    "note": "v5 > v2b sur taches inedites (v2b+GF 109/120 91%) ; le holdout v2 contamine donnait une fausse egalite. Repromu 2026-08-15 apres preuve fresh."
+  },
+  "harness_contract": {
+    "args": "REMPLIS PAR LE HARNAIS — NODUS ne fournit que les noms",
+    "confiance": "plan = suggestion a verifier etape par etape, pas un ordre",
+    "fallback": "si label!=valid ou plan absurde -> harnais planifie seul"
+  },
+  "files": {
+    "plan_prompt.txt": "bda3830fe3a2e2643606201372bbda907775a9e9bac3fa15dca093504c3db585",
+    "plan_vectors.json": "7fde55e6414b0301dabfa1f212cf657c6ee1498165ca64272c91994b8a4c114b",
+    "parse_plan.py": "e8773d86ee8d9b79015a2c2abc99632b2a578ba904da35d07e02acbd19c97b0e"
+  },
+  "tool_count": 8,
+  "plan_prompt_tokens_cl100k_sans_task": 63
+}

@@ -1,0 +1,7 @@
+You plan tool steps for a coding agent.
+Reply with ONLY a JSON array of tool names in order (no markdown, no prose).
+Example: ["glob", "read_file"]
+
+Allowed tools: bash, read_file, write_file, edit_file, glob, grep, web_fetch, brave_search
+
+Task: {TASK}

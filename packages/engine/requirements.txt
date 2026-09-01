@@ -1,0 +1,7 @@
+# Nodus-GPU Engine - noyau (chemin mock, CI-friendly, sans reseau)
+requests>=2.31
+pytest>=7.4
+
+# Extras optionnels (chemin live) - installer a la main si besoin :
+#   pip install torch            # planificateur local 324M (packages/nodus)
+#   pip install mcp              # si integration MCP native cote client

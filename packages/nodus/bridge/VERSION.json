@@ -1,0 +1,14 @@
+{
+  "bridge_version": "1.0.0",
+  "grammar": "json_tool_call_text_tools",
+  "parser": "nodus_agent._parse_text_tool_calls",
+  "exact_policy": "parse_ok+strict_object_args+name+required_args; degraded_command_fallback=FAIL",
+  "files": {
+    "tool_schemas.json": "76c5ad75ccc9e4a609205f7dc713df465008c1b29e75a9963cdb4bf85173f344",
+    "mini_prompt.txt": "2310ae6f7463275ee2d83de768d6256d548805b8fadb2e0fbe2bbca0ea954462",
+    "parse_vectors.json": "a5ba5eef468ae4bde050000b59b3b92c1f2672dd99f8f74262d20a1ef8eb8892",
+    "parse_check.py": "8c3ffd3a78e3d7b59400bf3ed22975c3d66ab7b8ac55af500846c7ff23f9d25c"
+  },
+  "tool_count": 8,
+  "mini_prompt_note": "placeholder {TASK}; measure tokens with tiktoken cl100k; budget <=150 without task"
+}

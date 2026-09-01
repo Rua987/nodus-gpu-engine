@@ -1,0 +1,8 @@
+{
+  "name": "fleet_test_triage",
+  "task": "Run the failing pytest suite across the GPU fleet, triage the failures, propose fixes, and deliver a consolidated Markdown report.",
+  "shards": 3,
+  "gpu_type": "H100",
+  "target": "packages/nodus/tests",
+  "collect": ["report.md"]
+}

@@ -1,0 +1,5 @@
+# Minimal deps for NODUS red-team CI (no torch / MCP).
+pytest>=7.4
+requests>=2.31
+numpy>=1.24
+Pillow>=10.0

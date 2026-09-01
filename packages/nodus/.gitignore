@@ -1,0 +1,56 @@
+# NODUS Memory (données utilisateur - ne pas commiter)
+NODUS_MEMORY.json
+test_memory_nodus.json
+backups/*.json
+
+# NODUS runtime artifacts (mémoire persistante + leçons + playbook)
+.nodus_memory.md
+.nodus_lessons.md
+.nodus_playbook.md
+
+# Clés API — JAMAIS commiter (Commandement #11)
+.brave_api_key
+.deepseek_api_key
+.anthropic_api_key
+*_api_key
+
+# Secrets/env
+.env
+.env.*
+*.env
+!*.env.example
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.cache/
+
+# Logs
+*.log
+logs/
+
+# P0 usage scratch (ne pas commiter)
+_p0_scratch/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test outputs
+test_output/
+*.tmp
+
+# Telemetry artifacts (Grafana JSONL — runtime output, never committed)
+*.jsonl
+
+# Checkpoints (trop lourds pour git — download depuis release/README)
+checkpoints/

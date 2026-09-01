@@ -1,0 +1,43 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# --- secrets / local config ---
+.env
+.env.*
+*.nebius_api_key
+.nebius_api_key
+.token_factory_api_key
+packages/engine/.env
+packages/engine/.env.*
+
+# --- run outputs ---
+packages/engine/out/
+*.log
+*.tmp
+
+# --- models / checkpoints (not committed) ---
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+*.onnx
+*.gguf
+
+# --- OS / editors ---
+.DS_Store
+Thumbs.db
+*.swp

@@ -1,0 +1,80 @@
+[
+  {
+    "id": "valid_simple",
+    "text": "[\"glob\", \"read_file\"]",
+    "expect_label": "valid",
+    "gold": ["glob", "read_file"],
+    "expect_exact": true
+  },
+  {
+    "id": "valid_compact",
+    "text": "[\"bash\"]",
+    "expect_label": "valid",
+    "gold": ["bash"],
+    "expect_exact": true
+  },
+  {
+    "id": "valid_three_steps",
+    "text": "[\"grep\",\"read_file\",\"edit_file\"]",
+    "expect_label": "valid",
+    "gold": ["grep", "read_file", "edit_file"],
+    "expect_exact": true
+  },
+  {
+    "id": "valid_with_whitespace",
+    "text": "  [ \"brave_search\" , \"web_fetch\" ]  ",
+    "expect_label": "valid",
+    "gold": ["brave_search", "web_fetch"],
+    "expect_exact": true
+  },
+  {
+    "id": "valid_wrong_order",
+    "text": "[\"read_file\", \"glob\"]",
+    "expect_label": "valid",
+    "gold": ["glob", "read_file"],
+    "expect_exact": false
+  },
+  {
+    "id": "valid_wrapped_in_prose",
+    "text": "Here is the plan: [\"write_file\", \"bash\"] hope it helps",
+    "expect_label": "valid",
+    "gold": ["write_file", "bash"],
+    "expect_exact": true
+  },
+  {
+    "id": "degraded_unknown_name",
+    "text": "[\"glob\", \"open_file\"]",
+    "expect_label": "degraded",
+    "gold": ["glob", "read_file"],
+    "expect_exact": false
+  },
+  {
+    "id": "degraded_broken_json_names_recoverable",
+    "text": "{\": \"write_file\", \"read_file\", \"read_file\"",
+    "expect_label": "degraded",
+    "gold": ["write_file", "read_file"],
+    "expect_exact": false
+  },
+  {
+    "id": "degraded_names_in_prose",
+    "text": "First glob then read_file should work",
+    "expect_label": "degraded",
+    "gold": ["glob", "read_file"],
+    "expect_exact": false
+  },
+  {
+    "id": "invalid_empty",
+    "text": "",
+    "expect_label": "invalid"
+  },
+  {
+    "id": "invalid_babble",
+    "text": "Let's go to the store and see what is inside the store.",
+    "expect_label": "invalid"
+  },
+  {
+    "id": "invalid_empty_array",
+    "text": "[]",
+    "expect_label": "invalid"
+  }
+]

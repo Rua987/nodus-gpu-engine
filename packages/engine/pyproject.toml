@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nodus-gpu-engine"
+version = "0.1.0"
+description = "Nodus-GPU Engine - agentic engineering platform: Nodus plans, Nemotron decides, GPU fleet + Token Factory sandboxes execute on Nebius."
+requires-python = ">=3.10"
+dependencies = ["requests>=2.31"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+nge-demo = "nge.demo_nebius:main"
+
+[tool.setuptools]
+packages = ["nge", "nge.backends", "nge.sandbox", "nge.fleet", "nge.tools"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

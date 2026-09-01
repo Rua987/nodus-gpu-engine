@@ -1,0 +1,163 @@
+[
+  {
+    "id": "v01_canonical_read",
+    "expect_label": "valid",
+    "expect_exact": true,
+    "gold_name": "read_file",
+    "gold_args": {"file_path": "C:\\Users\\admin\\nodus_sandbox\\a.py"},
+    "text": "{\"tool_call\": {\"name\": \"read_file\", \"arguments\": {\"file_path\": \"C:\\\\Users\\\\admin\\\\nodus_sandbox\\\\a.py\"}}}"
+  },
+  {
+    "id": "v02_canonical_bash",
+    "expect_label": "valid",
+    "expect_exact": true,
+    "gold_name": "bash",
+    "gold_args": {"command": "python -m pytest -q"},
+    "text": "{\"tool_call\": {\"name\": \"bash\", \"arguments\": {\"command\": \"python -m pytest -q\"}}}"
+  },
+  {
+    "id": "v03_canonical_write",
+    "expect_label": "valid",
+    "expect_exact": true,
+    "gold_name": "write_file",
+    "gold_args": {"file_path": "C:\\tmp\\x.txt", "content": "ok"},
+    "text": "{\"tool_call\": {\"name\": \"write_file\", \"arguments\": {\"file_path\": \"C:\\\\tmp\\\\x.txt\", \"content\": \"ok\"}}}"
+  },
+  {
+    "id": "v04_canonical_glob",
+    "expect_label": "valid",
+    "expect_exact": true,
+    "gold_name": "glob",
+    "gold_args": {"pattern": "**/*.py"},
+    "text": "{\"tool_call\": {\"name\": \"glob\", \"arguments\": {\"pattern\": \"**/*.py\"}}}"
+  },
+  {
+    "id": "v05_canonical_grep",
+    "expect_label": "valid",
+    "expect_exact": true,
+    "gold_name": "grep",
+    "gold_args": {"pattern": "def main"},
+    "text": "{\"tool_call\": {\"name\": \"grep\", \"arguments\": {\"pattern\": \"def main\"}}}"
+  },
+  {
+    "id": "v06_canonical_edit",
+    "expect_label": "valid",
+    "expect_exact": true,
+    "gold_name": "edit_file",
+    "gold_args": {"file_path": "C:\\a.py", "old_string": "foo", "new_string": "bar"},
+    "text": "{\"tool_call\": {\"name\": \"edit_file\", \"arguments\": {\"file_path\": \"C:\\\\a.py\", \"old_string\": \"foo\", \"new_string\": \"bar\"}}}"
+  },
+  {
+    "id": "v07_canonical_web_fetch",
+    "expect_label": "valid",
+    "expect_exact": true,
+    "gold_name": "web_fetch",
+    "gold_args": {"url": "https://example.com"},
+    "text": "{\"tool_call\": {\"name\": \"web_fetch\", \"arguments\": {\"url\": \"https://example.com\"}}}"
+  },
+  {
+    "id": "v08_canonical_brave",
+    "expect_label": "valid",
+    "expect_exact": true,
+    "gold_name": "brave_search",
+    "gold_args": {"query": "python pytest"},
+    "text": "{\"tool_call\": {\"name\": \"brave_search\", \"arguments\": {\"query\": \"python pytest\"}}}"
+  },
+  {
+    "id": "v09_args_as_json_string",
+    "expect_label": "valid",
+    "expect_exact": true,
+    "gold_name": "bash",
+    "gold_args": {"command": "echo hi"},
+    "text": "{\"tool_call\": {\"name\": \"bash\", \"arguments\": \"{\\\"command\\\": \\\"echo hi\\\"}\"}}"
+  },
+  {
+    "id": "v10_flat_name_form",
+    "expect_label": "valid",
+    "expect_exact": true,
+    "gold_name": "read_file",
+    "gold_args": {"file_path": "C:\\x.py"},
+    "text": "{\"name\": \"read_file\", \"arguments\": {\"file_path\": \"C:\\\\x.py\"}}"
+  },
+  {
+    "id": "d01_degraded_command_fallback",
+    "expect_label": "degraded",
+    "expect_exact": false,
+    "gold_name": "bash",
+    "gold_args": {"command": "python -m pytest"},
+    "text": "{\"tool_call\": {\"name\": \"bash\", \"arguments\": \"python -m pytest\"}}"
+  },
+  {
+    "id": "d02_degraded_with_prose_still_extracts",
+    "expect_label": "degraded",
+    "expect_exact": false,
+    "gold_name": "bash",
+    "gold_args": {"command": "ls"},
+    "text": "Sure, I will run it:\\n{\"tool_call\": {\"name\": \"bash\", \"arguments\": \"ls\"}}"
+  },
+  {
+    "id": "i01_empty",
+    "expect_label": "invalid",
+    "text": ""
+  },
+  {
+    "id": "i02_prose_only",
+    "expect_label": "invalid",
+    "text": "I will read the file now."
+  },
+  {
+    "id": "i03_broken_json",
+    "expect_label": "invalid",
+    "text": "{\"tool_call\": {\"name\": \"read_file\", \"arguments\": {\"file_path\": "
+  },
+  {
+    "id": "i04_missing_name",
+    "expect_label": "invalid",
+    "text": "{\"tool_call\": {\"arguments\": {\"file_path\": \"C:\\\\a.py\"}}}"
+  },
+  {
+    "id": "i05_markdown_fence_only_partial",
+    "expect_label": "invalid",
+    "text": "```json\\nnot json\\n```"
+  },
+  {
+    "id": "i06_wrong_tool_vs_gold",
+    "expect_label": "valid",
+    "expect_exact": false,
+    "gold_name": "read_file",
+    "gold_args": {"file_path": "C:\\a.py"},
+    "text": "{\"tool_call\": {\"name\": \"bash\", \"arguments\": {\"command\": \"type a.py\"}}}"
+  },
+  {
+    "id": "i07_missing_required_arg",
+    "expect_label": "valid",
+    "expect_exact": false,
+    "gold_name": "write_file",
+    "gold_args": {"file_path": "C:\\a.txt", "content": "x"},
+    "text": "{\"tool_call\": {\"name\": \"write_file\", \"arguments\": {\"file_path\": \"C:\\\\a.txt\"}}}"
+  },
+  {
+    "id": "i08_arg_value_mismatch",
+    "expect_label": "valid",
+    "expect_exact": false,
+    "gold_name": "glob",
+    "gold_args": {"pattern": "**/*.py"},
+    "text": "{\"tool_call\": {\"name\": \"glob\", \"arguments\": {\"pattern\": \"*.txt\"}}}"
+  },
+  {
+    "id": "v11_parameters_alias",
+    "expect_label": "valid",
+    "expect_exact": true,
+    "gold_name": "bash",
+    "gold_args": {"command": "echo ok"},
+    "text": "{\"tool_call\": {\"name\": \"bash\", \"parameters\": {\"command\": \"echo ok\"}}}"
+  },
+  {
+    "id": "v12_extra_optional_ok",
+    "expect_label": "valid",
+    "expect_exact": true,
+    "gold_name": "bash",
+    "gold_args": {"command": "echo ok"},
+    "text": "{\"tool_call\": {\"name\": \"bash\", \"arguments\": {\"command\": \"echo ok\", \"timeout\": 30}}}"
+  }
+]

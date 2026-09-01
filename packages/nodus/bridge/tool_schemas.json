@@ -1,0 +1,195 @@
+[
+  {
+    "name": "bash",
+    "description": "Executes a shell command (PowerShell 5.x on Windows) and returns its output. Prefer read_file/edit_file/glob/grep for file operations. On Windows: NEVER use '&&' or 'cd /d' — use absolute paths like 'python C:\\\\path\\\\script.py'. cwd is already the task directory. Use for: git, npm, pytest, pip, python, etc.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The command to execute"
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Timeout in seconds (default 30, max 120)",
+          "default": 30
+        }
+      },
+      "required": [
+        "command"
+      ]
+    }
+  },
+  {
+    "name": "read_file",
+    "description": "Reads a file with line numbers (cat -n format, 1-indexed). Use offset+limit for large files.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "Absolute path to the file"
+        },
+        "offset": {
+          "type": "integer",
+          "description": "Starting line (0-indexed, default 0)",
+          "default": 0
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Number of lines to read (default: all)"
+        }
+      },
+      "required": [
+        "file_path"
+      ]
+    }
+  },
+  {
+    "name": "edit_file",
+    "description": "Exact string replacement in a file. Read the file first to get the exact text. Fails if old_string not found or appears multiple times without replace_all.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "Absolute path to the file"
+        },
+        "old_string": {
+          "type": "string",
+          "description": "Exact text to replace (must be unique)"
+        },
+        "new_string": {
+          "type": "string",
+          "description": "Replacement text"
+        },
+        "replace_all": {
+          "type": "boolean",
+          "description": "Replace all occurrences (default false)",
+          "default": false
+        }
+      },
+      "required": [
+        "file_path",
+        "old_string",
+        "new_string"
+      ]
+    }
+  },
+  {
+    "name": "write_file",
+    "description": "Creates or overwrites a file.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "Absolute path to the file"
+        },
+        "content": {
+          "type": "string",
+          "description": "Content to write"
+        }
+      },
+      "required": [
+        "file_path",
+        "content"
+      ]
+    }
+  },
+  {
+    "name": "glob",
+    "description": "Find files by glob pattern, sorted by modification time.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Glob pattern (e.g. '**/*.py')"
+        },
+        "path": {
+          "type": "string",
+          "description": "Base directory (default: cwd)"
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    }
+  },
+  {
+    "name": "grep",
+    "description": "Search for a regex pattern in file contents.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Regex pattern"
+        },
+        "path": {
+          "type": "string",
+          "description": "File or directory (default: cwd)"
+        },
+        "glob": {
+          "type": "string",
+          "description": "File filter (e.g. '*.py')"
+        },
+        "output_mode": {
+          "type": "string",
+          "enum": [
+            "content",
+            "files_with_matches"
+          ],
+          "description": "content=matching lines (default), files_with_matches=file paths only",
+          "default": "content"
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    }
+  },
+  {
+    "name": "web_fetch",
+    "description": "Fetches text content from a URL.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "URL to fetch"
+        },
+        "max_chars": {
+          "type": "integer",
+          "description": "Max characters to return (default 20000)",
+          "default": 20000
+        }
+      },
+      "required": [
+        "url"
+      ]
+    }
+  },
+  {
+    "name": "brave_search",
+    "description": "Searches the web via Brave Search API and returns titles, URLs and descriptions. Use when you need current information not available locally.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query"
+        },
+        "count": {
+          "type": "integer",
+          "description": "Number of results (1-10, default 5)",
+          "default": 5
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  }
+]

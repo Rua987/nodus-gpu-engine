@@ -1,0 +1,13 @@
+{
+  "_comment": "Sample MCP config for the vendored Nodus runtime. Point Nodus at this file (mcp_config=...) and pass mcp_servers='nge-gpu' to run_agent, or `python nodus_agent.py \"...\" --mcp-servers nge-gpu`.",
+  "mcpServers": {
+    "nge-gpu": {
+      "command": "python",
+      "args": ["-m", "nge.tools.gpu_mcp_server"],
+      "env": {
+        "NGE_FLEET_MODE": "mock",
+        "NGE_SANDBOX": "mock"
+      }
+    }
+  }
+}
