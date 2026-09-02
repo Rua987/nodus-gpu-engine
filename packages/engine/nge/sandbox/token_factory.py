@@ -80,7 +80,11 @@ class TokenFactorySandbox(Sandbox):
         sid = f"tf-sbx-{self._n:02d}"
         if spec.node_id:
             sid = f"{sid}@{spec.node_id}"
-        img = sdk.images.docker(spec.image or DEFAULT_IMAGE)
+        ref = spec.image or DEFAULT_IMAGE
+        try:
+            img = sdk.images.use(ref)                 # quickstart path, no import perm
+        except Exception:
+            img = sdk.images.docker(ref)              # fall back to tag/import
         self._sessions[sid] = img.session()
         self._pending[sid] = {}
         return sid

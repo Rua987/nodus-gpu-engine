@@ -56,6 +56,10 @@ class _SDK:
         self.images = self
         self.last = None
 
+    def use(self, ref, **kw):
+        self.last = _Image()
+        return self.last
+
     def docker(self, ref, **kw):
         self.last = _Image()
         return self.last
