@@ -75,15 +75,22 @@ python -m nge.demo_nebius --live
 - Nemotron 3 on Token Factory: `nvidia/nemotron-3-super-120b-a12b` (default),
   `nvidia/nemotron-3-nano-30b-a3b`, and **Nemotron 3 Ultra 550b** (long-running
   autonomous agents - exact id string still to grab from the console).
-- Sandboxes are driven by the **ConTree SDK** (`contree-sdk`,
-  `Contree` / `ContreeSync`, `images.use(img).run(shell=...).wait()`).
-  `nge/sandbox/token_factory.py` implements create/put/exec/collect/destroy
-  against that surface; only the authenticated client constructor
-  (`_build_client`) is left as a TODO.
+- Sandboxes are driven by the **ConTree SDK** (`contree-sdk`, `ContreeSync`,
+  `images.use(img).session().run(args=["/bin/sh","-c",cmd], files={...}).wait()`).
+  Auth = `IAMAuth(token, project_id, base_url=".../sandboxes/")` (shared by
+  `nge/nebius_client.py`).
+- **Sandboxes is in beta — free, request access** at
+  <https://tokenfactory.nebius.com/sandboxes/about>. Until granted, the key's
+  `permissions` are all `False` (`spawn`, `import`, …). Verified against the
+  account: **auth + client construction work; the key just lacks beta access.**
+- `NebiusFleet` and `TokenFactorySandbox` are **both implemented** against
+  ConTree and share auth — they unlock together with beta access. `NebiusFleet`
+  telemetry = an `nvidia-smi` (or CPU-fallback) probe run inside each node.
 
 `--live` sets `NGE_TRACK=nebius` (guard: refuses any non-`nebius:` LLM), routes
 slot-fill through `nodus_agent._chat`, and selects `NebiusFleet` +
-`TokenFactorySandbox`.
+`TokenFactorySandbox`. `NGE_FLEET_MODE=mock` pins just the fleet ledger back to
+mock for a partial-real run.
 
 ## Stack map
 
@@ -101,28 +108,27 @@ slot-fill through `nodus_agent._chat`, and selects `NebiusFleet` +
 
 ## What is real vs. skeleton in this milestone
 
-| Real (tested in CI, no network — 57 tests + MCP integration job) | Skeleton (documented) |
+| Real (65 tests + MCP integration job) | Blocked on Nebius beta access, not code |
 |---|---|
-| `nebius:` backend + reversible register shim | `NebiusFleet` network calls |
-| Nemotron tier router (`nge/router.py`) | `TokenFactorySandbox._build_client` (auth wiring only) |
+| `nebius:` backend + reversible register shim — **real Nemotron call verified** | `NebiusFleet` / `TokenFactorySandbox` live runs (need Sandboxes beta access) |
+| Nemotron tier router (`nge/router.py`) | — |
 | Feedback loop: throttle → re-provision + migrate | Nemotron planner fallback beyond stub |
 | Auto-fix loop: patch → apply + re-test in fresh sandbox → keep verified | resume-from-snapshot on migration (needs Token Factory branching) |
 | Capability jail (`nge/policy.py`) enforced in `run_in_sandbox` | Grafana live wiring, demo video |
 | `MockFleet` (deterministic hot-node) + telemetry scoring | — |
-| `TokenFactorySandbox` create/put/exec/collect/destroy vs ConTree (fake-SDK tested) | — |
+| `NebiusFleet` + `TokenFactorySandbox` vs real ConTree SDK — auth verified, fake-SDK tested | — |
 | Real MCP server (`mcp` SDK) ↔ Nodus `McpBridge` — `test_mcp_bridge_integration` | — |
 | `demo_nebius --local`: real Nodus ReAct loop drives `nge-gpu.*` via a local model | — |
 | 5 GPU tools · orchestrator · artifact · event log | — |
 
 ## Build-next checklist (live path)
 
-1. `nge/fleet/nebius.py` — Nebius Compute: create GPU instances (preset
-   `gpu-h100-sxm`), poll DCGM/Observability for telemetry, delete on release.
-   (Or back the fleet with a pool of ConTree sandbox sessions — no IaaS creds.)
-2. `nge/sandbox/token_factory.py::_build_client` — construct the authenticated
-   `ContreeSync` client (`pip install contree-sdk`). The rest is already wired.
+1. **Request Token Factory Sandboxes beta access** for the key/project
+   (<https://tokenfactory.nebius.com/sandboxes/about>, free). This is the only
+   blocker for `--live` — `NebiusFleet` + `TokenFactorySandbox` are implemented.
+2. `python -m nge.sandbox.token_factory` — real sandbox smoke once access lands.
 3. Grab the exact **Nemotron 3 Ultra 550b** model id from the Token Factory
-   console; set `NEMOTRON_MODEL` (Super 120b is the working default).
+   console; set `NEMOTRON_MODEL` (Super 120b is the working default, verified).
 4. Point Nodus' MCP at `nge/tools/mcp.json` and run a real
    `nodus_agent.run_agent(..., model=NEMOTRON_MODEL, mcp_servers="nge-gpu")`.
 5. Grafana Cloud annotations from the orchestrator event log; record the demo.

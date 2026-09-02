@@ -20,24 +20,10 @@ from __future__ import annotations
 import time
 from typing import Dict
 
+from nge.nebius_client import DEFAULT_TF_BASE_URL, build_contree_client
 from nge.sandbox.base import ExecResult, Sandbox, SandboxSpec
 
-DEFAULT_TF_BASE_URL = "https://api.tokenfactory.nebius.com/sandboxes/"
-DEFAULT_IMAGE = "python:3.11-slim"
-
-
-def _import_contree():
-    """Return (ContreeSync, ContreeConfig, IAMAuth) or raise a helpful error."""
-    try:
-        from contree_sdk import ContreeSync             # type: ignore
-        from contree_sdk.config import ContreeConfig    # type: ignore
-        from contree_sdk.auth import IAMAuth            # type: ignore
-        return ContreeSync, ContreeConfig, IAMAuth
-    except Exception as exc:  # pragma: no cover - env dependent
-        raise ImportError(
-            "ConTree SDK missing - `pip install contree-sdk` "
-            "(Nebius Token Factory Sandboxes)."
-        ) from exc
+DEFAULT_IMAGE = "python:3.12-slim"
 
 
 class TokenFactorySandbox(Sandbox):
@@ -54,19 +40,7 @@ class TokenFactorySandbox(Sandbox):
 
     # -- client -----------------------------------------------------------
     def _build_client(self):
-        key = self.cfg.token_factory_api_key() or self.cfg.nebius_api_key()
-        pid = self.cfg.nebius_project_id
-        if not key:
-            raise RuntimeError(
-                "Token Factory: no API key - set NEBIUS_API_KEY or "
-                "packages/engine/.nebius_api_key")
-        if not pid:
-            raise RuntimeError(
-                "Token Factory: no project id - set NEBIUS_PROJECT_ID "
-                "(from the Nebius console).")
-        ContreeSync, ContreeConfig, IAMAuth = _import_contree()
-        auth = IAMAuth(token=key, project_id=pid, base_url=self.base_url)
-        return ContreeSync(config=ContreeConfig(auth=auth))
+        return build_contree_client(self.cfg)
 
     def _sdk_ready(self):
         if self._sdk is None:
@@ -134,17 +108,15 @@ class TokenFactorySandbox(Sandbox):
 def _smoke() -> int:
     """Real end-to-end: build client -> check perms -> spawn a sandbox -> run."""
     from nge import config as _cfg
+    from nge.nebius_client import assert_can_spawn, sandbox_permissions
     sbx = TokenFactorySandbox(_cfg.load())
     sdk = sbx._sdk_ready()
     try:
-        who = sdk.get_token_info()
-        perms = dict(getattr(who, "permissions", {}) or {})
-        print("auth OK  token:", getattr(who, "token_uuid", "?"), " permissions:", perms)
-        if not perms.get("spawn") and not perms.get("spawn_disposable"):
-            print("\n>> This token has NO sandbox spawn permission. Enable Token "
-                  "Factory *Sandboxes* access for this key/project in the Nebius "
-                  "console (the product is in beta). Auth + wiring are correct.")
-            return 2
+        print("auth OK  permissions:", sandbox_permissions(sdk))
+        assert_can_spawn(sdk)
+    except RuntimeError as exc:
+        print("\n>>", exc)
+        return 2
     except Exception as exc:
         print("get_token_info failed:", exc)
         return 1

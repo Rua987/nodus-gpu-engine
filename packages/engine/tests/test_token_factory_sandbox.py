@@ -100,7 +100,6 @@ def test_full_flow(sbx):
 
 def test_build_client_requires_key(monkeypatch):
     from nge import config as _cfg
-    monkeypatch.delenv("NEBIUS_API_KEY", raising=False)
     monkeypatch.setattr("nge.config.load_api_key", lambda *a, **k: None)
     s = tf.TokenFactorySandbox(_cfg.load())
     with pytest.raises(RuntimeError, match="no API key"):
@@ -110,7 +109,7 @@ def test_build_client_requires_key(monkeypatch):
 def test_build_client_requires_project_id(monkeypatch):
     from nge import config as _cfg
     monkeypatch.setattr("nge.config.load_api_key", lambda *a, **k: "sk-test")
-    monkeypatch.delenv("NEBIUS_PROJECT_ID", raising=False)
+    monkeypatch.setattr("nge.config.load_value", lambda *a, **k: "")
     s = tf.TokenFactorySandbox(_cfg.load())
     with pytest.raises(RuntimeError, match="no project id"):
         s._build_client()
@@ -119,7 +118,8 @@ def test_build_client_requires_project_id(monkeypatch):
 def test_build_client_constructs_contree(monkeypatch):
     from nge import config as _cfg
     monkeypatch.setattr("nge.config.load_api_key", lambda *a, **k: "sk-test")
-    monkeypatch.setenv("NEBIUS_PROJECT_ID", "proj-abc")
+    monkeypatch.setattr("nge.config.load_value",
+                        lambda b, e: "proj-abc" if "project" in b else "")
 
     seen = {}
 
@@ -135,7 +135,8 @@ def test_build_client_constructs_contree(monkeypatch):
         def __init__(self, config=None):
             seen["config"] = config
 
-    monkeypatch.setattr(tf, "_import_contree", lambda: (_FakeClient, _FakeCfg, _FakeIAM))
+    monkeypatch.setattr("nge.nebius_client._import_contree",
+                        lambda: (_FakeClient, _FakeCfg, _FakeIAM))
     s = tf.TokenFactorySandbox(_cfg.load())
     client = s._build_client()
     assert isinstance(client, _FakeClient)

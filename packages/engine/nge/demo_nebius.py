@@ -79,10 +79,11 @@ def run_orchestrated(args, live: bool) -> int:
     try:
         report = orch.run(scenario)
     except (NotImplementedError, RuntimeError) as exc:
-        print(f"\n[live skeleton] {type(exc).__name__}: {exc}\n"
-              "The live Nebius fleet / Token Factory path is not wired yet "
-              "(needs credentials + _build_client) - see docs/NEBIUS_TRACK.md.\n"
-              "Use --mock for the working end-to-end path.", file=sys.stderr)
+        print(f"\n[live blocked] {type(exc).__name__}: {exc}\n"
+              "The live path (NebiusFleet + TokenFactorySandbox) is wired and "
+              "authenticates; it needs Token Factory Sandboxes beta access on "
+              "the key. Use --mock for the working end-to-end path.",
+              file=sys.stderr)
         return 3
 
     print(f"\nplan({report.plan_source}): {report.plan_names}")
