@@ -1,5 +1,7 @@
 # Nodus-GPU Engine
 
+[![engine-tests](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml)
+
 **Agentic engineering platform — Nebius "Coding & Agentic Engineering" track.**
 
 A deterministic local planner decides *what* to do, Nemotron (tier-routed) decides
