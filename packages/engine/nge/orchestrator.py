@@ -132,16 +132,17 @@ class NgeOrchestrator:
         return cmd or f"NGE_SHARD={index}/{shards} {base}"
 
     # -- feedback loop : agents self-manage their GPU compute ----------
-    def _react_to_pressure(self, sr: "ShardResult", target: str,
-                           collect: list) -> None:
+    def _react_to_pressure(self, sr: "ShardResult", tele: Optional[dict],
+                           target: str, collect: list) -> None:
         """If the shard's node is throttling / inefficient, migrate the shard
         onto a freshly provisioned healthy node. Bounded to one remediation
-        per shard."""
-        if sr.migrated_from is not None:
-            return
-        st = handlers.gpu_status(node_id=sr.node_id)["nodes"]
-        tele = st[0] if st else None
-        if not tele:
+        per shard.
+
+        ``tele`` is the telemetry reading already taken by the run loop for this
+        node - reused verbatim so the pressure event, the remediation record and
+        the report all quote the exact same numbers (no second poll).
+        """
+        if sr.migrated_from is not None or not tele:
             return
         pressured = (tele["health"] == "throttle"
                      or tele["efficiency"] < self.MIN_EFFICIENCY)
@@ -154,6 +155,7 @@ class NgeOrchestrator:
                    temp_c=tele["temp_c"], power_w=tele["power_w"])
 
         repl = handlers.gpu_provision(n=1, gpu_type="H100")["nodes"][-1]["id"]
+        self._emit("gpu_provision_replacement", node_id=repl, for_shard=sr.index)
         handlers.gpu_allocate(job=f"shard-{sr.index}-retry")
         res = handlers.run_in_sandbox(command=sr.command, node_id=repl,
                                       collect=collect, timeout=180)
@@ -169,6 +171,10 @@ class NgeOrchestrator:
                "temp_c": tele["temp_c"], "power_w": tele["power_w"]}
         self.remediations.append(rec)
         self._emit("gpu_remediation", **rec)
+
+        # telemetry of the replacement (so a watcher sees it running healthy)
+        rst = handlers.gpu_status(node_id=repl)["nodes"]
+        self._emit("gpu_status", node_id=repl, telemetry=rst[0] if rst else None)
         handlers.gpu_release(node_ids=[old_node])
 
     # -- main -----------------------------------------------------------
@@ -213,10 +219,12 @@ class NgeOrchestrator:
                 exit_code=res["exit_code"], duration_s=res["duration_s"], failures=fails,
             ))
             st = handlers.gpu_status(node_id=node_id)["nodes"]
-            self._emit("gpu_status", node_id=node_id, telemetry=st[0] if st else None)
+            tele = st[0] if st else None
+            self._emit("gpu_status", node_id=node_id, telemetry=tele)
 
             # feedback loop: react if this node is throttling / inefficient
-            self._react_to_pressure(shard_results[-1], target, collect)
+            # (same telemetry reading - no second poll)
+            self._react_to_pressure(shard_results[-1], tele, target, collect)
 
             sr = shard_results[-1]
             self._emit("shard_done", index=i, node_id=sr.node_id,

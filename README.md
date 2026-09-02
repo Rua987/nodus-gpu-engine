@@ -40,6 +40,10 @@ sharded pytest (commands vetted by the jail) → a hot node throttles → the en
 re-provisions and migrates that shard by itself → `gpu_release` → consolidated
 triage report.
 
+```bash
+python -m nge.demo_nebius --mock --watch    # live fleet view: util/temp bars, the migration
+```
+
 ## The differentiators (all real in the mock demo)
 
 1. **Code + Infrastructure in one loop** — `orchestrator._react_to_pressure`:

@@ -62,9 +62,15 @@ def run_orchestrated(args, live: bool) -> int:
     else:
         cfg = _cfg.load(fleet_mode="mock", sandbox_mode="mock")
         chat_fn = None
-        print("[mock] deterministic run - no credentials, no network")
+        if not args.watch:
+            print("[mock] deterministic run - no credentials, no network")
 
-    orch = NgeOrchestrator(config=cfg, chat_fn=chat_fn)
+    watch = None
+    if args.watch:
+        from nge.watch import ConsoleWatch
+        watch = ConsoleWatch(delay=args.watch_delay)
+
+    orch = NgeOrchestrator(config=cfg, chat_fn=chat_fn, telemetry=watch)
     try:
         report = orch.run(scenario)
     except (NotImplementedError, RuntimeError) as exc:
@@ -81,10 +87,11 @@ def run_orchestrated(args, live: bool) -> int:
     print("model routing: " + " | ".join(
         f"{t}->{','.join(sorted(d))}" for t, d in
         sorted(tiers.items(), key=lambda x: ("ultra", "super", "nano").index(x[0]))))
-    for s in report.shards:
-        tag = f"  (migrated from {s.migrated_from})" if s.migrated_from else ""
-        print(f"  shard {s.index} on {s.node_id}: exit={s.exit_code} "
-              f"{s.duration_s}s  {len(s.failures)} failure(s){tag}")
+    if not args.watch:
+        for s in report.shards:
+            tag = f"  (migrated from {s.migrated_from})" if s.migrated_from else ""
+            print(f"  shard {s.index} on {s.node_id}: exit={s.exit_code} "
+                  f"{s.duration_s}s  {len(s.failures)} failure(s){tag}")
     for rm in report.remediations:
         print(f"  ! GPU pressure: {rm['from']} {rm['reason']} "
               f"({rm.get('temp_c')}C) -> re-provisioned {rm['to']}")
@@ -154,6 +161,10 @@ def main(argv=None) -> int:
     ap.add_argument("--scenario", default=str(_DEFAULT_SCENARIO))
     ap.add_argument("--shards", type=int, default=None)
     ap.add_argument("--json", action="store_true", help="print the RunReport as JSON")
+    ap.add_argument("--watch", action="store_true",
+                    help="--mock/--live: live fleet console view (util/temp bars, migration)")
+    ap.add_argument("--watch-delay", type=float, default=0.6,
+                    help="seconds between --watch frames (default 0.6)")
     # --local options
     ap.add_argument("--model", default=None, help="Ollama model (default qwen3.5:2b)")
     ap.add_argument("--task", default=None, help="override the --local task")
