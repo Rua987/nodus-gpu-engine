@@ -68,6 +68,7 @@ class RunReport:
     events: List[dict]
     routes: List[dict] = field(default_factory=list)
     remediations: List[dict] = field(default_factory=list)
+    fixes: List[dict] = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return {
@@ -77,6 +78,7 @@ class RunReport:
             "failures": self.failures,
             "routes": self.routes,
             "remediations": self.remediations,
+            "fixes": self.fixes,
             "events": self.events,
         }
 
@@ -84,6 +86,8 @@ class RunReport:
 class NgeOrchestrator:
     # trigger a remediation when a node throttles or drops below this efficiency
     MIN_EFFICIENCY = 0.25
+    # how many distinct failures the code agent tries to auto-fix per run
+    MAX_FIXES = 3
 
     def __init__(self, config: Optional[_cfg.Config] = None,
                  chat_fn: Optional[Callable] = None, telemetry=None) -> None:
@@ -93,6 +97,7 @@ class NgeOrchestrator:
         self.events: List[dict] = []
         self.routes: List[dict] = []
         self.remediations: List[dict] = []
+        self.fixes: List[dict] = []
 
     # -- event log ---------------------------------------------------------
     def _emit(self, kind: str, **fields) -> None:
@@ -189,6 +194,7 @@ class NgeOrchestrator:
         self.events.clear()
         self.routes.clear()
         self.remediations.clear()
+        self.fixes.clear()
         self._emit("run_start", task=task, shards=shards, gpu_type=gpu_type,
                    fleet_mode=self.config.fleet_mode, sandbox_mode=self.config.sandbox_mode,
                    jail=self.config.jail)
@@ -242,12 +248,16 @@ class NgeOrchestrator:
                                  "proposed_fix": _proposed_fix(f["error"])})
         self._emit("triage", unique_failures=len(failures))
 
-        # 5) release fleet
+        # 5) code agent: propose a patch per failure, apply + re-test in a
+        #    fresh sandbox, keep only the verified ones
+        fixes = self._attempt_fixes(failures, target)
+
+        # 6) release fleet
         rel = handlers.gpu_release()
         self._emit("gpu_release", **rel)
 
-        # 6) deliver artifact
-        artifact = self._write_report(task, pr, shard_results, failures)
+        # 7) deliver artifact
+        artifact = self._write_report(task, pr, shard_results, failures, fixes)
         self._emit("artifact", path=str(artifact))
         self._emit("run_end", ok=True)
 
@@ -256,10 +266,63 @@ class NgeOrchestrator:
             plan_names=pr.names, plan_source=pr.source,
             shards=shard_results, failures=failures, events=list(self.events),
             routes=list(self.routes), remediations=list(self.remediations),
+            fixes=list(self.fixes),
         )
 
+    # -- code agent : propose fix -> apply + re-test in a fresh sandbox ----
+    def _propose_patch(self, failure: dict, model: str) -> Optional[str]:
+        """Return a unified diff that should fix ``failure``.
+
+        ``--mock``: the canned patch from the fixture catalogue.
+        ``--local`` / ``--live``: ask the model (Nemotron Super tier) for a diff.
+        """
+        if self.chat_fn is None:
+            from nge import _fixtures
+            return _fixtures.canned_patch(failure["test"])
+
+        prompt = (
+            "A test is failing. Reply with ONLY a unified diff (```diff fenced) "
+            "that fixes it - no prose.\n"
+            f"Test: {failure['test']}\nError: {failure['error']}\n"
+        )
+        msg = self.chat_fn([{"role": "user", "content": prompt}], model, None)
+        text = (msg or {}).get("content") or ""
+        if "```" in text:
+            text = text.split("```", 2)[1]
+            if text.startswith("diff"):
+                text = text[4:]
+        text = text.strip("\n")
+        return text if text.startswith(("--- ", "diff --git")) else None
+
+    def _attempt_fixes(self, failures: List[dict], target: str) -> List[dict]:
+        fixes: List[dict] = []
+        for f in failures[: self.MAX_FIXES]:
+            model = self._route("triage")          # slot-fill / triage -> Super
+            patch = self._propose_patch(f, model)
+            self._emit("fix_attempt", test=f["test"], has_patch=bool(patch))
+            if not patch:
+                fixes.append({"test": f["test"], "verified": False,
+                              "patch": None, "reason": "no patch proposed"})
+                continue
+
+            node = handlers.gpu_provision(n=1, gpu_type="H100")["nodes"][-1]["id"]
+            handlers.gpu_allocate(job=f"fix-{f['test'].split('::')[-1]}")
+            kw = f["test"].split("::")[-1]
+            res = handlers.run_in_sandbox(
+                command=f"git apply fix.patch && python -m pytest {target} -q -k {kw}",
+                node_id=node, files={"fix.patch": patch}, timeout=120,
+            )
+            verified = res["exit_code"] == 0 and not res.get("blocked")
+            self._emit("fix_verified" if verified else "fix_rejected",
+                       test=f["test"], node=node)
+            fixes.append({"test": f["test"], "patch": patch, "verified": verified,
+                          "node": node, "stdout": res["stdout"]})
+            handlers.gpu_release(node_ids=[node])
+        self.fixes = fixes
+        return fixes
+
     # -- artifact -------------------------------------------------------
-    def _write_report(self, task, pr, shard_results, failures) -> Path:
+    def _write_report(self, task, pr, shard_results, failures, fixes=None) -> Path:
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         out_dir = self.config.out_dir
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -272,7 +335,8 @@ class NgeOrchestrator:
             "",
             f"- Plan ({pr.source}): `{pr.names}`",
             f"- Fleet mode: `{self.config.fleet_mode}` | Sandbox: `{self.config.sandbox_mode}`",
-            f"- Shards: {len(shard_results)} | Unique failures: {len(failures)}",
+            f"- Shards: {len(shard_results)} | Unique failures: {len(failures)}"
+            f" | Auto-fixed: {len([x for x in (fixes or []) if x.get('verified')])}",
             "",
             "## Shards",
             "",
@@ -304,15 +368,39 @@ class NgeOrchestrator:
                 f"(temp {rm.get('temp_c')}°C, {rm['power_w']} W, eff {rm['efficiency']}) "
                 f"→ re-provisioned + migrated to `{rm['to']}`")
 
+        # -- auto-fixes ------------------------------------------------------
+        fixes = fixes or []
+        verified = [x for x in fixes if x.get("verified")]
+        lines += ["", "## Auto-fixes (code agent)", "",
+                  f"Attempted {len(fixes)} / {len(failures)} failure(s) · "
+                  f"**{len(verified)} patched & re-tested green** in a fresh sandbox.", ""]
+        if fixes:
+            lines += ["| test | patch | verified |", "|---|---|---|"]
+            fix_dir = out_dir / "fixes"
+            for x in fixes:
+                pf = "-"
+                if x.get("patch"):
+                    fix_dir.mkdir(parents=True, exist_ok=True)
+                    fn = x["test"].split("::")[-1] + ".patch"
+                    (fix_dir / fn).write_text(x["patch"], encoding="utf-8")
+                    pf = f"`fixes/{fn}`"
+                mark = "✅" if x.get("verified") else ("—" if not x.get("patch") else "❌ still red")
+                lines.append(f"| `{x['test']}` | {pf} | {mark} |")
+
         lines += ["", "## Consolidated failures", ""]
         if not failures:
             lines.append("_No failures._")
         for f in failures:
+            fx = next((x for x in fixes if x["test"] == f["test"]), None)
+            status = ("auto-fixed & verified" if fx and fx.get("verified")
+                      else "patch rejected" if fx and fx.get("patch")
+                      else "needs a human")
             lines += [
                 f"### `{f['test']}`",
                 f"- Error: `{f['error']}`",
                 f"- Seen on: shard {f['shard']} / node `{f['node']}`",
-                f"- Proposed fix: {f['proposed_fix']}",
+                f"- Heuristic hint: {f['proposed_fix']}",
+                f"- Agent outcome: **{status}**",
                 "",
             ]
         lines += ["## Event log", "", "```json",

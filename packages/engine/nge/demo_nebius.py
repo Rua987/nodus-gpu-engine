@@ -95,7 +95,12 @@ def run_orchestrated(args, live: bool) -> int:
     for rm in report.remediations:
         print(f"  ! GPU pressure: {rm['from']} {rm['reason']} "
               f"({rm.get('temp_c')}C) -> re-provisioned {rm['to']}")
-    print(f"unique failures: {len(report.failures)}")
+    verified = [x for x in report.fixes if x.get("verified")]
+    print(f"unique failures: {len(report.failures)}  |  "
+          f"auto-fixed & verified: {len(verified)}/{len(report.fixes)}")
+    for x in report.fixes:
+        mark = "OK " if x.get("verified") else ("-- " if not x.get("patch") else "KO ")
+        print(f"  fix {mark} {x['test']}")
     print(f"artifact: {report.artifact_path}")
     if args.json:
         print(json.dumps(report.as_dict(), indent=2, ensure_ascii=False))

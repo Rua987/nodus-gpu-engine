@@ -32,6 +32,7 @@ ALLOW_HEADS = (
     "ruff", "flake8", "mypy", "black --check",
     "echo ", "ls", "cat ", "head ", "tail ", "wc ", "pwd", "true", "false",
     "git status", "git diff", "git log", "git show", "git rev-parse",
+    "git apply", "patch -p", "patch --",
     "mkdir -p", "cp ", "mv ", "grep ", "rg ", "find . ",
 )
 

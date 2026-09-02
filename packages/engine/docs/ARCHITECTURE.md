@@ -6,7 +6,7 @@
 |---|-------|-----------|------|
 | 1 | Brain / DSL | `nge/planner.py` → `packages/nodus/nodus_plan_local.py` | NL task → **ordered tool names** (fixed 8-tool coding vocab). Deterministic; no args. |
 | 2 | Inference | `nge/backends/nebius.py` + `nge/router.py` → `packages/nodus/nodus_backends._chat_openai_compatible` | Nemotron @ Nebius, **tier-routed**: Ultra 550b (plan/orchestrate), Super 120b (slot-fill/triage), Nano 30b (telemetry/healthcheck). |
-| 3 | Runtime | `nge/orchestrator.py` | Deterministic infra frame around the plan; fan-out; **telemetry feedback loop** (`_react_to_pressure`: throttling node → re-provision + migrate shard); event log. |
+| 3 | Runtime | `nge/orchestrator.py` | Deterministic infra frame around the plan; fan-out; **feedback loop** (`_react_to_pressure`: throttling node → re-provision + migrate shard); **auto-fix loop** (`_attempt_fixes`: patch → `git apply` + re-test in a fresh sandbox → keep only verified); event log. |
 | 3b | Capability jail | `nge/policy.py` | Allow/deny gate every LLM-proposed shell command hits before a sandbox runs it. |
 | 4 | Infrastructure | `nge/fleet/` (`MockFleet` \| `NebiusFleet`) | `provision(n)` / `status()` / `allocate()` / `release()` of Nebius GPU nodes + telemetry. |
 | 5 | Execution | `nge/sandbox/` (`MockSandbox` \| `TokenFactorySandbox`) | Isolated `create → put_files → exec → collect → destroy` on a pinned node. |
@@ -39,9 +39,13 @@ orchestrator.run()
    │        if health==throttle or eff<0.25:
    │           route("healthcheck") ─────────▶ Nemotron Nano 30b
    │           gpu_provision(1) + migrate shard onto the fresh node   [gpu_remediation event]
-   ├─ triage(shard stdout)  ─────────────────▶ dedup FAILED lines + proposed fixes
+   ├─ triage(shard stdout)  ─────────────────▶ dedup FAILED lines
+   ├─ _attempt_fixes(failures[:3]):             # ── auto-fix loop (code agent) ──
+   │     route("triage") ────────────────────▶ Nemotron Super 120b → unified diff
+   │     gpu_provision(1) + run_in_sandbox("git apply fix.patch && pytest -k <t>")
+   │     keep patch iff exit==0               [fix_attempt / fix_verified events]
    ├─ gpu_release()  ────────────────────────▶ all nodes gone (billing stops)
-   └─ write out/report_<ts>.md  ────────────▶ delivered artifact  (+ full JSON event log)
+   └─ write out/report_<ts>.md + out/fixes/*.patch  ─▶ artifact (+ full JSON event log)
 ```
 
 ## Interface contracts
@@ -60,6 +64,16 @@ orchestrator.run()
 - **Backend** (`nge/backends/register.py`): `apply()` wraps
   `nodus_backends.detect_backend` + `chat_api` (and the copies bound in
   `nodus_agent`) to recognise `nebius:`; `restore()` fully undoes it.
+
+## Shard state across a migration
+
+When a node throttles, the migrated shard **restarts from scratch** on the fresh
+node (the orchestrator re-issues the same command). This is correct for the
+stateless shards here (an idempotent `pytest` run). Stateful workloads would
+need **resume-from-snapshot**, which is exactly the primitive Nebius Token
+Factory Sandboxes provide (ConTree's git-like branching / state restore) — so
+the design path is: restart now, `fork`/`restore` the sandbox when running on
+Token Factory. Not yet wired.
 
 ## Why the planner does not plan GPU steps
 

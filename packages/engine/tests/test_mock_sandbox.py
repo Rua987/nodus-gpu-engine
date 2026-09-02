@@ -30,6 +30,18 @@ def test_non_pytest_commands_ok():
     assert s.exec(sid, "ls -la").exit_code == 0
 
 
+def test_verify_patch_command():
+    s = MockSandbox()
+    sid = s.create(SandboxSpec(node_id="nb-h100-04"))
+    s.put_files(sid, {"fix.patch": "--- a/x\n+++ b/x\n"})
+
+    ok = s.exec(sid, "git apply fix.patch && python -m pytest pkg -q -k test_plan_order")
+    assert ok.exit_code == 0 and "Applied patch" in ok.stdout and "1 passed" in ok.stdout
+
+    ko = s.exec(sid, "git apply fix.patch && python -m pytest pkg -q -k test_upload_mock")
+    assert ko.exit_code == 1 and "still failing" in ko.stdout
+
+
 def test_collect_returns_requested_paths():
     s = MockSandbox()
     sid = s.create(SandboxSpec())

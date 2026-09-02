@@ -68,3 +68,4 @@ def test_watch_is_a_valid_telemetry_sink():
     assert rep.ok and rep.remediations
     assert "migrate  shard 2" in out
     assert "nb-h100-02" in out and "nb-h100-03" in out
+    assert "fix OK" in out                     # auto-fix loop surfaced in the watch

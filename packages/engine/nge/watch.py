@@ -108,6 +108,13 @@ class ConsoleWatch:
             self._log.append(f"release: {', '.join(f.get('released', []))}")
         elif kind == "triage":
             self._log.append(f"triage: {f.get('unique_failures')} unique failure(s)")
+        elif kind == "fix_attempt":
+            self._log.append(f"fix?  {f.get('test')}  "
+                             + ("patch proposed" if f.get("has_patch") else "no patch"))
+        elif kind == "fix_verified":
+            self._log.append(self._c(f"fix OK  {f.get('test')}  (patched + re-tested green on {f.get('node')})", _GREEN))
+        elif kind == "fix_rejected":
+            self._log.append(self._c(f"fix KO  {f.get('test')}  (still red after patch)", _YELLOW))
         elif kind == "artifact":
             self._log.append(f"artifact: {f.get('path')}")
         elif kind == "run_end":

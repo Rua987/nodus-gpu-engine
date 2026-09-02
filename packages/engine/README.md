@@ -32,18 +32,21 @@ python -m nge.demo_nebius --mock
 
 The mock run: `plan` → `gpu_provision(3×H100)` → 3 sandboxes run a sharded pytest
 → telemetry polls → **a hot node throttles → the engine re-provisions and
-migrates that shard by itself** → `gpu_release` → consolidated triage report.
+migrates that shard by itself** → **the code agent patches each failure and
+re-tests it in a fresh sandbox** → `gpu_release` → report (triage + `fixes/*.patch`).
 Fully deterministic.
 
-### Three things this is, that an API wrapper is not
+### Four things this is, that an API wrapper is not
 
 1. **Code + Infrastructure in one loop** — the Nodus DSL plan is executed while
    the engine watches GPU telemetry and reallocates compute under thermal /
    efficiency pressure (`orchestrator._react_to_pressure`).
-2. **Multi-tier Nemotron routing** — `nge/router.py`: Ultra 550b for planning,
-   Super 120b for slot-fill / triage, Nano 30b for fast telemetry checks. Not
-   one model for everything.
-3. **Deterministic execution + capability jail** — the runtime stays strict and
+2. **A code agent, not a test runner** — for each failure the agent proposes a
+   patch, `git apply`s it in a fresh GPU sandbox, re-runs the test, and keeps
+   only what turns green (`orchestrator._attempt_fixes`).
+3. **Multi-tier Nemotron routing** — `nge/router.py`: Ultra 550b for planning,
+   Super 120b for slot-fill / triage / patching, Nano 30b for fast telemetry.
+4. **Deterministic execution + capability jail** — the runtime stays strict and
    reproducible; every LLM-proposed shell command passes `nge/policy.py` before
    it can touch a sandbox.
 
@@ -102,8 +105,9 @@ with the exact Nebius / Token Factory operation to implement — see
 | `nge/mcp_config.py` | emits a resolved MCP config for Nodus' `McpBridge` |
 | `nge/router.py` | Nemotron tier routing (ultra / super / nano) per decision kind |
 | `nge/policy.py` | capability jail — allow/deny gate for sandbox commands |
+| `nge/_fixtures.py` | deterministic failure catalogue + canned patches (`--mock`) |
 | `nge/planner.py` | Nodus 324M plan → heuristic → Nemotron fallback |
-| `nge/orchestrator.py` | the run: plan → fleet frame → shards → **telemetry feedback loop** → triage → artifact |
+| `nge/orchestrator.py` | the run: plan → fleet frame → shards → **feedback loop** → triage → **auto-fix loop** → artifact |
 | `nge/demo_nebius.py` | `--mock` / `--live` entrypoint |
 | `scenarios/` | demo scenario(s) |
 | `docs/ARCHITECTURE.md` | layer contract + data flow |

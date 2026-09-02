@@ -11,16 +11,11 @@ import re
 import time
 from typing import Dict
 
+from nge._fixtures import FAILURES, failure_by_test
 from nge.sandbox.base import ExecResult, Sandbox, SandboxSpec
 
-# A small fixed pool of "failures" the triage step will parse back out.
-_FAIL_POOL = [
-    ("tests/test_nodus_planner.py::test_plan_order", "AssertionError: plan names out of order"),
-    ("tests/test_nodus_tools.py::test_edit_file_unique", "ValueError: old_string not unique"),
-    ("tests/test_nodus_verify.py::test_carry_path", "AssertionError: expected [None, 'server.py']"),
-    ("tests/test_nodus_gcloud.py::test_upload_mock", "KeyError: 'GCLOUD_BUCKET'"),
-    ("tests/test_nodus_memory.py::test_roundtrip", "AssertionError: memory entry missing"),
-]
+# The triage step parses these ``FAILED <test> - <error>`` lines back out.
+_FAIL_POOL = [(f["test"], f["error"]) for f in FAILURES]
 
 
 def _seed(*parts: str) -> int:
@@ -49,6 +44,22 @@ class MockSandbox(Sandbox):
     def exec(self, sandbox_id: str, command: str, timeout: int = 120) -> ExecResult:
         seed = _seed(sandbox_id, command)
         t0 = time.perf_counter()
+
+        # --- verify an auto-fix: `git apply fix.patch && pytest ... -k <kw>` ---
+        if "git apply" in command and "pytest" in command:
+            mk = re.search(r"-k\s+([\w:.-]+)", command)
+            kw = mk.group(1) if mk else ""
+            f = failure_by_test(kw) if kw else None
+            fixed = bool(f and f["fixable"])
+            head = "Checking patch fix.patch...\nApplied patch fix.patch cleanly."
+            if fixed:
+                body = (f"1 passed in {0.4 + (seed % 20) / 10:.2f}s")
+                return ExecResult(exit_code=0, stdout=f"{head}\n{body}",
+                                  duration_s=round(0.6 + (seed % 20) / 10, 3))
+            body = (f"FAILED {f['test'] if f else kw} - still failing after patch"
+                    if (f or kw) else "no test selected")
+            return ExecResult(exit_code=1, stdout=f"{head}\n{body}\n1 failed",
+                              duration_s=round(0.6 + (seed % 20) / 10, 3))
 
         if "pytest" in command:
             # 1..2 deterministic failures per shard, drawn from the pool.

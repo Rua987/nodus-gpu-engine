@@ -37,20 +37,24 @@ python -m nge.demo_nebius --mock    # -> packages/engine/out/report_<ts>.md
 
 The mock run: `plan (→Ultra)` → `gpu_provision(3×H100)` → 3 sandboxes run a
 sharded pytest (commands vetted by the jail) → a hot node throttles → the engine
-re-provisions and migrates that shard by itself → `gpu_release` → consolidated
-triage report.
+re-provisions and migrates that shard by itself → **the code agent proposes a
+patch per failure, applies + re-tests it in a fresh sandbox, keeps the verified
+ones** → `gpu_release` → consolidated report (triage + `fixes/*.patch`).
 
 ```bash
-python -m nge.demo_nebius --mock --watch    # live fleet view: util/temp bars, the migration
+python -m nge.demo_nebius --mock --watch    # live fleet view: util/temp bars, migration, fixes
 ```
 
 ## The differentiators (all real in the mock demo)
 
 1. **Code + Infrastructure in one loop** — `orchestrator._react_to_pressure`:
    GPU telemetry drives compute reallocation while the plan executes.
-2. **Multi-tier Nemotron routing** — `nge/router.py`: Ultra 550b (plan),
-   Super 120b (slot-fill / triage), Nano 30b (fast telemetry checks).
-3. **Deterministic execution + capability jail** — `nge/policy.py` gates every
+2. **A code agent, not just a test runner** — `orchestrator._attempt_fixes`:
+   propose a patch → `git apply` + re-test in a fresh GPU sandbox → keep only
+   what re-tests green; unverifiable failures are flagged for a human.
+3. **Multi-tier Nemotron routing** — `nge/router.py`: Ultra 550b (plan),
+   Super 120b (slot-fill / triage / patch), Nano 30b (fast telemetry checks).
+4. **Deterministic execution + capability jail** — `nge/policy.py` gates every
    LLM-proposed shell command; the runtime stays strict and reproducible.
 
 Full judge-facing doc: [`packages/engine/docs/NEBIUS_TRACK.md`](packages/engine/docs/NEBIUS_TRACK.md).

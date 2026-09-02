@@ -11,6 +11,7 @@ def test_allows_expected_coding_commands():
         "python -c 'print(1)'",
         "pip install -r requirements.txt",
         "git status",
+        "git apply fix.patch && python -m pytest pkg -q -k test_x",
         "echo hello",
         "ruff check .",
     ]:

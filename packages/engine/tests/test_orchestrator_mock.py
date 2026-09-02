@@ -44,8 +44,8 @@ def test_event_log_covers_the_pipeline(cfg):
     for expected in ("run_start", "plan", "gpu_provision", "shard_start",
                      "gpu_status", "triage", "gpu_release", "artifact", "run_end"):
         assert expected in kinds
-    # fleet released at the end
-    rel = [e for e in rep.events if e["kind"] == "gpu_release"][0]
+    # final fleet release frees exactly the shard fleet (00, 01, migrated 03)
+    rel = [e for e in rep.events if e["kind"] == "gpu_release"][-1]
     assert rel["count"] == 3
 
 
@@ -106,6 +106,35 @@ def test_healthy_shards_are_not_migrated(cfg):
     rep = NgeOrchestrator(config=cfg).run(SCENARIO)
     assert rep.shards[0].migrated_from is None
     assert rep.shards[1].migrated_from is None
+
+
+def test_autofix_loop_patches_and_verifies(cfg):
+    rep = NgeOrchestrator(config=cfg).run(SCENARIO)
+
+    assert rep.fixes, "the code agent should attempt fixes"
+    assert [x for x in rep.fixes if x.get("verified")], "a canned patch should re-test green"
+    assert any(x.get("patch") is None for x in rep.fixes), "a non-fixable failure yields no patch"
+
+    kinds = [e["kind"] for e in rep.events]
+    assert "fix_attempt" in kinds and "fix_verified" in kinds
+
+    art = Path(rep.artifact_path)
+    text = art.read_text(encoding="utf-8")
+    assert "Auto-fixes (code agent)" in text
+    assert "patched & re-tested green" in text
+    assert "auto-fixed & verified" in text
+
+    fixes_dir = art.parent / "fixes"
+    assert fixes_dir.is_dir()
+    patches = list(fixes_dir.glob("*.patch"))
+    assert patches and any("--- a/" in p.read_text(encoding="utf-8") for p in patches)
+
+
+def test_autofix_is_deterministic(cfg):
+    a = NgeOrchestrator(config=cfg).run(SCENARIO)
+    b = NgeOrchestrator(config=cfg).run(SCENARIO)
+    assert [(x["test"], x.get("verified"), x.get("patch")) for x in a.fixes] == \
+           [(x["test"], x.get("verified"), x.get("patch")) for x in b.fixes]
 
 
 def test_chat_fn_slotfill_is_used(cfg):

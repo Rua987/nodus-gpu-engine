@@ -26,20 +26,22 @@ class MockFleet(GpuFleet):
     def __init__(self) -> None:
         self._nodes: List[GpuNode] = []
         self._hot: set = set()          # ids that run in a "bad rack"
+        self._next = 0                  # monotonic id counter (never reused)
         self._tick = 0
 
     # -- lifecycle ------------------------------------------------------------
     def provision(self, n: int, gpu_type: str = "H100") -> List[GpuNode]:
-        base = len(self._nodes)
+        first_batch = self._next == 0
         new = []
         for i in range(max(0, int(n))):
-            node = GpuNode(id=f"nb-{gpu_type.lower()}-{base + i:02d}", gpu_type=gpu_type,
+            node = GpuNode(id=f"nb-{gpu_type.lower()}-{self._next:02d}", gpu_type=gpu_type,
                            region="eu-north1", state="ready")
+            self._next += 1
             # Deterministic "bad rack": in the FIRST provisioning batch, every
             # 3rd node runs hot -> throttles under load, so the orchestrator
-            # feedback loop has something real to react to. Replacement nodes
-            # provisioned later are always healthy.
-            if base == 0 and (i % 3 == 2):
+            # feedback loop has something real to react to. Replacement / fix
+            # nodes provisioned later are always healthy.
+            if first_batch and (i % 3 == 2):
                 self._hot.add(node.id)
             new.append(node)
         self._nodes.extend(new)

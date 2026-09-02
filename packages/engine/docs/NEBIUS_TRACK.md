@@ -6,7 +6,10 @@ Google-only and untouched — see `packages/nodus/AGENTIC_CINEMA.md`).
 
 ## What it is
 
-An **agentic engineering platform**: not an API wrapper, a full stack from the
+An **agentic engineering platform** for the "**Coding** & Agentic Engineering"
+track: the agent doesn't just run tests across a GPU fleet — it **patches the
+failures and verifies each fix on a clean GPU**. Not an API wrapper, a full
+stack from the
 applicative DSL down to GPU resource management.
 
 - **Nodus** (local 324M PyTorch planner) turns a natural-language engineering
@@ -90,6 +93,7 @@ slot-fill through `nodus_agent._chat`, and selects `NebiusFleet` +
 | Routing | `nge/router.py` | Nemotron Ultra / Super / Nano per decision kind |
 | Orchestrator + slot-fill | **Nemotron @ Nebius Token Factory** | Decisions + argument fill |
 | Self-managed compute | `orchestrator._react_to_pressure` | Throttle → re-provision + migrate shard |
+| Code agent | `orchestrator._attempt_fixes` | Per failure: patch → `git apply` + re-test in a fresh sandbox → keep verified |
 | GPU fleet | **Nebius Cloud** GPU instances | Provision / monitor / release |
 | Capability jail | `nge/policy.py` | Vet every LLM shell command before exec |
 | Execution isolation | **Nebius Token Factory Sandboxes** (ConTree SDK) | Per-shard command execution |
@@ -97,11 +101,12 @@ slot-fill through `nodus_agent._chat`, and selects `NebiusFleet` +
 
 ## What is real vs. skeleton in this milestone
 
-| Real (tested in CI, no network — 46 tests + MCP integration job) | Skeleton (documented) |
+| Real (tested in CI, no network — 57 tests + MCP integration job) | Skeleton (documented) |
 |---|---|
 | `nebius:` backend + reversible register shim | `NebiusFleet` network calls |
 | Nemotron tier router (`nge/router.py`) | `TokenFactorySandbox._build_client` (auth wiring only) |
-| Telemetry feedback loop: throttle → re-provision + migrate | Nemotron planner fallback beyond stub |
+| Feedback loop: throttle → re-provision + migrate | Nemotron planner fallback beyond stub |
+| Auto-fix loop: patch → apply + re-test in fresh sandbox → keep verified | resume-from-snapshot on migration (needs Token Factory branching) |
 | Capability jail (`nge/policy.py`) enforced in `run_in_sandbox` | Grafana live wiring, demo video |
 | `MockFleet` (deterministic hot-node) + telemetry scoring | — |
 | `TokenFactorySandbox` create/put/exec/collect/destroy vs ConTree (fake-SDK tested) | — |
