@@ -53,6 +53,19 @@ def load_api_key(provider: str, env_name: Optional[str] = None) -> Optional[str]
     return os.environ.get(env_name or f"{provider.upper()}_API_KEY") or None
 
 
+def load_value(basename: str, env_name: str) -> str:
+    """Read a plain config value from ``packages/engine/.{basename}`` then env."""
+    f = _ENGINE_DIR / f".{basename}"
+    try:
+        if f.is_file():
+            v = f.read_text(encoding="utf-8").strip()
+            if v:
+                return v
+    except OSError:
+        pass
+    return _env(env_name)
+
+
 @dataclass(frozen=True)
 class Config:
     fleet_mode: str = "mock"          # mock | nebius
@@ -96,8 +109,8 @@ def load(**overrides) -> Config:
         nemotron_super=_env("NEMOTRON_SUPER_MODEL", NEMOTRON_SUPER_MODEL),
         nemotron_nano=_env("NEMOTRON_NANO_MODEL", NEMOTRON_NANO_MODEL),
         nebius_base_url=_env("NEBIUS_BASE_URL", DEFAULT_NEBIUS_BASE_URL),
-        token_factory_base_url=_env("TOKEN_FACTORY_BASE_URL"),
-        nebius_project_id=_env("NEBIUS_PROJECT_ID"),
+        token_factory_base_url=load_value("token_factory_base_url", "TOKEN_FACTORY_BASE_URL"),
+        nebius_project_id=load_value("nebius_project_id", "NEBIUS_PROJECT_ID"),
         nebius_region=_env("NEBIUS_REGION", "eu-north1"),
         jail=_env("NGE_JAIL", "on").lower() not in ("0", "off", "false", "no"),
         out_dir=Path(_env("NGE_OUT_DIR") or (_ENGINE_DIR / "out")),

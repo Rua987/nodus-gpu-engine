@@ -128,14 +128,22 @@ class TokenFactorySandbox(Sandbox):
 
 
 def _smoke() -> int:
-    """Real end-to-end: build client -> spawn a sandbox -> run a command."""
+    """Real end-to-end: build client -> check perms -> spawn a sandbox -> run."""
     from nge import config as _cfg
     sbx = TokenFactorySandbox(_cfg.load())
     sdk = sbx._sdk_ready()
     try:
-        print("token info:", sdk.get_token_info())
+        who = sdk.get_token_info()
+        perms = dict(getattr(who, "permissions", {}) or {})
+        print("auth OK  token:", getattr(who, "token_uuid", "?"), " permissions:", perms)
+        if not perms.get("spawn") and not perms.get("spawn_disposable"):
+            print("\n>> This token has NO sandbox spawn permission. Enable Token "
+                  "Factory *Sandboxes* access for this key/project in the Nebius "
+                  "console (the product is in beta). Auth + wiring are correct.")
+            return 2
     except Exception as exc:
         print("get_token_info failed:", exc)
+        return 1
     sid = sbx.create(SandboxSpec(image=DEFAULT_IMAGE, node_id="smoke"))
     print("sandbox:", sid)
     res = sbx.exec(sid, "echo tf-sandbox-ok && python -V && (nvidia-smi -L || true)")

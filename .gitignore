@@ -41,3 +41,8 @@ packages/engine/out/
 .DS_Store
 Thumbs.db
 *.swp
+
+# nebius live config (never commit)
+.nebius_project_id
+.nebius_api_key
+.token_factory_api_key
