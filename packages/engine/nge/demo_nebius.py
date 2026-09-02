@@ -1,10 +1,13 @@
 """End-to-end demo of the Nodus-GPU Engine.
 
-    python -m nge.demo_nebius --mock          # default: no creds, no network, CI
-    python -m nge.demo_nebius --live          # Nemotron + real fleet/sandbox (skeleton)
+    python -m nge.demo_nebius --mock     # deterministic orchestrator, no creds, CI
+    python -m nge.demo_nebius --local    # REAL Nodus ReAct loop, local Ollama model
+                                         #   -> real MCP calls to the GPU tools
+    python -m nge.demo_nebius --live     # Nemotron @ Nebius + real fleet/sandbox (skeleton)
 
-Mock is the judge path: deterministic plan -> 3-node fleet -> 3 sandboxes ->
-triage -> Markdown artifact, exit 0.
+``--mock`` is the judge path. ``--local`` proves the same tool + MCP wiring the
+Nebius path will use, driven by a local model instead of Nemotron (no cloud,
+no credits). ``--live`` swaps the model id + fleet/sandbox mode.
 """
 from __future__ import annotations
 
@@ -17,7 +20,17 @@ from pathlib import Path
 from nge import config as _cfg
 from nge.orchestrator import NgeOrchestrator
 
-_DEFAULT_SCENARIO = Path(__file__).resolve().parent.parent / "scenarios" / "fleet_test_triage.json"
+_ENGINE_DIR = Path(__file__).resolve().parent.parent
+_DEFAULT_SCENARIO = _ENGINE_DIR / "scenarios" / "fleet_test_triage.json"
+_REPO_ROOT = _ENGINE_DIR.parent.parent
+
+_LOCAL_TASK = (
+    "Do exactly these two tool calls with the nge-gpu tools, then stop:\n"
+    "1. nge-gpu.gpu_provision with n=2 and gpu_type=\"H100\"\n"
+    "2. nge-gpu.run_in_sandbox with command=\"echo benchmark-ok\" and node_id=\"nb-h100-00\"\n"
+    "Then answer in ONE sentence: how many nodes were provisioned and what the "
+    "sandbox printed."
+)
 
 
 def _load_scenario(path: Path) -> dict:
@@ -25,7 +38,6 @@ def _load_scenario(path: Path) -> dict:
 
 
 def _live_chat_fn(model):
-    """Nemotron slot-fill via the vendored Nodus backend + the nebius: route."""
     from nge.backends import register
     register.apply()
     import nodus_agent as na
@@ -35,17 +47,9 @@ def _live_chat_fn(model):
     return chat_fn
 
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="Nodus-GPU Engine demo")
-    mode = ap.add_mutually_exclusive_group()
-    mode.add_argument("--mock", action="store_true", help="deterministic, no creds (default)")
-    mode.add_argument("--live", action="store_true", help="Nemotron + real fleet/sandbox")
-    ap.add_argument("--scenario", default=str(_DEFAULT_SCENARIO))
-    ap.add_argument("--shards", type=int, default=None)
-    ap.add_argument("--json", action="store_true", help="print the RunReport as JSON")
-    args = ap.parse_args(argv)
+# ── orchestrated path (--mock / --live) ─────────────────────────────────────
 
-    live = bool(args.live)
+def run_orchestrated(args, live: bool) -> int:
     scenario = _load_scenario(Path(args.scenario))
     if args.shards:
         scenario["shards"] = args.shards
@@ -67,8 +71,7 @@ def main(argv=None) -> int:
         print(f"\n[live skeleton] {type(exc).__name__}: {exc}\n"
               "The live Nebius fleet / Token Factory path is not wired yet "
               "(needs credentials + _build_client) - see docs/NEBIUS_TRACK.md.\n"
-              "Use --mock for the working end-to-end path.",
-              file=sys.stderr)
+              "Use --mock for the working end-to-end path.", file=sys.stderr)
         return 3
 
     print(f"\nplan({report.plan_source}): {report.plan_names}")
@@ -90,6 +93,78 @@ def main(argv=None) -> int:
     if args.json:
         print(json.dumps(report.as_dict(), indent=2, ensure_ascii=False))
     return 0 if report.ok else 1
+
+
+# ── real Nodus ReAct loop, local Ollama model (--local) ─────────────────────
+
+def _ollama_up() -> bool:
+    import urllib.request
+    url = os.environ.get("OLLAMA_URL", "http://localhost:11434").rstrip("/") + "/api/tags"
+    try:
+        with urllib.request.urlopen(url, timeout=3) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def run_local(args) -> int:
+    from nge.mcp_config import write_config
+
+    model = args.model or "qwen3.5:2b"
+    task = args.task or _LOCAL_TASK
+
+    if not _ollama_up():
+        print("[local] Ollama not reachable at "
+              f"{os.environ.get('OLLAMA_URL', 'http://localhost:11434')} - "
+              "start it (`ollama serve`) and `ollama pull " + model + "`.",
+              file=sys.stderr)
+        return 3
+
+    cfg_path = write_config(_ENGINE_DIR / "out" / "mcp.local.json",
+                            fleet_mode="mock", sandbox_mode="mock")
+    print(f"[local] model={model}  mcp={cfg_path.name}  (real ReAct loop, no cloud)")
+
+    from nge.nodus_patches import neutralize_mcp_prompt
+    neutralize_mcp_prompt()  # drop Nodus' Godot-flavoured MCP system block
+
+    import nodus_agent as na
+    result = na.run_agent(
+        task,
+        cwd=str(_REPO_ROOT),
+        model=model,
+        verbose=True,
+        max_rounds=args.max_rounds,
+        mcp_servers="nge-gpu",
+        mcp_config=str(cfg_path),
+        text_tools=args.text_tools,
+    )
+    print("\n" + "=" * 60)
+    print(f"rounds={result.rounds}  tool_calls={result.tool_calls}  "
+          f"stopped={result.stopped_reason}")
+    print("answer:\n" + (result.answer or "(none)"))
+    return 0 if result.tool_calls > 0 else 1
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="Nodus-GPU Engine demo")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--mock", action="store_true", help="deterministic orchestrator (default)")
+    mode.add_argument("--local", action="store_true", help="real Nodus ReAct loop + local Ollama")
+    mode.add_argument("--live", action="store_true", help="Nemotron @ Nebius + real fleet/sandbox")
+    ap.add_argument("--scenario", default=str(_DEFAULT_SCENARIO))
+    ap.add_argument("--shards", type=int, default=None)
+    ap.add_argument("--json", action="store_true", help="print the RunReport as JSON")
+    # --local options
+    ap.add_argument("--model", default=None, help="Ollama model (default qwen3.5:2b)")
+    ap.add_argument("--task", default=None, help="override the --local task")
+    ap.add_argument("--max-rounds", type=int, default=14)
+    ap.add_argument("--text-tools", action="store_true",
+                    help="--local: JSON-text tool mode (models without native tool calling)")
+    args = ap.parse_args(argv)
+
+    if args.local:
+        return run_local(args)
+    return run_orchestrated(args, live=bool(args.live))
 
 
 if __name__ == "__main__":  # pragma: no cover

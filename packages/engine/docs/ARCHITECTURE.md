@@ -10,7 +10,12 @@
 | 3b | Capability jail | `nge/policy.py` | Allow/deny gate every LLM-proposed shell command hits before a sandbox runs it. |
 | 4 | Infrastructure | `nge/fleet/` (`MockFleet` \| `NebiusFleet`) | `provision(n)` / `status()` / `allocate()` / `release()` of Nebius GPU nodes + telemetry. |
 | 5 | Execution | `nge/sandbox/` (`MockSandbox` \| `TokenFactorySandbox`) | Isolated `create → put_files → exec → collect → destroy` on a pinned node. |
-| 6 | Tools bridge | `nge/tools/gpu_mcp_server.py` | Exposes layers 4–5 as MCP tools; vendored Nodus consumes them via its existing `--mcp-servers` path. |
+| 6 | Tools bridge | `nge/tools/gpu_mcp_server.py` (real `mcp` SDK) + `nge/mcp_config.py` | Exposes layers 4–5 as MCP tools. Nodus' `McpBridge` (`ClientSessionGroup`, SDK 1.x) spawns it over stdio; the model calls `nge-gpu.*`. Proven by `test_mcp_bridge_integration.py` (CI) and `demo_nebius --local` (real ReAct loop, local Ollama model). |
+
+`demo_nebius` has three entrypoints against the *same* layers 4–6:
+`--mock` (deterministic orchestrator, CI), `--local` (real Nodus ReAct loop +
+local model over real MCP — no cloud), `--live` (Nemotron @ Nebius + real
+fleet/sandbox — skeleton).
 
 ## Data flow (the demo scenario)
 

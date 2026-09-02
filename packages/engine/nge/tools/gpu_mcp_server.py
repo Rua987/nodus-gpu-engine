@@ -1,11 +1,16 @@
-"""Minimal MCP (Model Context Protocol) stdio server for the GPU / sandbox tools.
+"""MCP (Model Context Protocol) stdio server for the GPU / sandbox tools.
 
-Stdlib only. Speaks newline-delimited JSON-RPC 2.0 on stdin/stdout and implements
-the subset Nodus' ``McpBridge`` needs: ``initialize``, ``tools/list``,
-``tools/call`` (+ the ``notifications/initialized`` no-op).
+Two implementations of the same 5 tools:
 
-Run standalone:   python -m nge.tools.gpu_mcp_server
-Wire into Nodus:  see packages/engine/nge/tools/mcp.json
+* ``build_server()`` — the **real** server on the official ``mcp`` SDK (1.x,
+  ``FastMCP``). This is what Nodus' ``McpBridge`` (``ClientSessionGroup``)
+  connects to. Requires ``pip install "mcp<2"`` (see requirements-local.txt).
+* ``handle()`` / ``serve()`` — a stdlib-only newline-delimited JSON-RPC 2.0
+  fallback (``initialize`` / ``tools/list`` / ``tools/call``). Zero deps, used
+  by the unit tests and as a last resort.
+
+``python -m nge.tools.gpu_mcp_server`` runs the SDK server, falling back to the
+stdlib loop if ``mcp`` is not installed.
 """
 from __future__ import annotations
 
@@ -17,6 +22,28 @@ from nge.tools import handlers
 
 SERVER_NAME = "nge-gpu"
 PROTOCOL_VERSION = "2024-11-05"
+
+
+# ── real server (official mcp SDK, 1.x) ──────────────────────────────────────
+
+def build_server():
+    """Return a FastMCP server exposing the 5 GPU/sandbox tools."""
+    import logging
+    from mcp.server.fastmcp import FastMCP
+
+    logging.getLogger("mcp").setLevel(logging.WARNING)
+    try:
+        server = FastMCP(SERVER_NAME, log_level="WARNING")
+    except TypeError:  # older/newer signature
+        server = FastMCP(SERVER_NAME)
+    for schema in handlers.TOOL_SCHEMAS:
+        fn = handlers.DISPATCH[schema["name"]]
+        server.add_tool(fn, name=schema["name"], description=schema["description"])
+    return server
+
+
+def serve_sdk() -> None:
+    build_server().run()  # stdio transport by default
 
 
 def _mcp_tools() -> list:
@@ -90,4 +117,8 @@ def serve(stdin=None, stdout=None) -> None:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    serve()
+    try:
+        serve_sdk()
+    except ImportError:
+        sys.stderr.write("[nge-gpu] mcp SDK not installed - stdlib JSON-RPC fallback\n")
+        serve()

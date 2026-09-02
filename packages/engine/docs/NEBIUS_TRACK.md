@@ -28,9 +28,22 @@ applicative DSL down to GPU resource management.
 ```bash
 cd packages/engine
 pip install -r requirements.txt          # requests + pytest only
-python -m pytest -q                       # 43 tests, no network
+python -m pytest -q                       # 46 tests, no network
 python -m nge.demo_nebius --mock          # deterministic end-to-end
 ```
+
+### Optional — real ReAct loop, no cloud
+
+```bash
+pip install -r requirements-local.txt    # + mcp SDK
+ollama pull qwen3.5:2b
+python -m nge.demo_nebius --local         # Nodus ReAct loop, local model, real MCP
+```
+
+The local model drives `nge-gpu.gpu_provision / gpu_status / run_in_sandbox /
+gpu_release` over a real MCP stdio connection — the same tool wiring `--live`
+uses with Nemotron. CI covers this path headlessly via
+`test_mcp_bridge_integration.py` (Nodus' MCP client ↔ our MCP server, no model).
 
 Expected: `plan (route→Ultra) → gpu_provision(3×H100) → 3 sandboxes run a
 sharded pytest (commands vetted by the jail) → telemetry polls → node
@@ -84,7 +97,7 @@ slot-fill through `nodus_agent._chat`, and selects `NebiusFleet` +
 
 ## What is real vs. skeleton in this milestone
 
-| Real (tested in CI, no network — 43 tests) | Skeleton (documented) |
+| Real (tested in CI, no network — 46 tests + MCP integration job) | Skeleton (documented) |
 |---|---|
 | `nebius:` backend + reversible register shim | `NebiusFleet` network calls |
 | Nemotron tier router (`nge/router.py`) | `TokenFactorySandbox._build_client` (auth wiring only) |
@@ -92,7 +105,9 @@ slot-fill through `nodus_agent._chat`, and selects `NebiusFleet` +
 | Capability jail (`nge/policy.py`) enforced in `run_in_sandbox` | Grafana live wiring, demo video |
 | `MockFleet` (deterministic hot-node) + telemetry scoring | — |
 | `TokenFactorySandbox` create/put/exec/collect/destroy vs ConTree (fake-SDK tested) | — |
-| 5 GPU tools + stdlib MCP server · orchestrator · artifact · event log | — |
+| Real MCP server (`mcp` SDK) ↔ Nodus `McpBridge` — `test_mcp_bridge_integration` | — |
+| `demo_nebius --local`: real Nodus ReAct loop drives `nge-gpu.*` via a local model | — |
+| 5 GPU tools · orchestrator · artifact · event log | — |
 
 ## Build-next checklist (live path)
 

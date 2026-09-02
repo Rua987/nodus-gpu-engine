@@ -1,12 +1,14 @@
 {
-  "_comment": "Sample MCP config for the vendored Nodus runtime. Point Nodus at this file (mcp_config=...) and pass mcp_servers='nge-gpu' to run_agent, or `python nodus_agent.py \"...\" --mcp-servers nge-gpu`.",
+  "_comment": "Template only. At run time, nge.mcp_config.write_config() emits a resolved config (absolute script path + current interpreter) that Nodus' McpBridge consumes via run_agent(mcp_servers='nge-gpu', mcp_config=<that file>). Server: nge/tools/gpu_mcp_server.py (real mcp SDK 1.x; stdlib JSON-RPC fallback).",
   "mcpServers": {
     "nge-gpu": {
       "command": "python",
       "args": ["-m", "nge.tools.gpu_mcp_server"],
       "env": {
+        "PYTHONPATH": "<repo>/packages/engine",
         "NGE_FLEET_MODE": "mock",
-        "NGE_SANDBOX": "mock"
+        "NGE_SANDBOX": "mock",
+        "NGE_JAIL": "on"
       }
     }
   }
