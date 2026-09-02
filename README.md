@@ -1,6 +1,9 @@
 # Nodus-GPU Engine
 
 [![engine-tests](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml)
+[![python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)](pyproject.toml)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![tests](https://img.shields.io/badge/tests-43%20passing%20%C2%B7%20no%20network-brightgreen)](packages/engine/tests)
 
 **Agentic engineering platform — Nebius "Coding & Agentic Engineering" track.**
 
@@ -54,3 +57,8 @@ Architecture: [`packages/engine/docs/ARCHITECTURE.md`](packages/engine/docs/ARCH
 `packages/engine/docs/NEBIUS_TRACK.md` lists what's wired vs. skeleton
 (`NebiusFleet` network calls and `TokenFactorySandbox._build_client` are the
 remaining TODOs; everything else runs).
+
+## License
+
+MIT — see [`LICENSE`](LICENSE). The vendored `packages/nodus/` subtree is also
+MIT (Copyright (c) 2024 Temple IAM), with its own [`packages/nodus/LICENSE`](packages/nodus/LICENSE).
