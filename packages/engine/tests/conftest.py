@@ -20,6 +20,16 @@ import pytest  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
+def _isolate_credentials(tmp_path_factory, monkeypatch):
+    """No test may touch a real key. Point the ``.nebius_api_key`` /
+    ``.token_factory_api_key`` file lookup at an empty dir; tests that need a
+    key set it explicitly (env or monkeypatched load_api_key)."""
+    import nge.config as _cfg
+    monkeypatch.setattr(_cfg, "_ENGINE_DIR", tmp_path_factory.mktemp("nokeys"))
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _reset_engine():
     from nge.tools import handlers
     handlers.reset_state()

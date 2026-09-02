@@ -1,43 +1,41 @@
 """Nebius Token Factory Sandboxes - live execution isolation (ConTree SDK).
 
-Token Factory Sandboxes are exposed through the **ConTree SDK**
-(``pip install contree-sdk``; classes ``Contree`` / ``ContreeSync``;
-``sdk.images.use(image)`` -> ``image.run(shell=..., stdin=...).wait()`` ->
-``result.stdout / stderr / exit_code``). Docs:
-https://docs.tokenfactory.nebius.com/sandboxes/
+Real wiring against ``contree-sdk`` (``pip install contree-sdk``):
 
-Status of this file:
-    create / put_files / exec / collect / destroy  -> IMPLEMENTED against the
-        documented ``ContreeSync`` surface (file I/O done via ``cat`` since the
-        SDK's dedicated upload/download helpers are not documented publicly yet).
-    _build_client()                                -> the ONE open item: the
-        authenticated SDK client constructor. Raises NotImplementedError with a
-        pointer until confirmed against an account.
+    ContreeSync(config=ContreeConfig(auth=IAMAuth(token=..., project_id=...,
+        base_url="https://api.tokenfactory.nebius.com/sandboxes/")))
+    img  = client.images.docker("python:3.11-slim")   # import if needed
+    sess = img.session()                               # stateful sandbox
+    done = sess.run(args=["/bin/sh", "-c", cmd], files={...}, timeout=...).wait()
+    done.exit_code / done.stdout / done.stderr / done.elapsed
+    sess.read("path")  -> bytes
+
+Signature-compatible with :class:`MockSandbox`. Needs ``NEBIUS_API_KEY``
+(or ``packages/engine/.nebius_api_key``) **and** ``NEBIUS_PROJECT_ID``.
+
+Smoke test:  python -m nge.sandbox.token_factory
 """
 from __future__ import annotations
 
-import shlex
 import time
 from typing import Dict
 
 from nge.sandbox.base import ExecResult, Sandbox, SandboxSpec
 
+DEFAULT_TF_BASE_URL = "https://api.tokenfactory.nebius.com/sandboxes/"
+DEFAULT_IMAGE = "python:3.11-slim"
+
 
 def _import_contree():
-    """Return (ContreeSync, module) or raise a helpful ImportError."""
+    """Return (ContreeSync, ContreeConfig, IAMAuth) or raise a helpful error."""
     try:
-        from contree import ContreeSync  # type: ignore
-        import contree as mod  # type: ignore
-        return ContreeSync, mod
-    except Exception:
-        pass
-    try:
-        from contree_sdk import ContreeSync  # type: ignore
-        import contree_sdk as mod  # type: ignore
-        return ContreeSync, mod
+        from contree_sdk import ContreeSync             # type: ignore
+        from contree_sdk.config import ContreeConfig    # type: ignore
+        from contree_sdk.auth import IAMAuth            # type: ignore
+        return ContreeSync, ContreeConfig, IAMAuth
     except Exception as exc:  # pragma: no cover - env dependent
         raise ImportError(
-            "ConTree SDK not installed - `pip install contree-sdk` "
+            "ConTree SDK missing - `pip install contree-sdk` "
             "(Nebius Token Factory Sandboxes)."
         ) from exc
 
@@ -48,37 +46,30 @@ class TokenFactorySandbox(Sandbox):
     def __init__(self, config=None) -> None:
         from nge import config as _cfg
         self.cfg = config or _cfg.load()
-        self.base_url = self.cfg.token_factory_base_url
-        self._api_key = self.cfg.token_factory_api_key()
+        self.base_url = self.cfg.token_factory_base_url or DEFAULT_TF_BASE_URL
         self._sdk = None
-        self._images: Dict[str, object] = {}   # sandbox_id -> ConTree image handle
+        self._sessions: Dict[str, object] = {}     # sid -> ConTree session
+        self._pending: Dict[str, dict] = {}        # sid -> files to seed on next exec
         self._n = 0
 
     # -- client -----------------------------------------------------------
     def _build_client(self):
-        """Construct the authenticated ConTree API client.
-
-        TODO(live): confirm against an account. The ConTree docs show
-        ``ContreeSync(api_client)`` but do not publish the ``api_client`` /
-        auth constructor. Expected shape:
-
-            from contree import ContreeSync, ApiClient
-            client = ApiClient(base_url=self.base_url, api_key=self._api_key)
-            return ContreeSync(client)
-        """
-        if not self._api_key:
+        key = self.cfg.token_factory_api_key() or self.cfg.nebius_api_key()
+        pid = self.cfg.nebius_project_id
+        if not key:
             raise RuntimeError(
-                "Token Factory not configured - set TOKEN_FACTORY_API_KEY "
-                "(or packages/engine/.token_factory_api_key)."
-            )
-        raise NotImplementedError(
-            "TokenFactorySandbox._build_client: wire ContreeSync(api_client). "
-            "See https://docs.tokenfactory.nebius.com/sandboxes/sdk"
-        )
+                "Token Factory: no API key - set NEBIUS_API_KEY or "
+                "packages/engine/.nebius_api_key")
+        if not pid:
+            raise RuntimeError(
+                "Token Factory: no project id - set NEBIUS_PROJECT_ID "
+                "(from the Nebius console).")
+        ContreeSync, ContreeConfig, IAMAuth = _import_contree()
+        auth = IAMAuth(token=key, project_id=pid, base_url=self.base_url)
+        return ContreeSync(config=ContreeConfig(auth=auth))
 
     def _sdk_ready(self):
         if self._sdk is None:
-            ContreeSync, _ = _import_contree()
             self._sdk = self._build_client()
         return self._sdk
 
@@ -89,46 +80,70 @@ class TokenFactorySandbox(Sandbox):
         sid = f"tf-sbx-{self._n:02d}"
         if spec.node_id:
             sid = f"{sid}@{spec.node_id}"
-        # ConTree: import/select the base image for this sandbox session.
-        self._images[sid] = sdk.images.use(spec.image)
+        img = sdk.images.docker(spec.image or DEFAULT_IMAGE)
+        self._sessions[sid] = img.session()
+        self._pending[sid] = {}
         return sid
 
     def put_files(self, sandbox_id: str, files: Dict[str, str]) -> None:
-        img = self._images[sandbox_id]
-        for path, content in (files or {}).items():
-            q = shlex.quote(path)
-            res = img.run(shell=f"mkdir -p \"$(dirname {q})\" && cat > {q}",
-                          stdin=content).wait()
-            if getattr(res, "exit_code", 0) != 0:
-                raise RuntimeError(f"put_files failed for {path}: {res.stderr}")
+        self._pending.setdefault(sandbox_id, {}).update(files or {})
 
     def exec(self, sandbox_id: str, command: str, timeout: int = 120) -> ExecResult:
-        img = self._images[sandbox_id]
+        sess = self._sessions[sandbox_id]
+        files = self._pending.pop(sandbox_id, None) or None
         t0 = time.perf_counter()
-        res = img.run(shell=command, timeout=timeout).wait()
+        done = sess.run(args=["/bin/sh", "-c", command], files=files,
+                        timeout=timeout).wait()
+        self._sessions[sandbox_id] = done
+        dur = getattr(done, "elapsed", None)
         return ExecResult(
-            exit_code=int(getattr(res, "exit_code", 0)),
-            stdout=getattr(res, "stdout", "") or "",
-            stderr=getattr(res, "stderr", "") or "",
-            duration_s=round(time.perf_counter() - t0, 3),
+            exit_code=int(getattr(done, "exit_code", 0) or 0),
+            stdout=getattr(done, "stdout", "") or "",
+            stderr=getattr(done, "stderr", "") or "",
+            duration_s=float(dur) if dur is not None
+            else round(time.perf_counter() - t0, 3),
         )
 
     def collect(self, sandbox_id: str, paths: list) -> Dict[str, str]:
-        img = self._images[sandbox_id]
+        sess = self._sessions[sandbox_id]
         out: Dict[str, str] = {}
         for p in paths or []:
-            res = img.run(shell=f"cat {shlex.quote(p)}").wait()
-            out[p] = res.stdout if getattr(res, "exit_code", 1) == 0 else \
-                f"[missing: {p}] {getattr(res, 'stderr', '')}".strip()
+            try:
+                out[p] = sess.read(p).decode("utf-8", "replace")
+            except Exception as exc:
+                out[p] = f"[missing: {p}] {type(exc).__name__}"
         return out
 
     def destroy(self, sandbox_id: str) -> None:
-        img = self._images.pop(sandbox_id, None)
-        for meth in ("destroy", "close", "delete", "stop"):
-            fn = getattr(img, meth, None)
+        sess = self._sessions.pop(sandbox_id, None)
+        self._pending.pop(sandbox_id, None)
+        for meth in ("close", "delete", "stop"):
+            fn = getattr(sess, meth, None)
             if callable(fn):
                 try:
                     fn()
                 except Exception:
                     pass
                 break
+
+
+def _smoke() -> int:
+    """Real end-to-end: build client -> spawn a sandbox -> run a command."""
+    from nge import config as _cfg
+    sbx = TokenFactorySandbox(_cfg.load())
+    sdk = sbx._sdk_ready()
+    try:
+        print("token info:", sdk.get_token_info())
+    except Exception as exc:
+        print("get_token_info failed:", exc)
+    sid = sbx.create(SandboxSpec(image=DEFAULT_IMAGE, node_id="smoke"))
+    print("sandbox:", sid)
+    res = sbx.exec(sid, "echo tf-sandbox-ok && python -V && (nvidia-smi -L || true)")
+    print(f"exit={res.exit_code}  {res.duration_s}s\n"
+          f"--- stdout ---\n{res.stdout}\n--- stderr ---\n{res.stderr}")
+    sbx.destroy(sid)
+    return 0 if res.exit_code == 0 else 1
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(_smoke())

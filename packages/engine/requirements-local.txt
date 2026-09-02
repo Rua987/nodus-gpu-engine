@@ -1,4 +1,7 @@
 # Local end-to-end path: real Nodus ReAct loop + real MCP server, driven by a
 # local Ollama model as a Nemotron stand-in (no cloud, no credits).
 -r requirements.txt
-mcp>=1,<2          # Nodus' MCP client is SDK 1.x; 2.x renamed/!broke the API
+mcp>=1,<2          # Nodus' MCP client is SDK 1.x; 2.x renamed/broke the API
+
+# --live path: real Nebius Token Factory sandboxes
+contree-sdk>=0.3

@@ -56,9 +56,14 @@ def run_orchestrated(args, live: bool) -> int:
 
     if live:
         os.environ.setdefault("NGE_TRACK", "nebius")
-        cfg = _cfg.load(fleet_mode="nebius", sandbox_mode="token_factory")
+        # env can pin either half back to mock for a partial-real run, e.g.
+        #   NGE_FLEET_MODE=mock python -m nge.demo_nebius --live
+        #   -> real Nemotron + real Token Factory sandbox, simulated fleet ledger
+        cfg = _cfg.load(fleet_mode=os.environ.get("NGE_FLEET_MODE") or "nebius",
+                        sandbox_mode=os.environ.get("NGE_SANDBOX") or "token_factory")
         chat_fn = _live_chat_fn(cfg.nemotron_model)
-        print(f"[live] Nemotron={cfg.nemotron_model}  fleet=nebius  sandbox=token_factory")
+        print(f"[live] Nemotron={cfg.nemotron_model}  "
+              f"fleet={cfg.fleet_mode}  sandbox={cfg.sandbox_mode}")
     else:
         cfg = _cfg.load(fleet_mode="mock", sandbox_mode="mock")
         chat_fn = None
