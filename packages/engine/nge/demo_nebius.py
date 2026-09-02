@@ -108,6 +108,8 @@ def run_orchestrated(args, live: bool) -> int:
         mark = "OK " if x.get("verified") else ("-- " if not x.get("patch") else "KO ")
         print(f"  fix {mark} {x['test']}")
     print(f"artifact: {report.artifact_path}")
+    if report.html_path:
+        print(f"html:     {report.html_path}")
     if args.json:
         print(json.dumps(report.as_dict(), indent=2, ensure_ascii=False))
     return 0 if report.ok else 1

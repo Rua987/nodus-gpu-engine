@@ -27,7 +27,7 @@ cd packages/engine
 pip install -r requirements.txt
 python -m pytest -q
 python -m nge.demo_nebius --mock
-# -> packages/engine/out/report_<ts>.md
+# -> out/report_<ts>.md  +  out/report_<ts>.html (self-contained, screenshotable)
 ```
 
 The mock run: `plan` → `gpu_provision(3×H100)` → 3 sandboxes run a sharded pytest

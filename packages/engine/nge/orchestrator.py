@@ -66,6 +66,7 @@ class RunReport:
     shards: List[ShardResult]
     failures: List[dict]
     events: List[dict]
+    html_path: Optional[str] = None
     routes: List[dict] = field(default_factory=list)
     remediations: List[dict] = field(default_factory=list)
     fixes: List[dict] = field(default_factory=list)
@@ -73,6 +74,7 @@ class RunReport:
     def as_dict(self) -> dict:
         return {
             "ok": self.ok, "artifact_path": self.artifact_path,
+            "html_path": self.html_path,
             "plan": {"names": self.plan_names, "source": self.plan_source},
             "shards": [s.__dict__ for s in self.shards],
             "failures": self.failures,
@@ -263,6 +265,7 @@ class NgeOrchestrator:
 
         return RunReport(
             ok=True, artifact_path=str(artifact),
+            html_path=str(self._html_path) if getattr(self, "_html_path", None) else None,
             plan_names=pr.names, plan_source=pr.source,
             shards=shard_results, failures=failures, events=list(self.events),
             routes=list(self.routes), remediations=list(self.remediations),
@@ -406,4 +409,17 @@ class NgeOrchestrator:
         lines += ["## Event log", "", "```json",
                   json.dumps(self.events, indent=2, ensure_ascii=False), "```", ""]
         path.write_text("\n".join(lines), encoding="utf-8")
+
+        # sibling self-contained HTML (screenshotable)
+        try:
+            from nge import report_html
+            self._html_path = report_html.render({
+                "plan": {"names": pr.names, "source": pr.source},
+                "shards": [s.__dict__ for s in shard_results],
+                "failures": failures, "routes": self.routes,
+                "remediations": self.remediations, "fixes": fixes or [],
+                "events": self.events,
+            }, path.with_suffix(".html"))
+        except Exception:
+            self._html_path = None
         return path

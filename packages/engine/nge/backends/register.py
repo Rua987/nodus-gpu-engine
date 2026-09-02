@@ -37,6 +37,33 @@ def _wrap_chat_api(orig):
     return chat_api
 
 
+_PROBE = "nebius:__register_selfcheck__"
+
+
+def verify() -> None:
+    """Fail loud if the patch is not actually in effect where it must be.
+
+    Guards against a vendored-Nodus refactor changing import style (e.g.
+    ``nodus_agent`` re-importing ``detect_backend`` after apply()) silently
+    routing ``nebius:`` models to Ollama.
+    """
+    import nodus_backends as nb
+    if nb.detect_backend(_PROBE) != _nebius.BACKEND_NAME:
+        raise RuntimeError(
+            "register: monkey-patch not in effect on nodus_backends.detect_backend "
+            "- vendored Nodus may have changed. nebius: models would misroute.")
+    if getattr(nb.chat_api, "__wrapped__", None) is None:
+        raise RuntimeError("register: nodus_backends.chat_api is not the wrapper")
+    try:
+        import nodus_agent as na
+    except Exception:
+        return
+    if na.detect_backend(_PROBE) != _nebius.BACKEND_NAME:
+        raise RuntimeError(
+            "register: nodus_agent.detect_backend not repointed - it likely "
+            "re-imported the name from nodus_backends after apply().")
+
+
 def apply() -> None:
     """Idempotently install the nebius: routes. Safe to call many times."""
     global _APPLIED
@@ -60,6 +87,7 @@ def apply() -> None:
         pass
 
     _APPLIED = True
+    verify()
 
 
 def restore() -> None:

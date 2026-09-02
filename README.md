@@ -32,7 +32,7 @@ Token Factory        ──▶  isolated exec + capability jail [ execution   ]
 cd packages/engine
 pip install -r requirements.txt
 python -m pytest -q                 # 43 tests
-python -m nge.demo_nebius --mock    # -> packages/engine/out/report_<ts>.md
+python -m nge.demo_nebius --mock    # -> out/report_<ts>.md  +  .html (self-contained)
 ```
 
 The mock run: `plan (→Ultra)` → `gpu_provision(3×H100)` → 3 sandboxes run a
