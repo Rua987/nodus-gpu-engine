@@ -137,6 +137,94 @@ def test_fix_command_quotes_the_test_keyword(tmp_path, monkeypatch):
     assert policy.check_command(cmd)[0]
 
 
+# -- 2. hostile / empty LLM output must not break a run ---------------------
+
+def _with_reply(tmp_path, reply):
+    return NgeOrchestrator(config=_cfg.load(
+        fleet_mode="mock", sandbox_mode="mock", out_dir=tmp_path),
+        chat_fn=lambda m, mo, t: reply)
+
+
+@pytest.mark.parametrize("reply", [
+    {"content": ""}, {"content": "  \n "}, None, {"foo": "bar"},
+])
+def test_empty_model_reply_falls_back_instead_of_crashing(tmp_path, reply):
+    """Regression: `.splitlines()[0]` raised IndexError and killed the run."""
+    o = _with_reply(tmp_path, reply)
+    cmd = o._shard_command("t", ["bash"], "tests", 0, 1)
+    assert cmd == "NGE_SHARD=0/1 python -m pytest tests -q -p no:cacheprovider"
+    assert [e for e in o.events if e["kind"] == "slotfill_empty"]
+
+
+def test_fenced_reply_yields_the_command_not_the_fence(tmp_path):
+    """Regression: a fenced reply produced the literal command '```bash'."""
+    o = _with_reply(tmp_path, {"content": "```bash\npytest -q\n```"})
+    assert o._shard_command("t", [], "tests", 0, 1) == "pytest -q"
+
+
+def test_a_raising_model_does_not_take_the_run_down(tmp_path):
+    def boom(*a, **k):
+        raise TimeoutError("504")
+    o = NgeOrchestrator(config=_cfg.load(
+        fleet_mode="mock", sandbox_mode="mock", out_dir=tmp_path), chat_fn=boom)
+    cmd = o._shard_command("t", [], "tests", 1, 3)
+    assert cmd.startswith("NGE_SHARD=1/3")
+    assert [e for e in o.events if e["kind"] == "slotfill_error"]
+
+    assert o._propose_patch({"test": "t", "error": "e"}, "m") is None
+    assert [e for e in o.events if e["kind"] == "patch_error"]
+
+
+def test_patch_survives_a_mislabelled_fence(tmp_path):
+    diff = "--- a/x.py\n+++ b/x.py\n@@\n-a\n+b"
+    o = _with_reply(tmp_path, {"content": f"```python\n{diff}\n```"})
+    assert o._propose_patch({"test": "t", "error": "e"}, "m") == diff
+
+
+def test_failed_regex_rejects_shell_metacharacters():
+    from nge.orchestrator import _FAILED_RE
+    ok = "FAILED tests/t.py::test_p[a-1] - boom"
+    assert [m.group(1) for m in _FAILED_RE.finditer(ok)] == ["tests/t.py::test_p[a-1]"]
+    for evil in ["FAILED tests/t.py::test_a;whoami - boom",
+                 "FAILED t.py::x`id` - boom",
+                 "FAILED t.py::x$(id) - boom",
+                 "FAILED t.py::x|nc - boom"]:
+        assert list(_FAILED_RE.finditer(evil)) == [], evil
+
+
+# -- 3. mission intents must reach the orchestrator -------------------------
+
+def test_auto_fix_off_skips_the_code_agent(tmp_path):
+    o = _orch(tmp_path)
+    rep = o.run({**SCENARIO, "auto_fix": False})
+    assert rep.fixes == []
+    skipped = [e for e in o.events if e["kind"] == "autofix_skipped"]
+    assert skipped and skipped[0]["reason"] == "disabled by mission"
+
+
+def test_self_heal_off_leaves_the_hot_node_alone(tmp_path):
+    o = _orch(tmp_path)
+    rep = o.run({**SCENARIO, "self_heal": False})
+    assert rep.remediations == []
+    assert all(s.migrated_from is None for s in rep.shards)
+    assert not [e for e in o.events if e["kind"] == "gpu_remediation"]
+
+
+def test_intents_default_to_on(tmp_path):
+    o = _orch(tmp_path)
+    rep = o.run(SCENARIO)                      # no self_heal / auto_fix keys
+    assert rep.remediations and rep.fixes
+
+
+def test_mission_intents_survive_the_round_trip(tmp_path):
+    from nge.mission import parse_mission
+    sc = parse_mission("Run tests, do not migrate, and don't fix anything").scenario()
+    assert sc["self_heal"] is False and sc["auto_fix"] is False
+    o = _orch(tmp_path)
+    rep = o.run({**sc, "shards": 3, "target": "packages/nodus/tests"})
+    assert rep.remediations == [] and rep.fixes == []
+
+
 # -- gpu_type must follow the scenario --------------------------------------
 
 def test_gpu_type_propagates_to_replacement_and_fix_nodes(tmp_path):

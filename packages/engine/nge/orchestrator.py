@@ -27,12 +27,18 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 from nge import config as _cfg
+from nge import llm_text
 from nge.tools import handlers
 
 # packages/engine/nge/orchestrator.py -> repo root
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
-_FAILED_RE = re.compile(r"^FAILED\s+(\S+)\s+-\s+(.*)$", re.M)
+# A pytest node id, minus every shell metacharacter. `kw` is derived from this
+# and interpolated into a sandbox command, so a stdout line reading
+# `FAILED t.py::test_a;whoami - x` must not parse at all rather than smuggle a
+# second command through (shlex.quote is the other half of that belt).
+_TEST_ID = r"[^\s;&|`$(){}<>'\"\\]+"
+_FAILED_RE = re.compile(rf"^FAILED\s+({_TEST_ID})\s+-\s+(.*)$", re.M)
 # files a unified diff touches: "--- a/path" / "+++ b/path"
 _PATCH_FILE_RE = re.compile(r"^(?:---|\+\+\+)\s+[ab]/(\S+)", re.M)
 
@@ -140,9 +146,18 @@ class NgeOrchestrator:
             f"Shard {index} of {shards}. Target path: {target}\n"
             "Reply with ONLY the command."
         )
-        msg = self.chat_fn([{"role": "user", "content": prompt}], model, None)
-        cmd = (msg.get("content") or "").strip().splitlines()[0].strip() if msg else ""
-        return cmd or f"NGE_SHARD={index}/{shards} {base}"
+        fallback = f"NGE_SHARD={index}/{shards} {base}"
+        try:
+            msg = self.chat_fn([{"role": "user", "content": prompt}], model, None)
+        except Exception as exc:                     # a flaky model must not
+            self._emit("slotfill_error", shard=index,   # take the run down
+                       error=f"{type(exc).__name__}: {exc}")
+            return fallback
+        cmd = llm_text.first_command(msg)
+        if not cmd:
+            self._emit("slotfill_empty", shard=index)
+            return fallback
+        return cmd
 
     # -- feedback loop : agents self-manage their GPU compute ----------
     def _react_to_pressure(self, sr: "ShardResult", tele: Optional[dict],
@@ -258,6 +273,9 @@ class NgeOrchestrator:
         gpu_type = scenario.get("gpu_type", "H100")
         target = scenario.get("target", "packages/nodus/tests")
         collect = scenario.get("collect", [])
+        # mission intents - default on, an engineer can turn either off
+        self_heal = bool(scenario.get("self_heal", True))
+        auto_fix = bool(scenario.get("auto_fix", True))
 
         # 3) fan out
         for i, node_id in enumerate(node_ids):
@@ -278,8 +296,9 @@ class NgeOrchestrator:
 
             # feedback loop: react if this node is throttling / inefficient
             # (same telemetry reading - no second poll)
-            self._react_to_pressure(shard_results[-1], tele, target, collect,
-                                    gpu_type)
+            if self_heal:
+                self._react_to_pressure(shard_results[-1], tele, target,
+                                        collect, gpu_type)
 
             sr = shard_results[-1]
             self._emit("shard_done", index=i, node_id=sr.node_id,
@@ -299,7 +318,11 @@ class NgeOrchestrator:
 
         # 5) code agent: propose a patch per failure, apply + re-test in a
         #    fresh sandbox, keep only the verified ones
-        fixes.extend(self._attempt_fixes(failures, target, gpu_type))
+        if auto_fix:
+            fixes.extend(self._attempt_fixes(failures, target, gpu_type))
+        else:
+            self._emit("autofix_skipped", reason="disabled by mission",
+                       would_have_tried=min(len(failures), self.MAX_FIXES))
 
     # -- code agent : propose fix -> apply + re-test in a fresh sandbox ----
     def _propose_patch(self, failure: dict, model: str) -> Optional[str]:
@@ -317,14 +340,13 @@ class NgeOrchestrator:
             "that fixes it - no prose.\n"
             f"Test: {failure['test']}\nError: {failure['error']}\n"
         )
-        msg = self.chat_fn([{"role": "user", "content": prompt}], model, None)
-        text = (msg or {}).get("content") or ""
-        if "```" in text:
-            text = text.split("```", 2)[1]
-            if text.startswith("diff"):
-                text = text[4:]
-        text = text.strip("\n")
-        return text if text.startswith(("--- ", "diff --git")) else None
+        try:
+            msg = self.chat_fn([{"role": "user", "content": prompt}], model, None)
+        except Exception as exc:
+            self._emit("patch_error", test=failure.get("test"),
+                       error=f"{type(exc).__name__}: {exc}")
+            return None
+        return llm_text.unified_diff(msg)
 
     def _sources_for_patch(self, patch: str) -> Dict[str, str]:
         """Read the repo files a patch touches, so ``git apply`` has something

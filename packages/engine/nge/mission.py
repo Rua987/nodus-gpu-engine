@@ -26,8 +26,11 @@ _ARTIFACT_RE = re.compile(r"\b([\w./-]+\.(?:xml|md|json|txt|html|log))\b", re.I)
 
 _SELF_HEAL = ("self-heal", "self heal", "auto-repair", "auto repair", "auto-migrate",
               "migrate", "throttl", "reallocat", "move them", "s'auto", "auto-migre")
+_NO_HEAL = ("no self-heal", "no self heal", "don't migrate", "do not migrate",
+            "no migration", "disable self-heal", "without migration",
+            "stay on the same node", "ne pas migrer", "sans migration")
 _NO_FIX = ("no fix", "don't fix", "do not fix", "skip fix", "report only",
-           "just report", "no patch")
+           "just report", "no patch", "ne corrige pas", "sans correctif")
 
 
 @dataclass
@@ -42,9 +45,13 @@ class Mission:
     derived: List[str] = field(default_factory=list)
 
     def scenario(self) -> dict:
+        """The dict NgeOrchestrator.run() consumes. Every parsed field is
+        carried through - an intent that does not reach the orchestrator is an
+        intent the engineer expressed for nothing."""
         return {"name": "mission", "task": self.task, "shards": self.shards,
                 "gpu_type": self.gpu_type, "target": self.target,
-                "collect": self.collect}
+                "collect": self.collect, "self_heal": self.self_heal,
+                "auto_fix": self.auto_fix}
 
 
 def parse_mission(text: str) -> Mission:
@@ -77,7 +84,11 @@ def parse_mission(text: str) -> Mission:
         m.collect = sorted(set(arts))
         why.append(f"collect={m.collect}")
 
-    if any(k in low for k in _SELF_HEAL):
+    # negation wins: "migrate" appears inside "do not migrate"
+    if any(k in low for k in _NO_HEAL):
+        m.self_heal = False
+        why.append("self-heal=off (explicit)")
+    elif any(k in low for k in _SELF_HEAL):
         m.self_heal = True
         why.append("self-heal=on (explicit)")
     if any(k in low for k in _NO_FIX):
