@@ -19,16 +19,22 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from nge import config as _cfg
 from nge.tools import handlers
 
+# packages/engine/nge/orchestrator.py -> repo root
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
 _FAILED_RE = re.compile(r"^FAILED\s+(\S+)\s+-\s+(.*)$", re.M)
+# files a unified diff touches: "--- a/path" / "+++ b/path"
+_PATCH_FILE_RE = re.compile(r"^(?:---|\+\+\+)\s+[ab]/(\S+)", re.M)
 
 _FIX_HINTS = [
     ("not unique", "Make `old_string` unique or pass replace_all=True."),
@@ -140,7 +146,8 @@ class NgeOrchestrator:
 
     # -- feedback loop : agents self-manage their GPU compute ----------
     def _react_to_pressure(self, sr: "ShardResult", tele: Optional[dict],
-                           target: str, collect: list) -> None:
+                           target: str, collect: list,
+                           gpu_type: str = "H100") -> None:
         """If the shard's node is throttling / inefficient, migrate the shard
         onto a freshly provisioned healthy node. Bounded to one remediation
         per shard.
@@ -161,7 +168,7 @@ class NgeOrchestrator:
                    health=tele["health"], efficiency=tele["efficiency"],
                    temp_c=tele["temp_c"], power_w=tele["power_w"])
 
-        repl = handlers.gpu_provision(n=1, gpu_type="H100")["nodes"][-1]["id"]
+        repl = handlers.gpu_provision(n=1, gpu_type=gpu_type)["nodes"][-1]["id"]
         self._emit("gpu_provision_replacement", node_id=repl, for_shard=sr.index)
         handlers.gpu_allocate(job=f"shard-{sr.index}-retry")
         res = handlers.run_in_sandbox(command=sr.command, node_id=repl,
@@ -212,8 +219,47 @@ class NgeOrchestrator:
         node_ids = [n["id"] for n in prov["nodes"]]
         self._emit("gpu_provision", **prov)
 
-        # 3) fan out
         shard_results: List[ShardResult] = []
+        failures: List[dict] = []
+        fixes: List[dict] = []
+        try:
+            self._fan_out_and_fix(scenario, pr, node_ids, shard_results,
+                                  failures, fixes)
+        except BaseException as exc:                    # incl. KeyboardInterrupt
+            self._emit("run_error", error=f"{type(exc).__name__}: {exc}")
+            raise
+        finally:
+            # Release the fleet no matter what. A crash anywhere above would
+            # otherwise leave live GPU nodes allocated - and billing.
+            rel = handlers.gpu_release()
+            self._emit("gpu_release", **rel)
+
+        # deliver artifact
+        artifact = self._write_report(task, pr, shard_results, failures, fixes)
+        self._emit("artifact", path=str(artifact))
+        self._emit("run_end", ok=True)
+
+        return RunReport(
+            ok=True, artifact_path=str(artifact),
+            html_path=str(self._html_path) if getattr(self, "_html_path", None) else None,
+            plan_names=pr.names, plan_source=pr.source,
+            shards=shard_results, failures=failures, events=list(self.events),
+            routes=list(self.routes), remediations=list(self.remediations),
+            fixes=list(self.fixes),
+        )
+
+    def _fan_out_and_fix(self, scenario: dict, pr, node_ids: List[str],
+                         shard_results: List["ShardResult"],
+                         failures: List[dict], fixes: List[dict]) -> None:
+        """Shards -> triage -> auto-fix. Results are appended in place so the
+        caller can still write a report if this raises."""
+        task = scenario["task"]
+        shards = int(scenario.get("shards", 1))
+        gpu_type = scenario.get("gpu_type", "H100")
+        target = scenario.get("target", "packages/nodus/tests")
+        collect = scenario.get("collect", [])
+
+        # 3) fan out
         for i, node_id in enumerate(node_ids):
             handlers.gpu_allocate(job=f"shard-{i}")
             cmd = self._shard_command(task, pr.names, target, i, shards)
@@ -232,7 +278,8 @@ class NgeOrchestrator:
 
             # feedback loop: react if this node is throttling / inefficient
             # (same telemetry reading - no second poll)
-            self._react_to_pressure(shard_results[-1], tele, target, collect)
+            self._react_to_pressure(shard_results[-1], tele, target, collect,
+                                    gpu_type)
 
             sr = shard_results[-1]
             self._emit("shard_done", index=i, node_id=sr.node_id,
@@ -240,7 +287,7 @@ class NgeOrchestrator:
                        exit_code=sr.exit_code, failures=len(sr.failures))
 
         # 4) triage (consolidate + dedupe)
-        seen, failures = set(), []
+        seen = set()
         for sr in shard_results:
             for f in sr.failures:
                 if f["test"] in seen:
@@ -252,25 +299,7 @@ class NgeOrchestrator:
 
         # 5) code agent: propose a patch per failure, apply + re-test in a
         #    fresh sandbox, keep only the verified ones
-        fixes = self._attempt_fixes(failures, target)
-
-        # 6) release fleet
-        rel = handlers.gpu_release()
-        self._emit("gpu_release", **rel)
-
-        # 7) deliver artifact
-        artifact = self._write_report(task, pr, shard_results, failures, fixes)
-        self._emit("artifact", path=str(artifact))
-        self._emit("run_end", ok=True)
-
-        return RunReport(
-            ok=True, artifact_path=str(artifact),
-            html_path=str(self._html_path) if getattr(self, "_html_path", None) else None,
-            plan_names=pr.names, plan_source=pr.source,
-            shards=shard_results, failures=failures, events=list(self.events),
-            routes=list(self.routes), remediations=list(self.remediations),
-            fixes=list(self.fixes),
-        )
+        fixes.extend(self._attempt_fixes(failures, target, gpu_type))
 
     # -- code agent : propose fix -> apply + re-test in a fresh sandbox ----
     def _propose_patch(self, failure: dict, model: str) -> Optional[str]:
@@ -297,7 +326,31 @@ class NgeOrchestrator:
         text = text.strip("\n")
         return text if text.startswith(("--- ", "diff --git")) else None
 
-    def _attempt_fixes(self, failures: List[dict], target: str) -> List[dict]:
+    def _sources_for_patch(self, patch: str) -> Dict[str, str]:
+        """Read the repo files a patch touches, so ``git apply`` has something
+        to apply to *inside* the sandbox.
+
+        Without this the sandbox holds only ``fix.patch`` and the verification
+        can never succeed against a real Token Factory sandbox. Paths are
+        resolved and confined to the repo - the patch is model-written, so
+        ``--- a/../../etc/passwd`` must not read outside the tree.
+        """
+        out: Dict[str, str] = {}
+        for m in _PATCH_FILE_RE.finditer(patch or ""):
+            rel = m.group(1)
+            if rel in ("/dev/null", "dev/null") or rel in out:
+                continue
+            try:
+                p = (_REPO_ROOT / rel).resolve()
+                p.relative_to(_REPO_ROOT)          # refuse path escape
+                if p.is_file():
+                    out[rel] = p.read_text(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):
+                continue
+        return out
+
+    def _attempt_fixes(self, failures: List[dict], target: str,
+                       gpu_type: str = "H100") -> List[dict]:
         fixes: List[dict] = []
         for f in failures[: self.MAX_FIXES]:
             model = self._route("triage")          # slot-fill / triage -> Super
@@ -308,12 +361,20 @@ class NgeOrchestrator:
                               "patch": None, "reason": "no patch proposed"})
                 continue
 
-            node = handlers.gpu_provision(n=1, gpu_type="H100")["nodes"][-1]["id"]
+            node = handlers.gpu_provision(n=1, gpu_type=gpu_type)["nodes"][-1]["id"]
             handlers.gpu_allocate(job=f"fix-{f['test'].split('::')[-1]}")
             kw = f["test"].split("::")[-1]
+            # ship the touched sources next to the patch, and make the sandbox a
+            # git work tree so `git apply` has a repo to act on
+            files = {"fix.patch": patch}
+            sources = self._sources_for_patch(patch)
+            files.update(sources)
+            self._emit("fix_sources", test=f["test"], files=sorted(sources))
             res = handlers.run_in_sandbox(
-                command=f"git apply fix.patch && python -m pytest {target} -q -k {kw}",
-                node_id=node, files={"fix.patch": patch}, timeout=120,
+                command=("git init -q && git add -A && git apply fix.patch"
+                         f" && python -m pytest {shlex.quote(target)}"
+                         f" -q -k {shlex.quote(kw)}"),
+                node_id=node, files=files, timeout=120,
             )
             verified = res["exit_code"] == 0 and not res.get("blocked")
             self._emit("fix_verified" if verified else "fix_rejected",
