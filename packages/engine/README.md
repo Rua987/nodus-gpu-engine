@@ -112,3 +112,4 @@ with the exact Nebius / Token Factory operation to implement — see
 | `scenarios/` | demo scenario(s) |
 | `docs/ARCHITECTURE.md` | layer contract + data flow |
 | `docs/NEBIUS_TRACK.md` | judge-facing: run it, stack map, what to build next |
+| `docs/VALIDATION.md` | end-to-end validation runs (real Nemotron / real Nodus loop) + coverage matrix |
