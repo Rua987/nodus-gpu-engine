@@ -70,6 +70,20 @@ def run_orchestrated(args, live: bool) -> int:
         if not args.watch:
             print("[mock] deterministic run - no credentials, no network")
 
+    # --mission overrides the scenario file: the engineer states the what,
+    # the model (when there is one) extracts the how, the regex is the floor.
+    if getattr(args, "mission", None):
+        from nge.mission import parse_mission, parse_mission_llm
+        mis = (parse_mission_llm(args.mission, chat_fn, cfg.nemotron_model)
+               if chat_fn else parse_mission(args.mission))
+        scenario = mis.scenario()
+        if args.shards:
+            scenario["shards"] = args.shards
+        print(f"[mission] {mis.shards}x{mis.gpu_type} target={mis.target} "
+              f"self_heal={mis.self_heal} auto_fix={mis.auto_fix}")
+        for d in mis.derived:
+            print(f"          - {d}")
+
     watch = None
     if args.watch:
         from nge.watch import ConsoleWatch
@@ -172,6 +186,9 @@ def main(argv=None) -> int:
     mode.add_argument("--local", action="store_true", help="real Nodus ReAct loop + local Ollama")
     mode.add_argument("--live", action="store_true", help="Nemotron @ Nebius + real fleet/sandbox")
     ap.add_argument("--scenario", default=str(_DEFAULT_SCENARIO))
+    ap.add_argument("--mission", default=None,
+                    help="natural-language mission, overrides --scenario "
+                         "(parsed by the model when one is available)")
     ap.add_argument("--shards", type=int, default=None)
     ap.add_argument("--json", action="store_true", help="print the RunReport as JSON")
     ap.add_argument("--watch", action="store_true",
