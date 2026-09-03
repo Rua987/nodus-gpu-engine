@@ -99,7 +99,13 @@ jobs:
         id: creds
         run: |
           if [ -z "$NEBIUS_API_KEY" ] || [ -z "$NEBIUS_PROJECT_ID" ]; then
-            echo "NEBIUS_API_KEY / NEBIUS_PROJECT_ID are not set in repository secrets."
+            {
+              echo "### live-smoke skipped"
+              echo ""
+              echo "\`NEBIUS_API_KEY\` / \`NEBIUS_PROJECT_ID\` are not set in"
+              echo "repository secrets, so **nothing was verified against Nebius**."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::live-smoke skipped - Nebius secrets are not configured"
             echo "present=false" >> "$GITHUB_OUTPUT"
           else
             echo "present=true" >> "$GITHUB_OUTPUT"
@@ -109,7 +115,25 @@ jobs:
         if: steps.creds.outputs.present == 'true'
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt contree-sdk
+          # --live imports nodus_agent to install the `nebius:` backend patch,
+          # which pulls nodus_perceptual -> numpy. The engine requirements do
+          # not cover the vendored runtime, so the first CI run died on
+          # ModuleNotFoundError: No module named 'numpy' - present locally,
+          # absent on the runner.
+          pip install -r requirements.txt -r ../nodus/requirements-ci.txt contree-sdk
+
+      - name: Import the whole --live path before spending anything
+        if: steps.creds.outputs.present == 'true'
+        run: |
+          python -c "
+          import nge
+          from nge.backends import register
+          register.apply(); register.verify()
+          from nge import demo_nebius, live_check, orchestrator, planner, symbols
+          from nge.sandbox import token_factory
+          from nge.fleet import nebius
+          print('live path imports clean')
+          "
 
       - name: Sandbox smoke (auth + spawn + exec)
         if: steps.creds.outputs.present == 'true'
@@ -127,7 +151,10 @@ jobs:
           # --json prints a human summary before the report, so keep from the
           # first brace onwards
           python -c "import pathlib; t = pathlib.Path('live.json').read_text(encoding='utf-8'); pathlib.Path('report.json').write_text(t[t.index('{'):], encoding='utf-8')"
-          python -m nge.live_check report.json
+          # `| tee` would hand the step tee's exit code and the assertions could
+          # never fail the job - the same silent green this job exists to catch
+          set -o pipefail
+          python -m nge.live_check report.json | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.creds.outputs.present == 'true'
