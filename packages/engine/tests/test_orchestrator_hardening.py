@@ -181,9 +181,10 @@ def test_a_raising_model_does_not_take_the_run_down(tmp_path):
 
 
 def test_patch_survives_a_mislabelled_fence(tmp_path):
-    diff = "--- a/x.py\n+++ b/x.py\n@@\n-a\n+b"
+    diff = "--- a/x.py\n+++ b/x.py\n@@ -3,1 +3,1 @@\n-a\n+b"
     o = _with_reply(tmp_path, {"content": f"```python\n{diff}\n```"})
-    # a trailing newline is added: patch-ng needs a complete patch stream
+    # normalised on the way out: hunk counts recomputed from the body, and the
+    # trailing newline patch-ng requires
     assert o._propose_patch({"test": "t", "error": "e"}, "m") == diff + "\n"
 
 

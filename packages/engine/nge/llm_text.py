@@ -60,7 +60,13 @@ def first_command(msg) -> Optional[str]:
     return None
 
 
-_HUNK_RE = re.compile(r"^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@(.*)$")
+# Both `@@ -a,b +c,d @@` and a bare `@@`. Models write the bare form often -
+# it reads like a diff but patch-ng refuses the file outright ("skipping
+# invalid patch with no hunks"), so the patch dies before its content matters.
+# A bare header means "position unknown": it is given line 1 here and the
+# orchestrator's _relocate_hunks then finds where the context really is.
+_HUNK_RE = re.compile(
+    r"^@@(?:\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s*@@)?(.*)$")
 
 
 def normalize_hunks(diff: str) -> str:
@@ -75,7 +81,14 @@ def normalize_hunks(diff: str) -> str:
     """
     if not diff:
         return diff
-    lines = diff.splitlines()
+    # Drop git's envelope. patch-ng strips the a/ prefix itself when it sees a
+    # `diff --git` line, so our fixed `--strip 1` then removes one component
+    # too many and the file is reported missing:
+    #     source/target file does not exist: --- b'nodus/nodus_tools.py'
+    # Keeping only the ---/+++ form makes the strip depth predictable.
+    lines = [l for l in diff.splitlines()
+             if not l.startswith(("diff --git ", "index ", "old mode ",
+                                  "new mode ", "similarity index "))]
     out, i = [], 0
     while i < len(lines):
         m = _HUNK_RE.match(lines[i])
@@ -83,7 +96,10 @@ def normalize_hunks(diff: str) -> str:
             out.append(lines[i])
             i += 1
             continue
-        old_start, new_start, tail = int(m.group(1)), int(m.group(2)), m.group(3)
+        # a bare @@ carries no position; 1 is a placeholder for _relocate_hunks
+        old_start = int(m.group(1)) if m.group(1) else 1
+        new_start = int(m.group(2)) if m.group(2) else 1
+        tail = m.group(3)
         body, j = [], i + 1
         while j < len(lines):
             ln = lines[j]

@@ -3,6 +3,7 @@
 Regressions: an empty reply used to raise IndexError and kill the run, and a
 fenced reply produced the literal command '```bash'.
 """
+import pytest
 from nge import llm_text as lt
 
 
@@ -57,9 +58,11 @@ def test_first_command_plain_text():
 # -- unified_diff ------------------------------------------------------------
 
 DIFF = "--- a/x.py\n+++ b/x.py\n@@\n-a\n+b"
-# A patch stream must end with a newline: patch-ng refuses one that does not
-# with "patch stream is incomplete!", so unified_diff() always appends it.
-DIFF_OUT = DIFF + "\n"
+# unified_diff() normalises on the way out: a bare `@@` gets counts (and a
+# placeholder position that _relocate_hunks later corrects), and the stream
+# gets its trailing newline. patch-ng refuses it without either - a bare header
+# is rejected as "invalid patch with no hunks".
+DIFF_OUT = "--- a/x.py\n+++ b/x.py\n@@ -1,1 +1,1 @@\n-a\n+b\n"
 
 
 def test_unified_diff_none_when_absent():
@@ -80,7 +83,11 @@ def test_unified_diff_from_a_mislabelled_fence():
 def test_unified_diff_from_bare_prose():
     msg = {"content": f"Here is the fix:\ndiff --git a/x b/x\n{DIFF}"}
     got = lt.unified_diff(msg)
-    assert got.startswith("diff --git") and "+b" in got
+    # git's envelope is dropped: patch-ng strips the a/ prefix itself when it
+    # sees `diff --git`, so our fixed --strip 1 would remove one component too
+    # many and report the file missing
+    assert not got.startswith("diff --git")
+    assert got.startswith("--- a/x.py") and "+b" in got
 
 
 def test_unified_diff_ignores_a_non_diff_fence():
@@ -90,3 +97,65 @@ def test_unified_diff_ignores_a_non_diff_fence():
 def test_fenced_blocks_returns_bodies_in_order():
     text = "```a\none\n```\nmid\n```b\ntwo\n```"
     assert lt.fenced_blocks(text) == ["one\n", "two\n"]
+
+
+# -- bare @@ headers (what models actually write) ----------------------------
+
+def test_a_bare_hunk_header_gets_counts():
+    """`@@` with no numbers reads like a diff but patch-ng refuses the file
+    outright: "skipping invalid patch with no hunks"."""
+    d = "--- a/x.py\n+++ b/x.py\n@@\n keep\n-old\n+new\n"
+    out = lt.normalize_hunks(d)
+    assert out.splitlines()[2] == "@@ -1,2 +1,2 @@"
+
+
+def test_a_numbered_header_keeps_its_position():
+    d = "--- a/x.py\n+++ b/x.py\n@@ -35,7 +35,7 @@\n keep\n-old\n+new\n"
+    assert lt.normalize_hunks(d).splitlines()[2] == "@@ -35,2 +35,2 @@"
+
+
+def test_the_hunk_trailer_is_preserved():
+    d = "--- a/x.py\n+++ b/x.py\n@@ -1,9 +1,9 @@ def f(self):\n a\n-b\n+c\n"
+    assert lt.normalize_hunks(d).splitlines()[2] == "@@ -1,2 +1,2 @@ def f(self):"
+
+
+def test_several_hunks_are_each_counted():
+    d = ("--- a/x.py\n+++ b/x.py\n"
+         "@@\n a\n-b\n+c\n"
+         "@@ -50,9 +50,9 @@\n d\n e\n-f\n+g\n")
+    hdrs = [l for l in lt.normalize_hunks(d).splitlines() if l.startswith("@@")]
+    assert hdrs == ["@@ -1,2 +1,2 @@", "@@ -50,3 +50,3 @@"]
+
+
+def test_normalized_output_is_accepted_by_patch_ng():
+    import tempfile, pathlib
+    patch_ng = pytest.importorskip("patch_ng")
+    d = "--- a/x.py\n+++ b/x.py\n@@\n keep\n-old\n+new\n"
+    p = pathlib.Path(tempfile.mkdtemp()) / "f.patch"
+    p.write_text(lt.normalize_hunks(d), encoding="utf-8")
+    assert patch_ng.fromfile(str(p)), "bare @@ must survive normalisation"
+
+
+def test_git_envelope_is_dropped():
+    """patch-ng strips the a/ prefix itself for a `diff --git` patch, so a
+    fixed --strip 1 then removes one component too many:
+        source/target file does not exist: --- b'nodus/nodus_tools.py'
+    Live, this rejected a patch that was otherwise correct."""
+    d = ("diff --git a/pkg/mod.py b/pkg/mod.py\n"
+         "index 1234567..89abcde 100644\n"
+         "--- a/pkg/mod.py\n+++ b/pkg/mod.py\n@@\n a\n-b\n+c\n")
+    out = lt.normalize_hunks(d)
+    assert "diff --git" not in out and "index " not in out
+    assert out.startswith("--- a/pkg/mod.py")
+
+
+def test_strip_depth_is_stable_for_patch_ng():
+    patch_ng = pytest.importorskip("patch_ng")
+    import tempfile, pathlib
+    for head in ("", "diff --git a/pkg/mod.py b/pkg/mod.py\n"):
+        d = head + "--- a/pkg/mod.py\n+++ b/pkg/mod.py\n@@\n a\n-b\n+c\n"
+        p = pathlib.Path(tempfile.mkdtemp()) / "f.patch"
+        p.write_text(lt.normalize_hunks(d), encoding="utf-8")
+        parsed = patch_ng.fromfile(str(p))
+        assert parsed, head
+        assert parsed.items[0].source.decode() == "a/pkg/mod.py", head
