@@ -137,9 +137,12 @@ class NgeOrchestrator:
 
     # -- slot-fill -------------------------------------------------------
     def _shard_command(self, task: str, plan_names: List[str], target: str,
-                       index: int, shards: int) -> str:
+                       index: int, shards: int,
+                       own: Optional[List[str]] = None) -> str:
+        # what this shard is actually responsible for
+        paths = " ".join(shlex.quote(p) for p in own) if own else shlex.quote(target)
         base = (f"pip install -q pytest && "
-                f"python -m pytest {target} -q -p no:cacheprovider")
+                f"python -m pytest {paths} -q -p no:cacheprovider")
         model = self._route("slotfill")
         if self.chat_fn is None:
             return f"NGE_SHARD={index}/{shards} {base}"
@@ -171,6 +174,36 @@ class NgeOrchestrator:
                            reason=reason)
                 return fallback
         return cmd
+
+    # -- sharding --------------------------------------------------------
+    def _discover_test_files(self, target: str) -> List[str]:
+        """Test files under ``target``, repo-relative, sorted (deterministic)."""
+        try:
+            base = (_REPO_ROOT / target).resolve()
+            base.relative_to(_REPO_ROOT)
+        except (OSError, ValueError):
+            return []
+        if base.is_file():
+            return [base.relative_to(_REPO_ROOT).as_posix()]
+        if not base.is_dir():
+            return []
+        out = []
+        for f in sorted(base.rglob("test_*.py")) + sorted(base.rglob("*_test.py")):
+            if "__pycache__" in f.parts:
+                continue
+            rel = f.relative_to(_REPO_ROOT).as_posix()
+            if rel not in out:
+                out.append(rel)
+        return sorted(out)
+
+    def _shard_targets(self, files: List[str], index: int, shards: int) -> List[str]:
+        """Round-robin the test files over the shards.
+
+        Without this every shard ran the *same* `pytest <target>`: three GPUs
+        doing the identical suite three times. NGE_SHARD was in the command
+        but nothing ever read it.
+        """
+        return files[index::shards] if files else []
 
     @staticmethod
     def _ensure_runner(cmd: str) -> str:
@@ -309,6 +342,24 @@ class NgeOrchestrator:
         self_heal = bool(scenario.get("self_heal", True))
         auto_fix = bool(scenario.get("auto_fix", True))
 
+        # Split the work. The planner's vocabulary decides *how*: glob/grep
+        # mean "go look first", so the file list is discovered from the tree;
+        # otherwise the whole target goes to every shard (the old behaviour,
+        # kept only as an explicit, logged choice rather than an accident).
+        wants_discovery = bool({"glob", "grep"} & set(pr.names))
+        test_files = self._discover_test_files(target) if wants_discovery else []
+        if wants_discovery:
+            self._emit("plan_decision", decision="discover_test_files",
+                       because=[n for n in pr.names if n in ("glob", "grep")],
+                       files=len(test_files))
+        if not test_files:
+            # no plan hint (or nothing found): still split, so shards do not
+            # all repeat the identical suite
+            test_files = self._discover_test_files(target)
+            if test_files:
+                self._emit("shard_split", strategy="round-robin-files",
+                           files=len(test_files), shards=shards)
+
         # The sandbox starts from a bare image, so every shard needs the code
         # under test and a runner. Collected once, seeded into each sandbox.
         payload = self._payload_files(target, scenario.get("payload"))
@@ -318,9 +369,15 @@ class NgeOrchestrator:
 
         # 3) fan out
         for i, node_id in enumerate(node_ids):
+            own = self._shard_targets(test_files, i, shards)
+            if test_files and not own:
+                # more shards than test files - do not burn a sandbox on a
+                # duplicate of the whole suite
+                self._emit("shard_empty", index=i, node_id=node_id)
+                continue
             handlers.gpu_allocate(job=f"shard-{i}")
             cmd = self._ensure_runner(
-                self._shard_command(task, pr.names, target, i, shards))
+                self._shard_command(task, pr.names, target, i, shards, own))
             self._emit("shard_start", index=i, node_id=node_id, command=cmd)
             res = handlers.run_in_sandbox(command=cmd, node_id=node_id,
                                           files=payload, collect=collect,
