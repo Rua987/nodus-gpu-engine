@@ -44,5 +44,6 @@ Thumbs.db
 
 # nebius live config (never commit)
 .nebius_project_id
+.nodus_plan_ckpt
 .nebius_api_key
 .token_factory_api_key

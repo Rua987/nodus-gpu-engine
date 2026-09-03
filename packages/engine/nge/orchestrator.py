@@ -230,8 +230,11 @@ class NgeOrchestrator:
         # 1) plan (Nodus brain) - high-level reasoning routes to Ultra
         self._route("plan")
         from nge import planner
-        pr = planner.plan(task)
-        self._emit("plan", names=pr.names, source=pr.source, note=pr.note)
+        pr = planner.plan(task, config=self.config)
+        self._emit("plan", names=pr.names, source=pr.source, note=pr.note,
+                   degraded=pr.degraded)
+        if pr.degraded:
+            self._emit("plan_degraded", source=pr.source, reason=pr.note)
 
         # 2) provision fleet
         prov = handlers.gpu_provision(n=shards, gpu_type=gpu_type)
@@ -427,7 +430,9 @@ class NgeOrchestrator:
             "",
             f"**Task:** {task}",
             "",
-            f"- Plan ({pr.source}): `{pr.names}`",
+            f"- Plan ({pr.source}): `{pr.names}`"
+            + ("  **- not the 324M planner**" if pr.degraded else ""),
+            *([f"  - {pr.note}"] if pr.note else []),
             f"- Fleet mode: `{self.config.fleet_mode}` | Sandbox: `{self.config.sandbox_mode}`",
             f"- Shards: {len(shard_results)} | Unique failures: {len(failures)}"
             f" | Auto-fixed: {len([x for x in (fixes or []) if x.get('verified')])}",

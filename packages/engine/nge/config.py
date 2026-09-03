@@ -78,6 +78,7 @@ class Config:
     nebius_base_url: str = DEFAULT_NEBIUS_BASE_URL
     token_factory_base_url: str = ""
     nebius_project_id: str = ""
+    nodus_plan_ckpt: str = ""        # 324M planner weights; "" -> vendored default
     nebius_region: str = "eu-north1"
     jail: bool = True                 # capability jail on run_in_sandbox
     out_dir: Path = field(default=_ENGINE_DIR / "out")
@@ -111,6 +112,7 @@ def load(**overrides) -> Config:
         nebius_base_url=_env("NEBIUS_BASE_URL", DEFAULT_NEBIUS_BASE_URL),
         token_factory_base_url=load_value("token_factory_base_url", "TOKEN_FACTORY_BASE_URL"),
         nebius_project_id=load_value("nebius_project_id", "NEBIUS_PROJECT_ID"),
+        nodus_plan_ckpt=load_value("nodus_plan_ckpt", "NODUS_PLAN_CKPT"),
         nebius_region=_env("NEBIUS_REGION", "eu-north1"),
         jail=_env("NGE_JAIL", "on").lower() not in ("0", "off", "false", "no"),
         out_dir=Path(_env("NGE_OUT_DIR") or (_ENGINE_DIR / "out")),

@@ -84,6 +84,10 @@ def run_orchestrated(args, live: bool) -> int:
         for d in mis.derived:
             print(f"          - {d}")
 
+    from nge import planner as _planner
+    _ck, _ok, _note = _planner.ckpt_status(cfg)
+    print(f"[planner] {_note}" if _ok else f"[planner] WARNING - {_note}")
+
     watch = None
     if args.watch:
         from nge.watch import ConsoleWatch

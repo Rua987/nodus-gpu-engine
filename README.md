@@ -19,6 +19,20 @@ GPU fleet (Nebius)   ──▶  provision / monitor / migrate  [ infrastructure 
 Token Factory        ──▶  isolated exec + capability jail [ execution   ]
 ```
 
+> **The 324M planner needs its weights.** They are ~988 MB and not in git, so
+> without them the planner step falls back to a hand-written keyword heuristic
+> — a real fallback, but *not* the model. Every run says which one produced the
+> plan (`plan(nodus-324m)` vs `plan(heuristic)`, plus a `[planner] WARNING`
+> line and a `plan_degraded` event), so this is never silent. To use the model:
+>
+> ```bash
+> echo /path/to/checkpoint_sft_plan_v5.pt > packages/engine/.nodus_plan_ckpt
+> # or: export NODUS_PLAN_CKPT=/path/to/checkpoint_sft_plan_v5.pt
+> ```
+>
+> The two disagree — on `"Find the config file and read it"` the model answers
+> `['bash']` where the heuristic guesses `['glob', 'read_file']`.
+
 ## Layout
 
 | Path | What |
