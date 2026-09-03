@@ -362,6 +362,17 @@ def test_a_prose_reply_is_not_called_empty(tmp_path):
     assert len(un) == 2
     assert un[0]["reply_chars"] == len(prose)
     assert "cannot fix this" in un[0]["reply_head"], "keep a readable excerpt"
+    assert un[0]["why"] == "no diff in the reply"
+
+
+def test_headerless_hunks_are_named_as_such(tmp_path):
+    """Hunks with no `--- a/<path>`: the reply *is* a diff, but nothing says
+    which file. Distinct from a refusal, and not silently the same failure."""
+    headerless = "```diff\n@@ -1,2 +1,2 @@\n keep\n-old\n+new\n```"
+    o = _orch(tmp_path, chat_fn=lambda m, mo=None, t=None: {"content": headerless})
+    assert o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m") is None
+    un = [e for e in o.events if e["kind"] == "patch_unparsed"]
+    assert un and un[0]["why"] == "hunks with no file header"
 
 
 def test_a_good_first_reply_is_not_retried(tmp_path):

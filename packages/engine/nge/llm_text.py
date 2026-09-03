@@ -120,6 +120,41 @@ def normalize_hunks(diff: str) -> str:
 
 
 
+def _dedent(block: str) -> str:
+    """Remove a uniform indent a model added to a fenced diff.
+
+    Some replies indent the whole block by four spaces. The leading `---`
+    then no longer starts the line, extraction misses it entirely, and the
+    patch is lost as "no diff". A diff's own structure lives in column 0
+    (' ', '-', '+'), so only a shared prefix on *every* non-empty line is
+    stripped - never per-line whitespace, which would corrupt the hunks.
+    """
+    lines = block.splitlines()
+    real = [l for l in lines if l.strip()]
+    if not real:
+        return block
+    pad = min(len(l) - len(l.lstrip(" ")) for l in real)
+    if pad == 0:
+        return block
+    return "\n".join(l[pad:] if l.strip() else l for l in lines)
+
+
+def has_hunks_without_header(text: str) -> bool:
+    """A reply carrying `@@` hunks but naming no file.
+
+    Not recoverable here: without `--- a/<path>` there is nothing to say which
+    file to patch, and guessing would apply a diff to the wrong one. Reported
+    so the run says *why* nothing was extracted instead of a bare "no diff".
+    """
+    if not text:
+        return False
+    for body in fenced_blocks(text) or [text]:
+        b = _dedent(body.strip("\n"))
+        if b.startswith("@@") and not b.startswith(_DIFF_START):
+            return True
+    return False
+
+
 def unified_diff(msg) -> Optional[str]:
     """A unified diff out of a reply, or None.
 
@@ -135,7 +170,7 @@ def unified_diff(msg) -> Optional[str]:
     # whole thing with "patch stream is incomplete!" - a live Nemotron patch
     # was rejected for exactly that, before its content was even considered.
     for body in fenced_blocks(text):
-        stripped = body.strip("\n")
+        stripped = _dedent(body.strip("\n"))
         if stripped.startswith(_DIFF_START):
             return normalize_hunks(stripped)
 

@@ -810,10 +810,17 @@ class NgeOrchestrator:
             # Live these were logged under one name, and a 681-character reply
             # was reported as "patch_empty".
             text = llm_text.content_of(msg)
-            self._emit("patch_empty" if not text.strip() else "patch_unparsed",
-                       test=failure.get("test"), attempt=attempt,
-                       reply_chars=len(text),
-                       reply_head=text.strip()[:200] if text.strip() else "")
+            if not text.strip():
+                kind, why = "patch_empty", "model returned nothing"
+            elif llm_text.has_hunks_without_header(text):
+                # hunks but no `--- a/<path>`: which file to patch is unknown,
+                # and guessing would apply the diff to the wrong one
+                kind, why = "patch_unparsed", "hunks with no file header"
+            else:
+                kind, why = "patch_unparsed", "no diff in the reply"
+            self._emit(kind, test=failure.get("test"), attempt=attempt,
+                       why=why, reply_chars=len(text),
+                       reply_head=text.strip()[:200])
         return None
 
     def _sources_for_patch(self, patch: str) -> Dict[str, str]:

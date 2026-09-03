@@ -159,3 +159,37 @@ def test_strip_depth_is_stable_for_patch_ng():
         parsed = patch_ng.fromfile(str(p))
         assert parsed, head
         assert parsed.items[0].source.decode() == "a/pkg/mod.py", head
+
+
+# -- shapes that silently lost a patch ---------------------------------------
+
+BODY = "@@ -1,2 +1,2 @@\n keep\n-old\n+new\n"
+
+
+def test_a_fully_indented_block_is_still_a_diff():
+    """Some replies indent the whole block; `---` then no longer starts the
+    line and the patch was lost as "no diff"."""
+    ind = ("```diff\n    --- a/x.py\n    +++ b/x.py\n"
+           "    @@ -1,2 +1,2 @@\n     keep\n    -old\n    +new\n```")
+    got = lt.unified_diff({"content": ind})
+    assert got is not None
+    assert got.startswith("--- a/x.py")
+    # the diff's own column-0 markers must survive
+    assert "\n keep\n" in got and "\n-old\n" in got and "\n+new\n" in got
+
+
+def test_dedent_never_touches_a_ragged_block():
+    """Only a prefix shared by every line is removed - per-line stripping
+    would destroy the ' ' / '-' / '+' column that carries the meaning."""
+    d = "--- a/x.py\n+++ b/x.py\n" + BODY
+    assert lt._dedent(d) == d
+
+
+def test_hunks_without_a_file_header_are_identified():
+    """Recoverable? No - nothing says which file to patch, and guessing would
+    apply the diff to the wrong one. Reported so the run says why."""
+    assert lt.has_hunks_without_header(f"```diff\n{BODY}```")
+    assert lt.has_hunks_without_header(BODY)
+    assert not lt.has_hunks_without_header(f"```diff\n--- a/x.py\n+++ b/x.py\n{BODY}```")
+    assert not lt.has_hunks_without_header("I cannot fix this.")
+    assert not lt.has_hunks_without_header("")
