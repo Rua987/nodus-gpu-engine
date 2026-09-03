@@ -1,5 +1,6 @@
 """End-to-end mock run: plan -> fleet -> sandboxes -> triage -> artifact."""
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -151,8 +152,28 @@ def test_chat_fn_slotfill_is_used(cfg):
 
     def chat_fn(messages, model=None, tools=None):
         calls.append(model)
-        return {"role": "assistant", "content": "python -m pytest packages/nodus/tests -q -k smoke"}
+        # Answer for *this* shard: echo back the files the prompt named, or the
+        # command is rejected as off-target (it would un-do the split).
+        prompt = messages[-1]["content"]
+        own = re.findall(r"packages/nodus/tests/[\w./-]+\.py", prompt)
+        return {"role": "assistant",
+                "content": f"python -m pytest {' '.join(own)} -q -k smoke"}
 
     rep = NgeOrchestrator(config=cfg, chat_fn=chat_fn).run(SCENARIO)
     assert calls, "chat_fn should be called for slot-fill"
     assert any("-k smoke" in s.command for s in rep.shards)
+
+
+def test_a_command_that_drops_the_shards_files_is_rejected(cfg):
+    """Live, Nemotron answered `pytest packages/nodus/tests -v --gpu` for a
+    shard owning 4 named files: the split silently became "every shard runs
+    everything"."""
+    def chat_fn(messages, model=None, tools=None):
+        return {"role": "assistant",
+                "content": "python -m pytest packages/nodus/tests -v --gpu"}
+
+    o = NgeOrchestrator(config=cfg, chat_fn=chat_fn)
+    rep = o.run(SCENARIO)
+    assert [e for e in o.events if e["kind"] == "slotfill_off_target"]
+    assert not any("--gpu" in s.command for s in rep.shards)
+    assert len({s.command for s in rep.shards}) == len(rep.shards)

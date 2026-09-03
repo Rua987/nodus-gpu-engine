@@ -23,7 +23,7 @@ import shlex
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Callable, Dict, List, Optional
 
 from nge import config as _cfg
@@ -38,7 +38,10 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 # `FAILED t.py::test_a;whoami - x` must not parse at all rather than smuggle a
 # second command through (shlex.quote is the other half of that belt).
 _TEST_ID = r"[^\s;&|`$(){}<>'\"\\]+"
-_FAILED_RE = re.compile(rf"^FAILED\s+({_TEST_ID})\s+-\s+(.*)$", re.M)
+# The " - <message>" tail is optional: with plain `-q` pytest prints only
+# `FAILED <nodeid>`, which is exactly what the first working live run
+# produced - 3 real failures that parsed as zero.
+_FAILED_RE = re.compile(rf"^FAILED\s+({_TEST_ID})(?:\s+-\s+(.*))?$", re.M)
 # files a unified diff touches: "--- a/path" / "+++ b/path"
 _PATCH_FILE_RE = re.compile(r"^(?:---|\+\+\+)\s+[ab]/(\S+)", re.M)
 
@@ -150,7 +153,9 @@ class NgeOrchestrator:
             "Fill ONE shell command for this shard of a distributed test run.\n"
             f"Task: {task}\nPlan: {plan_names}\n"
             f"Shard {index} of {shards}. Target path: {target}\n"
-            "Reply with ONLY the command."
+            + (f"This shard runs EXACTLY these files, all of them and nothing "
+               f"else: {' '.join(own)}\n" if own else "")
+            + "Reply with ONLY the command."
         )
         fallback = f"NGE_SHARD={index}/{shards} {base}"
         try:
@@ -163,6 +168,16 @@ class NgeOrchestrator:
         if not cmd:
             self._emit("slotfill_empty", shard=index)
             return fallback
+        # The model is free to phrase the command, not to change the work.
+        # Live, Nemotron answered `pytest packages/nodus/tests -v --gpu` for a
+        # shard that owned 4 named files: it silently un-did the split (every
+        # shard back to the whole suite) and invented a --gpu flag, exit=4.
+        if own:
+            missing = [p for p in own if p not in cmd]
+            if missing:
+                self._emit("slotfill_off_target", shard=index, command=cmd,
+                           missing=len(missing))
+                return fallback
         # A command the jail will refuse costs the whole shard (exit 126, zero
         # tests run). Vet it here and keep the deterministic template instead -
         # the first live run lost every shard to $(...) the model invented.
@@ -205,17 +220,60 @@ class NgeOrchestrator:
         """
         return files[index::shards] if files else []
 
+    # -- what the tests need in order to import -------------------------
     @staticmethod
-    def _ensure_runner(cmd: str) -> str:
-        """Guarantee the test runner exists, whoever wrote the command.
+    def _source_root(target: str) -> str:
+        """The importable root for ``target``.
 
-        A Token Factory sandbox has no pytest. Asking the model nicely in the
-        prompt is not a guarantee - the first live run came back exit=127 on
-        every shard because Nemotron wrote a bare `pytest ...` despite being
-        told to install it first. The environment is the orchestrator's job,
-        not the model's.
+        Shipping only ``packages/nodus/tests`` gave
+        ``ModuleNotFoundError: No module named 'demo_agentic_cinema'`` - the
+        tests import modules that live one level up. Walk out of the tests
+        directory to find the root that has to be on PYTHONPATH.
         """
-        return cmd if "pip install" in cmd else f"pip install -q pytest && {cmd}"
+        p = PurePosixPath(target.replace("\\", "/"))
+        while p.name in ("tests", "test", "testing") and str(p.parent) != ".":
+            p = p.parent
+        return str(p) if str(p) != "." else target
+
+    @staticmethod
+    def _requirements_file(root: str) -> Optional[str]:
+        """A requirements file under ``root``, CI-flavoured first.
+
+        The bare image has no third-party packages either: once the import
+        path was fixed the next error was `No module named 'requests'`.
+        """
+        for name in ("requirements-ci.txt", "requirements-test.txt",
+                     "requirements-dev.txt", "requirements.txt"):
+            try:
+                cand = (_REPO_ROOT / root / name).resolve()
+                cand.relative_to(_REPO_ROOT)
+            except (OSError, ValueError):
+                continue
+            if cand.is_file():
+                return f"{root}/{name}"
+        return None
+
+    @staticmethod
+    def _ensure_runner(cmd: str, source_root: str = "",
+                       requirements: Optional[str] = None) -> str:
+        """Guarantee the runner, the deps and the import path.
+
+        A Token Factory sandbox has no pytest, no third-party packages and no
+        PYTHONPATH pointing at our code. Asking the model nicely in the prompt
+        is not a guarantee - the first live run came back exit=127 on every
+        shard because Nemotron wrote a bare `pytest ...` despite being told to
+        install it first. Environment setup is the orchestrator's job.
+        """
+        install = (f"pip install -q -r {shlex.quote(requirements)}"
+                   if requirements else "pip install -q pytest")
+        body = cmd
+        if "pip install" in body:               # model already tried; use ours
+            parts = [seg for seg in body.split("&&")
+                     if "pip install" not in seg]
+            body = "&&".join(parts).strip() or body
+        if source_root and "PYTHONPATH=" not in body:
+            body = f"PYTHONPATH={shlex.quote(source_root)} {body}"
+        return f"{install} && {body}"
 
     # -- feedback loop : agents self-manage their GPU compute ----------
     def _react_to_pressure(self, sr: "ShardResult", tele: Optional[dict],
@@ -251,7 +309,7 @@ class NgeOrchestrator:
         sr.node_id = repl
         sr.exit_code = res["exit_code"]
         sr.duration_s = res["duration_s"]
-        sr.failures = [{"test": m.group(1), "error": m.group(2)}
+        sr.failures = [{"test": m.group(1), "error": m.group(2) or "(no message; see shard output)"}
                        for m in _FAILED_RE.finditer(res["stdout"])]
         rec = {"shard": sr.index, "from": old_node, "to": repl,
                "reason": tele["health"], "efficiency": tele["efficiency"],
@@ -361,8 +419,20 @@ class NgeOrchestrator:
                            files=len(test_files), shards=shards)
 
         # The sandbox starts from a bare image, so every shard needs the code
-        # under test and a runner. Collected once, seeded into each sandbox.
-        payload = self._payload_files(target, scenario.get("payload"))
+        # under test, the modules it imports, and its dependencies.
+        source_root = scenario.get("source_root") or self._source_root(target)
+        requirements = (scenario.get("requirements")
+                        or self._requirements_file(source_root))
+        payload = self._payload_files(
+            target, [source_root, *(scenario.get("payload") or [])])
+        if requirements:
+            try:
+                payload[requirements] = (_REPO_ROOT / requirements).read_text(
+                    encoding="utf-8", errors="replace")
+            except OSError:
+                requirements = None
+        self._emit("sandbox_env", source_root=source_root,
+                   requirements=requirements, payload_files=len(payload))
         if payload:
             self._emit("payload", files=len(payload),
                        bytes=sum(len(v) for v in payload.values()))
@@ -377,12 +447,13 @@ class NgeOrchestrator:
                 continue
             handlers.gpu_allocate(job=f"shard-{i}")
             cmd = self._ensure_runner(
-                self._shard_command(task, pr.names, target, i, shards, own))
+                self._shard_command(task, pr.names, target, i, shards, own),
+                source_root, requirements)
             self._emit("shard_start", index=i, node_id=node_id, command=cmd)
             res = handlers.run_in_sandbox(command=cmd, node_id=node_id,
                                           files=payload, collect=collect,
                                           timeout=180)
-            fails = [{"test": m.group(1), "error": m.group(2)}
+            fails = [{"test": m.group(1), "error": m.group(2) or "(no message; see shard output)"}
                      for m in _FAILED_RE.finditer(res["stdout"])]
             shard_results.append(ShardResult(
                 index=i, node_id=node_id, command=cmd,
