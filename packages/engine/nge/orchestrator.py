@@ -122,6 +122,8 @@ class NgeOrchestrator:
     MAX_FIXES = 3
     # cap on the source tree shipped into a sandbox (bytes)
     PAYLOAD_MAX_BYTES = 4 * 1024 * 1024
+    # backoff between patch attempts when the model answers nothing
+    RETRY_DELAY_S = 2.0
 
     def __init__(self, config: Optional[_cfg.Config] = None,
                  chat_fn: Optional[Callable] = None, telemetry=None) -> None:
@@ -791,7 +793,14 @@ class NgeOrchestrator:
         # in a row lost fixes to `has_patch: False` while a one-line prompt to
         # the same model answered fine, so this is flakiness, not refusal.
         # One retry, then give up honestly.
-        for attempt in (1, 2):
+        for attempt in (1, 2, 3):
+            if attempt > 1:
+                # Four consecutive calls came back empty in one run, while the
+                # same prompt answered twice in a row minutes later - a window
+                # of service flakiness, not something about the request (a
+                # 5541-char and a 1500-char version of it both succeeded).
+                # Retrying instantly just spends the window; wait it out.
+                time.sleep(self.RETRY_DELAY_S * (attempt - 1))
             try:
                 msg = self.chat_fn([{"role": "user", "content": prompt}],
                                    model, None)
@@ -821,6 +830,11 @@ class NgeOrchestrator:
             self._emit(kind, test=failure.get("test"), attempt=attempt,
                        why=why, reply_chars=len(text),
                        reply_head=text.strip()[:200])
+            # Only an empty answer is worth another call. A refusal or a
+            # headerless diff is a considered reply - asking again just spends
+            # a request to get the same thing.
+            if kind != "patch_empty":
+                return None
         return None
 
     def _sources_for_patch(self, patch: str) -> Dict[str, str]:

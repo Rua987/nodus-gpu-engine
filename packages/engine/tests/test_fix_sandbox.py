@@ -325,7 +325,7 @@ def test_empty_output_is_not_a_pass(tmp_path, monkeypatch):
 
 # -- the model sometimes answers nothing at all ------------------------------
 
-def test_an_empty_reply_is_retried_once(tmp_path):
+def test_an_empty_reply_is_retried(tmp_path):
     """Live, Nemotron returned an empty string for a prompt that had produced
     a valid diff a run earlier - two runs lost fixes to `has_patch: False`."""
     calls = []
@@ -338,7 +338,7 @@ def test_an_empty_reply_is_retried_once(tmp_path):
     o = _orch(tmp_path, chat_fn=chat_fn)
     got = o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m")
     assert got == diff, "the retry's patch must be used"
-    assert len(calls) == 2, "exactly one retry"
+    assert len(calls) == 2, "the retry's call, no more than needed"
     assert [e for e in o.events if e["kind"] == "patch_retry_succeeded"]
 
 
@@ -346,7 +346,7 @@ def test_two_empty_replies_give_up_and_say_so(tmp_path):
     o = _orch(tmp_path, chat_fn=lambda m, mo=None, t=None: {"content": ""})
     assert o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m") is None
     empties = [e for e in o.events if e["kind"] == "patch_empty"]
-    assert [e["attempt"] for e in empties] == [1, 2]
+    assert [e["attempt"] for e in empties] == [1, 2, 3]
     assert empties[0]["reply_chars"] == 0
 
 
@@ -359,7 +359,7 @@ def test_a_prose_reply_is_not_called_empty(tmp_path):
     assert o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m") is None
     assert not [e for e in o.events if e["kind"] == "patch_empty"]
     un = [e for e in o.events if e["kind"] == "patch_unparsed"]
-    assert len(un) == 2
+    assert len(un) == 1, "a refusal is a considered reply - do not ask again"
     assert un[0]["reply_chars"] == len(prose)
     assert "cannot fix this" in un[0]["reply_head"], "keep a readable excerpt"
     assert un[0]["why"] == "no diff in the reply"
@@ -400,3 +400,20 @@ def test_an_exception_is_not_retried(tmp_path):
     assert o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m") is None
     assert len(calls) == 1, "a failing endpoint is not hammered"
     assert [e for e in o.events if e["kind"] == "patch_error"]
+
+
+def test_only_an_empty_reply_is_retried(tmp_path):
+    """An empty answer is flakiness; a refusal or a headerless diff is a
+    considered reply, and asking again just spends a request."""
+    for content, expect_calls in (("", 3),
+                                  ("I will not patch this.", 1),
+                                  ("```diff\n@@ -1,1 +1,1 @@\n-a\n+b\n```", 1)):
+        calls = []
+
+        def chat_fn(messages, model=None, tools=None, _c=content):
+            calls.append(1)
+            return {"content": _c}
+
+        o = _orch(tmp_path, chat_fn=chat_fn)
+        assert o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m") is None
+        assert len(calls) == expect_calls, content[:20]

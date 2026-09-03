@@ -35,3 +35,13 @@ def _reset_engine():
     handlers.reset_state()
     yield
     handlers.reset_state()
+
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _no_retry_backoff(monkeypatch):
+    """The patch retry waits out a service hiccup; tests must not."""
+    from nge.orchestrator import NgeOrchestrator
+    monkeypatch.setattr(NgeOrchestrator, "RETRY_DELAY_S", 0.0)
