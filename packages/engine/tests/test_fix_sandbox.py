@@ -114,3 +114,70 @@ def test_context_reaches_the_model(tmp_path):
 def test_shard_result_keeps_stdout_for_triage(tmp_path):
     rep = _orch(tmp_path).run({"task": "t", "shards": 2, "target": TARGET})
     assert any(s.stdout for s in rep.shards), "triage needs the shard output"
+
+
+# -- layer 7: the model also guesses the line, and sometimes the whole file --
+
+REAL = "packages/engine/nge/policy.py"
+
+
+def _real_lines(o, n=2):
+    src = o._payload_files(REAL)[REAL].splitlines()
+    i = next(k for k, l in enumerate(src) if "MAX_COMMAND_LEN" in l)
+    return i + 1, src[i:i + n]
+
+
+def test_relocate_moves_a_hunk_to_its_real_line(tmp_path):
+    o = _orch(tmp_path)
+    line, ctx = _real_lines(o)
+    body = "\n".join(" " + c for c in ctx)
+    patch = f"--- a/{REAL}\n+++ b/{REAL}\n@@ -3,2 +3,2 @@\n{body}\n+new\n"
+    out = o._relocate_hunks(patch)
+    hdr = [l for l in out.splitlines() if l.startswith("@@")][0]
+    assert hdr.startswith(f"@@ -{line},"), f"expected line {line}, got {hdr}"
+    assert [e for e in o.events if e["kind"] == "patch_relocated"]
+
+
+def test_relocate_leaves_a_correct_hunk_alone(tmp_path):
+    o = _orch(tmp_path)
+    line, ctx = _real_lines(o, 1)
+    patch = (f"--- a/{REAL}\n+++ b/{REAL}\n"
+             f"@@ -{line},1 +{line},1 @@\n {ctx[0]}\n")
+    assert f"@@ -{line}," in o._relocate_hunks(patch)
+    assert not [e for e in o.events if e["kind"] == "patch_relocated"]
+
+
+def test_invented_context_is_detected(tmp_path):
+    """Live: Nemotron patched nodus_tools.py quoting lines that exist nowhere
+    in it - the function it meant is at line 1200 and looks nothing like that.
+    No amount of relocating can save such a patch."""
+    o = _orch(tmp_path)
+    patch = (f"--- a/{REAL}\n+++ b/{REAL}\n@@ -1,2 +1,2 @@\n"
+             " def totally_made_up(self, x):\n-    return x - 1\n+    return x + 1\n")
+    assert o._patch_context_missing(patch) == [REAL]
+
+
+def test_real_context_passes(tmp_path):
+    o = _orch(tmp_path)
+    patch = (f"--- a/{REAL}\n+++ b/{REAL}\n@@ -1,2 +1,2 @@\n"
+             " MAX_COMMAND_LEN = 4096\n-x\n+y\n")
+    assert o._patch_context_missing(patch) == []
+
+
+def test_a_fabricated_patch_costs_no_gpu(tmp_path, monkeypatch):
+    provisioned = []
+    real_prov = handlers.gpu_provision
+    monkeypatch.setattr(handlers, "gpu_provision",
+                        lambda **kw: provisioned.append(1) or real_prov(**kw))
+
+    o = _orch(tmp_path)
+    o._propose_patch = lambda f, m: (
+        f"--- a/{REAL}\n+++ b/{REAL}\n@@ -1,2 +1,2 @@\n"
+        " def never_written_here(a):\n-    return 1\n+    return 2\n")
+    handlers.reset_state(o.config)
+    out = o._attempt_fixes([{"test": "t.py::test_a", "error": "boom"}], TARGET)
+
+    assert provisioned == [], "no node may be provisioned for an impossible patch"
+    assert out[0]["verified"] is False
+    assert "does not exist" in out[0]["reason"]
+    assert [e for e in o.events if e["kind"] == "fix_context_invented"]

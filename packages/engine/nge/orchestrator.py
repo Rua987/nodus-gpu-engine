@@ -44,6 +44,8 @@ _TEST_ID = r"[^\s;&|`$(){}<>'\"\\]+"
 _FAILED_RE = re.compile(rf"^FAILED\s+({_TEST_ID})(?:\s+-\s+(.*))?$", re.M)
 # files a unified diff touches: "--- a/path" / "+++ b/path"
 _PATCH_FILE_RE = re.compile(r"^(?:---|\+\+\+)\s+[ab]/(\S+)", re.M)
+# @@ -old,n +new,m @@ trailer
+_HUNK_HDR_RE = re.compile(r"^@@\s+-(\d+),(\d+)\s+\+\d+,(\d+)\s+@@(.*)$")
 
 # pytest options that need no plugin. A model that reaches for pytest-html
 # (`--html=... --self-contained-html`) or an invented `--gpu` costs the whole
@@ -277,6 +279,113 @@ class NgeOrchestrator:
         lo, hi = max(0, line - span), min(len(lines), line + span)
         body = "\n".join(f"{i + 1:5d}| {lines[i]}" for i in range(lo, hi))
         return f"{rel} (lines {lo + 1}-{hi}), exact text:\n{body}"
+
+    def _relocate_hunks(self, patch: str) -> str:
+        """Move each hunk to where its context actually is in the file.
+
+        The model guesses the ``@@`` start line the same way it guessed the
+        indentation and the counts. patch-ng then refuses with "hunk no.1
+        doesn't match source file at line 35", quoting a line from somewhere
+        else entirely. We have the file, so this is decidable: search for the
+        hunk's own context/removed lines and rewrite the offset.
+
+        A hunk whose context cannot be found anywhere is left untouched - the
+        patch is simply wrong, and the sandbox will say so.
+        """
+        if not patch:
+            return patch
+        lines = patch.splitlines()
+        out: List[str] = []
+        src: Optional[List[str]] = None
+        i = 0
+        while i < len(lines):
+            ln = lines[i]
+            m = _PATCH_FILE_RE.match(ln)
+            if m:                                   # entering a file section
+                try:
+                    f = (_REPO_ROOT / m.group(1)).resolve()
+                    f.relative_to(_REPO_ROOT)
+                    src = (f.read_text(encoding="utf-8", errors="replace")
+                           .splitlines()) if f.is_file() else None
+                except (OSError, ValueError):
+                    src = None
+                out.append(ln)
+                i += 1
+                continue
+
+            hm = _HUNK_HDR_RE.match(ln)
+            if not hm or src is None:
+                out.append(ln)
+                i += 1
+                continue
+
+            body, j = [], i + 1
+            while j < len(lines) and lines[j][:1] in (" ", "-", "+", "\\"):
+                body.append(lines[j])
+                j += 1
+            want = [b[1:] for b in body if b[:1] in (" ", "-")]
+            new_start = int(hm.group(1))
+            if want:
+                found = None
+                for k in range(len(src) - len(want) + 1):
+                    if src[k:k + len(want)] == want:
+                        found = k + 1               # diffs are 1-based
+                        break
+                if found is not None and found != new_start:
+                    self._emit("patch_relocated", claimed=new_start, actual=found)
+                    new_start = found
+            out.append(f"@@ -{new_start},{hm.group(2)} "
+                       f"+{new_start},{hm.group(3)} @@{hm.group(4)}")
+            out.extend(body)
+            i = j
+        return "\n".join(out) + "\n"
+
+    def _patch_context_missing(self, patch: str) -> List[str]:
+        """Hunks whose context appears nowhere in the file they claim to edit.
+
+        Relocating a hunk only helps when its context is real. Live, Nemotron
+        wrote a patch for nodus_tools.py quoting
+
+            dirname, filename = os.path.split(tail)
+            filename = '_' + filename
+
+        neither of which exists: the function it meant is at line 1200 and
+        looks nothing like that. The model had never seen the module - the
+        traceback only named the test file - so it wrote plausible fiction.
+
+        Such a patch can never apply. Catching it here means saying so instead
+        of provisioning a GPU to discover it.
+        """
+        bad: List[str] = []
+        lines = (patch or "").splitlines()
+        src: Optional[List[str]] = None
+        rel = ""
+        i = 0
+        while i < len(lines):
+            m = _PATCH_FILE_RE.match(lines[i])
+            if m:
+                rel = m.group(1)
+                try:
+                    f = (_REPO_ROOT / rel).resolve()
+                    f.relative_to(_REPO_ROOT)
+                    src = (f.read_text(encoding="utf-8", errors="replace")
+                           .splitlines()) if f.is_file() else None
+                except (OSError, ValueError):
+                    src = None
+                i += 1
+                continue
+            if not _HUNK_HDR_RE.match(lines[i]) or src is None:
+                i += 1
+                continue
+            body, j = [], i + 1
+            while j < len(lines) and lines[j][:1] in (" ", "-", "+", "\\"):
+                body.append(lines[j])
+                j += 1
+            want = [b[1:] for b in body if b[:1] in (" ", "-") and b[1:].strip()]
+            if want and not any(w in src for w in want):
+                bad.append(rel)
+            i = j
+        return bad
 
     # -- sharding --------------------------------------------------------
     def _discover_test_files(self, target: str) -> List[str]:
@@ -717,6 +826,15 @@ class NgeOrchestrator:
             if not patch:
                 fixes.append({"test": f["test"], "verified": False,
                               "patch": None, "reason": "no patch proposed"})
+                continue
+
+            patch = self._relocate_hunks(patch)
+            missing = self._patch_context_missing(patch)
+            if missing:
+                self._emit("fix_context_invented", test=f["test"], files=missing)
+                fixes.append({"test": f["test"], "patch": patch, "verified": False,
+                              "reason": "patch context does not exist in "
+                                        + ", ".join(sorted(set(missing)))})
                 continue
 
             node = handlers.gpu_provision(n=1, gpu_type=gpu_type)["nodes"][-1]["id"]
