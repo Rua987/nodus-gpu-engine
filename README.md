@@ -26,8 +26,17 @@ Token Factory        ──▶  isolated exec + capability jail [ execution   ]
 > line and a `plan_degraded` event), so this is never silent. To use the model:
 >
 > ```bash
+> python -m nge.fetch_ckpt      # from packages/engine — downloads, verifies, configures
+> ```
+>
+> It pulls the published asset (release `v1.0.0` of `Rua987/nodus`, ~988 MB),
+> checks its SHA256 and writes `.nodus_plan_ckpt`. Not in Git LFS on purpose:
+> the free tier is 1 GB of storage and 1 GB of bandwidth per month, so one
+> clone would exhaust it. `--check` reports what is configured without
+> downloading. If you already have the file:
+>
+> ```bash
 > echo /path/to/checkpoint_sft_plan_v5.pt > packages/engine/.nodus_plan_ckpt
-> # or: export NODUS_PLAN_CKPT=/path/to/checkpoint_sft_plan_v5.pt
 > ```
 >
 > The two disagree — on `"Find the config file and read it"` the model answers
