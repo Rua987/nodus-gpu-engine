@@ -45,8 +45,11 @@ class MockSandbox(Sandbox):
         seed = _seed(sandbox_id, command)
         t0 = time.perf_counter()
 
-        # --- verify an auto-fix: `git apply fix.patch && pytest ... -k <kw>` ---
-        if "git apply" in command and "pytest" in command:
+        # --- verify an auto-fix: apply fix.patch, then pytest ... -k <kw> ---
+        # (the live command uses patch-ng: python:3.12-slim ships neither
+        #  git nor patch, so `git apply` failed with 127 before running)
+        if ("fix.patch" in command and "pytest" in command
+                and ("patch_ng" in command or "git apply" in command)):
             mk = re.search(r"-k\s+([\w:.-]+)", command)
             kw = mk.group(1) if mk else ""
             f = failure_by_test(kw) if kw else None

@@ -87,12 +87,12 @@ def test_sources_for_patch_skips_missing_and_dev_null(tmp_path):
     assert o._sources_for_patch("--- /dev/null\n+++ b/new.py\n") == {}
 
 
-def test_fix_run_ships_patch_and_sources_and_inits_a_repo(tmp_path, monkeypatch):
+def test_fix_run_ships_patch_and_sources_and_a_usable_applier(tmp_path, monkeypatch):
     seen = {}
     real = handlers.run_in_sandbox
 
     def spy(command, node_id=None, files=None, **kw):
-        if "git apply" in command:
+        if "fix.patch" in command and "pytest" in command:
             seen["command"] = command
             seen["files"] = sorted(files or {})
         return real(command=command, node_id=node_id, files=files, **kw)
@@ -107,7 +107,10 @@ def test_fix_run_ships_patch_and_sources_and_inits_a_repo(tmp_path, monkeypatch)
     assert "fix.patch" in seen["files"]
     assert "packages/engine/nge/policy.py" in seen["files"], \
         "the sandbox must get the file the patch touches"
-    assert "git init" in seen["command"], "git apply needs a work tree"
+    # python:3.12-slim ships neither git nor patch, so `git apply` exited 127
+    # before a single fix was ever verified
+    assert "patch_ng" in seen["command"], "the image has no git and no patch"
+    assert "pip install" in seen["command"], "and no pytest either"
 
 
 # -- injection: the test keyword reaches a shell -----------------------------
@@ -119,7 +122,7 @@ def test_fix_command_quotes_the_test_keyword(tmp_path, monkeypatch):
     seen = {}
 
     def spy(command, node_id=None, files=None, **kw):
-        seen["c"] = command
+        seen.setdefault("c", command)
         return {"sandbox_id": "x", "node_id": node_id, "exit_code": 1,
                 "ok": False, "stdout": "", "stderr": "", "duration_s": 0.0,
                 "artifacts": {}}
@@ -132,8 +135,8 @@ def test_fix_command_quotes_the_test_keyword(tmp_path, monkeypatch):
                      "packages/nodus/tests")
     cmd = seen["c"]
     assert "'test_a;whoami'" in cmd, "keyword must be shell-quoted"
-    # and the jail sees one quoted argument, not a second command
-    assert len(policy.split_segments(cmd)) == 4      # init, add, apply, pytest
+    # the jail sees one quoted argument, not a second command
+    assert len(policy.split_segments(cmd)) == 3      # install, apply, pytest
     assert policy.check_command(cmd)[0]
 
 
@@ -180,7 +183,8 @@ def test_a_raising_model_does_not_take_the_run_down(tmp_path):
 def test_patch_survives_a_mislabelled_fence(tmp_path):
     diff = "--- a/x.py\n+++ b/x.py\n@@\n-a\n+b"
     o = _with_reply(tmp_path, {"content": f"```python\n{diff}\n```"})
-    assert o._propose_patch({"test": "t", "error": "e"}, "m") == diff
+    # a trailing newline is added: patch-ng needs a complete patch stream
+    assert o._propose_patch({"test": "t", "error": "e"}, "m") == diff + "\n"
 
 
 def test_failed_regex_rejects_shell_metacharacters():

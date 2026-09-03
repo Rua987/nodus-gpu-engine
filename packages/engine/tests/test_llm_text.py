@@ -57,6 +57,9 @@ def test_first_command_plain_text():
 # -- unified_diff ------------------------------------------------------------
 
 DIFF = "--- a/x.py\n+++ b/x.py\n@@\n-a\n+b"
+# A patch stream must end with a newline: patch-ng refuses one that does not
+# with "patch stream is incomplete!", so unified_diff() always appends it.
+DIFF_OUT = DIFF + "\n"
 
 
 def test_unified_diff_none_when_absent():
@@ -65,13 +68,13 @@ def test_unified_diff_none_when_absent():
 
 
 def test_unified_diff_from_diff_fence():
-    assert lt.unified_diff({"content": f"```diff\n{DIFF}\n```"}) == DIFF
+    assert lt.unified_diff({"content": f"```diff\n{DIFF}\n```"}) == DIFF_OUT
 
 
 def test_unified_diff_from_a_mislabelled_fence():
     """Models routinely tag a diff as ```python - the old parser dropped it."""
-    assert lt.unified_diff({"content": f"```python\n{DIFF}\n```"}) == DIFF
-    assert lt.unified_diff({"content": f"```\n{DIFF}\n```"}) == DIFF
+    assert lt.unified_diff({"content": f"```python\n{DIFF}\n```"}) == DIFF_OUT
+    assert lt.unified_diff({"content": f"```\n{DIFF}\n```"}) == DIFF_OUT
 
 
 def test_unified_diff_from_bare_prose():

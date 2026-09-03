@@ -82,6 +82,7 @@ class ShardResult:
     duration_s: float
     failures: List[dict] = field(default_factory=list)
     migrated_from: Optional[str] = None
+    stdout: str = ""            # kept so triage can quote the traceback
 
 
 @dataclass
@@ -157,7 +158,7 @@ class NgeOrchestrator:
         # what this shard is actually responsible for
         paths = " ".join(shlex.quote(p) for p in own) if own else shlex.quote(target)
         base = (f"pip install -q pytest && "
-                f"python -m pytest {paths} -q -p no:cacheprovider")
+                f"python -m pytest {paths} -q --tb=short -p no:cacheprovider")
         model = self._route("slotfill")
         if self.chat_fn is None:
             return f"NGE_SHARD={index}/{shards} {base}"
@@ -209,6 +210,73 @@ class NgeOrchestrator:
                            reason=reason)
                 return fallback
         return cmd
+
+    @staticmethod
+    def _failure_context(stdout: str, test: str, limit: int = 1500) -> str:
+        """The traceback pytest printed for ``test``.
+
+        Without this the code agent was handed `Error: (no message; see shard
+        output)` and had to invent a patch from the test name alone - every
+        one of them failed to apply.
+        """
+        if not stdout:
+            return ""
+        name = test.split("::")[-1]
+        lines = stdout.splitlines()
+        start = None
+        for i, ln in enumerate(lines):
+            # pytest heads each failure block with `___ test_name ___`
+            if ln.startswith("_") and name in ln:
+                start = i
+                break
+        if start is None:
+            for i, ln in enumerate(lines):
+                if name in ln and ("Error" in ln or "assert" in ln):
+                    start = max(0, i - 4)
+                    break
+        if start is None:
+            return ""
+        out = []
+        for ln in lines[start:start + 60]:
+            if out and ln.startswith("_") and name not in ln:
+                break                                   # next failure block
+            out.append(ln)
+        return "\n".join(out)[:limit]
+
+    _TB_LOC_ALL = re.compile(r"^([\w./-]+\.py):(\d+)", re.M)
+
+    def _source_excerpt(self, context: str, span: int = 12) -> str:
+        """The real lines around the failure, quoted from the repo.
+
+        A model that only sees a traceback has to guess the indentation, and
+        it guesses wrong: Nemotron produced a hunk with 4 spaces for a line
+        that has 8 (a method inside a class), so patch-ng refused every patch
+        with "hunk no.1 doesn't match source file". Showing it the actual text
+        removes the guess.
+        """
+        hits = self._TB_LOC_ALL.findall(context or "")
+        if not hits:
+            return ""
+        parts = []
+        for rel, line_s in hits[:3]:
+            part = self._one_excerpt(rel, int(line_s), span)
+            if part and part not in parts:
+                parts.append(part)
+        return "\n\n".join(parts)
+
+    @staticmethod
+    def _one_excerpt(rel: str, line: int, span: int) -> str:
+        try:
+            f = (_REPO_ROOT / rel).resolve()
+            f.relative_to(_REPO_ROOT)
+            if not f.is_file():
+                return ""
+            lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        except (OSError, ValueError):
+            return ""
+        lo, hi = max(0, line - span), min(len(lines), line + span)
+        body = "\n".join(f"{i + 1:5d}| {lines[i]}" for i in range(lo, hi))
+        return f"{rel} (lines {lo + 1}-{hi}), exact text:\n{body}"
 
     # -- sharding --------------------------------------------------------
     def _discover_test_files(self, target: str) -> List[str]:
@@ -275,7 +343,8 @@ class NgeOrchestrator:
 
     @staticmethod
     def _ensure_runner(cmd: str, source_root: str = "",
-                       requirements: Optional[str] = None) -> str:
+                       requirements: Optional[str] = None,
+                       extra: tuple = ()) -> str:
         """Guarantee the runner, the deps and the import path.
 
         A Token Factory sandbox has no pytest, no third-party packages and no
@@ -286,6 +355,8 @@ class NgeOrchestrator:
         """
         install = (f"pip install -q -r {shlex.quote(requirements)}"
                    if requirements else "pip install -q pytest")
+        if extra:
+            install += " " + " ".join(shlex.quote(e) for e in extra)
         body = cmd
         if "pip install" in body:               # model already tried; use ours
             parts = [seg for seg in body.split("&&")
@@ -499,6 +570,7 @@ class NgeOrchestrator:
             shard_results.append(ShardResult(
                 index=i, node_id=node_id, command=cmd,
                 exit_code=res["exit_code"], duration_s=res["duration_s"], failures=fails,
+                stdout=(res["stdout"] or "")[-20000:],
             ))
             st = handlers.gpu_status(node_id=node_id)["nodes"]
             tele = st[0] if st else None
@@ -523,6 +595,7 @@ class NgeOrchestrator:
                     continue
                 seen.add(f["test"])
                 failures.append({**f, "shard": sr.index, "node": sr.node_id,
+                                 "context": self._failure_context(sr.stdout, f["test"]),
                                  "proposed_fix": _proposed_fix(f["error"])})
         self._emit("triage", unique_failures=len(failures))
         # prioritize complex failures (longer error messages) - more likely to be systemic
@@ -530,7 +603,9 @@ class NgeOrchestrator:
         # 5) code agent: propose a patch per failure, apply + re-test in a
         #    fresh sandbox, keep only the verified ones
         if auto_fix:
-            fixes.extend(self._attempt_fixes(failures, target, gpu_type))
+            fixes.extend(self._attempt_fixes(
+                failures, target, gpu_type, source_root, requirements,
+                payload))
         else:
             self._emit("autofix_skipped", reason="disabled by mission",
                        would_have_tried=min(len(failures), self.MAX_FIXES))
@@ -546,10 +621,15 @@ class NgeOrchestrator:
             from nge import _fixtures
             return _fixtures.canned_patch(failure["test"])
 
+        excerpt = self._source_excerpt(failure.get("context") or "")
         prompt = (
             "A test is failing. Reply with ONLY a unified diff (```diff fenced) "
             "that fixes it - no prose.\n"
+            "Paths must be repo-relative (a/<path>, b/<path>) and match the "
+            "traceback below.\n"
             f"Test: {failure['test']}\nError: {failure['error']}\n"
+            + (f"\nTraceback:\n{(failure.get('context') or '').strip()}\n"
+               if failure.get("context") else "")
         )
         try:
             msg = self.chat_fn([{"role": "user", "content": prompt}], model, None)
@@ -623,7 +703,9 @@ class NgeOrchestrator:
         return out
 
     def _attempt_fixes(self, failures: List[dict], target: str,
-                       gpu_type: str = "H100") -> List[dict]:
+                       gpu_type: str = "H100", source_root: str = "",
+                       requirements: Optional[str] = None,
+                       payload: Optional[Dict[str, str]] = None) -> List[dict]:
         # graver failures (longer error messages) are attempted first
         failures = sorted(failures,
                          key=lambda f: len(f.get("error", "")), reverse=True)
@@ -642,15 +724,23 @@ class NgeOrchestrator:
             kw = f["test"].split("::")[-1]
             # ship the touched sources next to the patch, and make the sandbox a
             # git work tree so `git apply` has a repo to act on
-            files = {"fix.patch": patch}
+            # The verification sandbox needs exactly what a shard needs -
+            # it was getting only the patched files, and its command started
+            # with `git`, which python:3.12-slim does not ship (nor `patch`).
+            # Every fix came back "rejected" on `git: not found`, so 0/N
+            # verified said nothing about the patches at all.
+            files = dict(payload or {})
+            files["fix.patch"] = patch
             sources = self._sources_for_patch(patch)
             files.update(sources)
             self._emit("fix_sources", test=f["test"], files=sorted(sources))
+            cmd = self._ensure_runner(
+                f"python -m patch_ng --strip 1 fix.patch"
+                f" && python -m pytest {shlex.quote(target)}"
+                f" -q -k {shlex.quote(kw)}",
+                source_root, requirements, extra=("patch-ng",))
             res = handlers.run_in_sandbox(
-                command=("git init -q && git add -A && git apply fix.patch"
-                         f" && python -m pytest {shlex.quote(target)}"
-                         f" -q -k {shlex.quote(kw)}"),
-                node_id=node, files=files, timeout=120,
+                command=cmd, node_id=node, files=files, timeout=240,
             )
             verified = res["exit_code"] == 0 and not res.get("blocked")
             self._emit("fix_verified" if verified else "fix_rejected",

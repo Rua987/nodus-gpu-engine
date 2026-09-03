@@ -60,6 +60,50 @@ def first_command(msg) -> Optional[str]:
     return None
 
 
+_HUNK_RE = re.compile(r"^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@(.*)$")
+
+
+def normalize_hunks(diff: str) -> str:
+    """Recompute every ``@@ -a,b +c,d @@`` from the lines that follow it.
+
+    Models write plausible counts without counting. A live Nemotron patch
+    declared ``@@ -35,7 +35,7 @@`` above four lines, and patch-ng rejected the
+    whole file with "patch stream is incomplete!" - the diff was otherwise
+    correct: right file, right line, right indentation.
+
+    Only the counts are touched; content and start lines are left alone.
+    """
+    if not diff:
+        return diff
+    lines = diff.splitlines()
+    out, i = [], 0
+    while i < len(lines):
+        m = _HUNK_RE.match(lines[i])
+        if not m:
+            out.append(lines[i])
+            i += 1
+            continue
+        old_start, new_start, tail = int(m.group(1)), int(m.group(2)), m.group(3)
+        body, j = [], i + 1
+        while j < len(lines):
+            ln = lines[j]
+            if ln.startswith("@@") or ln.startswith(("--- ", "+++ ", "diff --git")):
+                break
+            if ln[:1] not in (" ", "-", "+", "\\", ""):
+                break
+            body.append(ln)
+            j += 1
+        while body and body[-1] == "":
+            body.pop()
+        old = sum(1 for b in body if b[:1] in (" ", "-") or b == "")
+        new = sum(1 for b in body if b[:1] in (" ", "+") or b == "")
+        out.append(f"@@ -{old_start},{old} +{new_start},{new} @@{tail}")
+        out.extend(body)
+        i = j
+    return "\n".join(out) + "\n"
+
+
+
 def unified_diff(msg) -> Optional[str]:
     """A unified diff out of a reply, or None.
 
@@ -71,15 +115,18 @@ def unified_diff(msg) -> Optional[str]:
     if not text.strip():
         return None
 
+    # A patch stream must end with a newline. Without it patch-ng refuses the
+    # whole thing with "patch stream is incomplete!" - a live Nemotron patch
+    # was rejected for exactly that, before its content was even considered.
     for body in fenced_blocks(text):
         stripped = body.strip("\n")
         if stripped.startswith(_DIFF_START):
-            return stripped
+            return normalize_hunks(stripped)
 
     lines = text.splitlines()
     for i, line in enumerate(lines):
         if line.startswith(_DIFF_START):
-            return "\n".join(lines[i:]).strip("\n")
+            return normalize_hunks("\n".join(lines[i:]).strip("\n"))
     return None
 
 
