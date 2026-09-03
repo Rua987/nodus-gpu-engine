@@ -48,6 +48,11 @@ def _esc(x: Any) -> str:
     return html.escape(str(x), quote=False)
 
 
+def _esc_attr(x: Any) -> str:
+    """Escape for use in HTML attribute values."""
+    return html.escape(str(x), quote=True)
+
+
 def _diff_html(patch: str) -> str:
     out = []
     for ln in (patch or "").splitlines():
@@ -81,7 +86,7 @@ def _timeline(events) -> str:
                 rows.append(f'<div class="pill">telemetry <code>{_esc(t.get("id"))}</code> '
                             f'util {t.get("util_pct")}% &middot; {t.get("temp_c")}&deg;C &middot; '
                             f'{t.get("power_w")} W &middot; '
-                            f'<span class="{t.get("health")}">{_esc(str(t.get("health","")).upper())}</span></div>')
+                            f'<span class="{_esc_attr(t.get("health"))}">{_esc(str(t.get("health","")).upper())}</span></div>')
         elif k == "gpu_pressure":
             rows.append(f'<div class="pill pressure">! pressure shard {e["shard"]} on '
                         f'<code>{_esc(e["node_id"])}</code>: {_esc(e["health"])} '

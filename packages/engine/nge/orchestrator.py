@@ -204,6 +204,10 @@ class NgeOrchestrator:
         # telemetry of the replacement (so a watcher sees it running healthy)
         rst = handlers.gpu_status(node_id=repl)["nodes"]
         self._emit("gpu_status", node_id=repl, telemetry=rst[0] if rst else None)
+        if rst and rst[0].get("health") in ("warm", "throttle"):
+            self._emit("replacement_node_pressure_warning",
+                       node_id=repl, health=rst[0].get("health"),
+                       reason="replacement node itself under pressure")
         handlers.gpu_release(node_ids=[old_node])
 
     # -- main -----------------------------------------------------------
@@ -315,6 +319,7 @@ class NgeOrchestrator:
                 failures.append({**f, "shard": sr.index, "node": sr.node_id,
                                  "proposed_fix": _proposed_fix(f["error"])})
         self._emit("triage", unique_failures=len(failures))
+        # prioritize complex failures (longer error messages) - more likely to be systemic
 
         # 5) code agent: propose a patch per failure, apply + re-test in a
         #    fresh sandbox, keep only the verified ones
@@ -373,6 +378,9 @@ class NgeOrchestrator:
 
     def _attempt_fixes(self, failures: List[dict], target: str,
                        gpu_type: str = "H100") -> List[dict]:
+        # graver failures (longer error messages) are attempted first
+        failures = sorted(failures,
+                         key=lambda f: len(f.get("error", "")), reverse=True)
         fixes: List[dict] = []
         for f in failures[: self.MAX_FIXES]:
             model = self._route("triage")          # slot-fill / triage -> Super
