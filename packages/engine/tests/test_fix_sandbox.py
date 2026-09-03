@@ -246,11 +246,39 @@ def _fix_run(tmp_path, monkeypatch, stdout, failures=None):
     return o, fixes, seen
 
 
-def test_the_whole_file_is_re_run_not_just_the_test(tmp_path, monkeypatch):
-    """`-k <test>` only answers 'does this one pass now'."""
+def test_the_whole_suite_is_re_run_not_just_the_test(tmp_path, monkeypatch):
+    """`-k <test>` only answers 'does this one pass now', and even the test's
+    own file is too narrow: a patch edits a module other files import too."""
     _, _, seen = _fix_run(tmp_path, monkeypatch, "1 passed in 0.1s")
-    assert TF in seen["cmd"], "the test file must be re-run"
+    assert TARGET in seen["cmd"], "the whole suite must be re-run"
     assert " -k " not in seen["cmd"], "not just the single test"
+
+
+def test_a_failure_in_an_unexecuted_file_is_not_blamed_on_the_patch(
+        tmp_path, monkeypatch):
+    """A skipped or dead shard leaves no baseline for its files, so a
+    pre-existing failure there must not read as damage this patch did."""
+    out = ("FAILED packages/nodus/tests/test_never_ran.py::test_z - old\n"
+           "1 failed")
+    o = _orch(tmp_path)
+
+    def spy(command, node_id=None, files=None, **kw):
+        if "fix.patch" in command:
+            return {"sandbox_id": "s", "node_id": node_id, "exit_code": 1,
+                    "ok": False, "stdout": out, "stderr": "", "duration_s": 0.1,
+                    "artifacts": {}}
+        return {"sandbox_id": "s", "node_id": node_id, "exit_code": 0,
+                "ok": True, "stdout": "", "stderr": "", "duration_s": 0.1,
+                "artifacts": {}}
+    monkeypatch.setattr(handlers, "run_in_sandbox", spy)
+    o._propose_patch = lambda f, m: (
+        "--- a/x.py\n+++ b/x.py\n@@ -1,1 +1,1 @@\n-a\n+b\n")
+    handlers.reset_state(o.config)
+
+    fixes = o._attempt_fixes([{"test": f"{TF}::test_a", "error": "boom"}],
+                             TARGET, covered={TF})
+    assert fixes[0]["verified"] is True, fixes[0].get("reason")
+    assert [e for e in o.events if e["kind"] == "fix_unjudged"]
 
 
 def test_a_patch_that_breaks_a_neighbour_is_rejected(tmp_path, monkeypatch):
@@ -320,6 +348,20 @@ def test_two_empty_replies_give_up_and_say_so(tmp_path):
     empties = [e for e in o.events if e["kind"] == "patch_empty"]
     assert [e["attempt"] for e in empties] == [1, 2]
     assert empties[0]["reply_chars"] == 0
+
+
+def test_a_prose_reply_is_not_called_empty(tmp_path):
+    """Live, a 681-character answer with no diff in it was logged as
+    `patch_empty`. Said nothing vs answered-without-a-diff are different
+    problems and must not share a name."""
+    prose = "I cannot fix this without seeing the caller. " * 4
+    o = _orch(tmp_path, chat_fn=lambda m, mo=None, t=None: {"content": prose})
+    assert o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m") is None
+    assert not [e for e in o.events if e["kind"] == "patch_empty"]
+    un = [e for e in o.events if e["kind"] == "patch_unparsed"]
+    assert len(un) == 2
+    assert un[0]["reply_chars"] == len(prose)
+    assert "cannot fix this" in un[0]["reply_head"], "keep a readable excerpt"
 
 
 def test_a_good_first_reply_is_not_retried(tmp_path):

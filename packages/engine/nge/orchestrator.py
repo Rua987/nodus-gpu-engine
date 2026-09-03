@@ -692,6 +692,7 @@ class NgeOrchestrator:
                        bytes=sum(len(v) for v in payload.values()))
 
         # 3) fan out
+        covered: set = set()
         for i, node_id in enumerate(node_ids):
             own = self._shard_targets(test_files, i, shards)
             if test_files and not own:
@@ -725,6 +726,10 @@ class NgeOrchestrator:
                                         collect, gpu_type)
 
             sr = shard_results[-1]
+            # a shard that produced pytest output is a usable baseline for its
+            # files; one that died (126/127/4) is not
+            if (sr.stdout or "").strip() and sr.exit_code not in (126, 127, 4):
+                covered.update(own or test_files or [])
             self._emit("shard_done", index=i, node_id=sr.node_id,
                        migrated_from=sr.migrated_from,
                        exit_code=sr.exit_code, failures=len(sr.failures))
@@ -747,7 +752,7 @@ class NgeOrchestrator:
         if auto_fix:
             fixes.extend(self._attempt_fixes(
                 failures, target, gpu_type, source_root, requirements,
-                payload))
+                payload, covered))
         else:
             self._emit("autofix_skipped", reason="disabled by mission",
                        would_have_tried=min(len(failures), self.MAX_FIXES))
@@ -799,8 +804,16 @@ class NgeOrchestrator:
                 if attempt > 1:
                     self._emit("patch_retry_succeeded", test=failure.get("test"))
                 return patch
-            self._emit("patch_empty", test=failure.get("test"), attempt=attempt,
-                       reply_chars=len(llm_text.content_of(msg)))
+            # "no diff" has two very different causes: the model said nothing
+            # at all (flakiness, worth a retry) or it answered in prose with no
+            # diff in it (it declined, or wrote a format we do not parse).
+            # Live these were logged under one name, and a 681-character reply
+            # was reported as "patch_empty".
+            text = llm_text.content_of(msg)
+            self._emit("patch_empty" if not text.strip() else "patch_unparsed",
+                       test=failure.get("test"), attempt=attempt,
+                       reply_chars=len(text),
+                       reply_head=text.strip()[:200] if text.strip() else "")
         return None
 
     def _sources_for_patch(self, patch: str) -> Dict[str, str]:
@@ -869,7 +882,8 @@ class NgeOrchestrator:
     def _attempt_fixes(self, failures: List[dict], target: str,
                        gpu_type: str = "H100", source_root: str = "",
                        requirements: Optional[str] = None,
-                       payload: Optional[Dict[str, str]] = None) -> List[dict]:
+                       payload: Optional[Dict[str, str]] = None,
+                       covered: Optional[set] = None) -> List[dict]:
         # graver failures (longer error messages) are attempted first
         failures = sorted(failures,
                          key=lambda f: len(f.get("error", "")), reverse=True)
@@ -908,28 +922,41 @@ class NgeOrchestrator:
             sources = self._sources_for_patch(patch)
             files.update(sources)
             self._emit("fix_sources", test=f["test"], files=sorted(sources))
-            # Re-run the WHOLE test file, not just the failing test. Verifying
-            # `-k <test>` only answers "does this one pass now" - a patch that
-            # repairs one test and breaks three others was reported fix OK. The
-            # exit code cannot be the criterion either, since the file may hold
-            # other failures that were already red before the patch, so compare
-            # the failure sets instead.
-            test_file = f["test"].split("::")[0] or target
-            before = {x["test"] for x in failures
-                      if str(x.get("test", "")).startswith(test_file + "::")}
+            # Re-run the WHOLE suite, not the failing test and not even just
+            # its file. `-k <test>` only answers "does this one pass now", and
+            # a patch edits a module other files import too - scoping the check
+            # to the test's own file still lets a fix break its neighbours
+            # elsewhere. The shards already ran everything, so `before` is the
+            # complete set of failures this run knows about; anything outside
+            # it afterwards is damage this patch did.
+            #
+            # The exit code cannot be the criterion: the suite legitimately has
+            # other red tests. Compare the failure sets instead.
+            before = {str(x.get("test", "")) for x in failures}
             cmd = self._ensure_runner(
                 f"python -m patch_ng --strip 1 fix.patch"
                 # the mock sandbox needs to know which test is under repair;
                 # harmless in a real one
                 f" && NGE_FIX_TEST={shlex.quote(kw)}"
-                f" python -m pytest {shlex.quote(test_file)} -q --tb=short",
+                f" python -m pytest {shlex.quote(target)} -q --tb=short"
+                f" -p no:cacheprovider",
                 source_root, requirements, extra=("patch-ng",))
             res = handlers.run_in_sandbox(
-                command=cmd, node_id=node, files=files, timeout=240,
+                command=cmd, node_id=node, files=files, timeout=300,
             )
             out = res["stdout"] or ""
             after = {m.group(1) for m in _FAILED_RE.finditer(out)}
-            regressions = sorted(after - before)
+            # A shard that was skipped or died (exit 126/127) never produced a
+            # baseline for its files, so a pre-existing failure there would
+            # look like damage. Only judge files the shards really ran.
+            new = after - before
+            if covered:
+                unknown = {t for t in new if t.split("::")[0] not in covered}
+                if unknown:
+                    self._emit("fix_unjudged", test=f["test"],
+                               files=sorted({t.split("::")[0] for t in unknown}))
+                new -= unknown
+            regressions = sorted(new)
             # With no output nothing ran, so "the test is not in the failure
             # list" is vacuous - the shape of the `git: not found` bug, where
             # an empty stdout looked exactly like a clean pass.
