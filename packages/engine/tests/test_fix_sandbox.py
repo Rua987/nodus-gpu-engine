@@ -181,3 +181,38 @@ def test_a_fabricated_patch_costs_no_gpu(tmp_path, monkeypatch):
     assert out[0]["verified"] is False
     assert "does not exist" in out[0]["reason"]
     assert [e for e in o.events if e["kind"] == "fix_context_invented"]
+
+
+# -- the module under test must reach the prompt ----------------------------
+
+def test_under_test_resolves_and_is_emitted(tmp_path):
+    o = _orch(tmp_path)
+    s = o._under_test({"test": "packages/nodus/tests/test_nodus_tools.py"
+                               "::TestRepairLlmFilePath::test_drive_underscore_prefix"},
+                      "packages/nodus")
+    assert "def repair_llm_file_path" in s
+    ev = [e for e in o.events if e["kind"] == "under_test"]
+    assert ev and any("nodus_tools.py" in r for r in ev[0]["resolved"])
+
+
+def test_under_test_is_safe_on_junk(tmp_path):
+    o = _orch(tmp_path)
+    for tid in ["", "no-separator", "x::nope", "../../../etc/passwd::t",
+                "does/not/exist.py::t"]:
+        assert o._under_test({"test": tid}, "") == ""
+
+
+def test_the_module_source_reaches_the_model(tmp_path):
+    seen = {}
+
+    def chat_fn(messages, model=None, tools=None):
+        seen["prompt"] = messages[-1]["content"]
+        return {"content": "```diff\n--- a/x.py\n+++ b/x.py\n@@ -1,1 +1,1 @@\n-a\n+b\n```"}
+
+    o = _orch(tmp_path, chat_fn=chat_fn)
+    o._propose_patch({"test": "t.py::test_a", "error": "boom",
+                      "under_test": "mylib.py line 7, the code under test, "
+                                    "exact text:\n    7| def helper(a):"},
+                     "m")
+    assert "def helper(a):" in seen["prompt"]
+    assert "VERBATIM" in seen["prompt"], "the model must be told not to retype"

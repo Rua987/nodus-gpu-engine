@@ -340,6 +340,39 @@ class NgeOrchestrator:
             i = j
         return "\n".join(out) + "\n"
 
+    def _under_test(self, failure: dict, source_root: str = "") -> str:
+        """Source of the functions the failing test calls, for the prompt.
+
+        ``<file>::<Class>::<test>`` -> parse the test statically, follow its
+        imports, and quote the definitions it invokes. Nothing is imported or
+        executed, so a module that needs torch is still resolvable.
+        """
+        test_id = failure.get("test") or ""
+        if "::" not in test_id:
+            return ""
+        rel_file, name = test_id.split("::")[0], test_id.split("::")[-1]
+        try:
+            f = (_REPO_ROOT / rel_file).resolve()
+            f.relative_to(_REPO_ROOT)
+            if not f.is_file():
+                return ""
+        except (OSError, ValueError):
+            return ""
+
+        roots = [_REPO_ROOT / source_root] if source_root else []
+        roots += [f.parent, f.parent.parent, _REPO_ROOT]
+        try:
+            from nge import symbols
+            found = symbols.sources_under_test(f, name, _REPO_ROOT, roots)
+        except Exception as exc:                    # never break a run over this
+            self._emit("under_test_error", test=test_id,
+                       error=f"{type(exc).__name__}: {exc}")
+            return ""
+        if found:
+            self._emit("under_test", test=test_id,
+                       resolved=[f"{r}:{ln}" for r, ln, _ in found])
+        return symbols.render(found)
+
     def _patch_context_missing(self, patch: str) -> List[str]:
         """Hunks whose context appears nowhere in the file they claim to edit.
 
@@ -731,14 +764,22 @@ class NgeOrchestrator:
             return _fixtures.canned_patch(failure["test"])
 
         excerpt = self._source_excerpt(failure.get("context") or "")
+        # The traceback names the test file; the module it exercises appears
+        # nowhere in it. Without this the model invents that module's contents.
+        under_test = failure.get("under_test") or ""
         prompt = (
             "A test is failing. Reply with ONLY a unified diff (```diff fenced) "
             "that fixes it - no prose.\n"
             "Paths must be repo-relative (a/<path>, b/<path>) and match the "
             "traceback below.\n"
+            "Every context line must be copied VERBATIM from the source shown "
+            "below - do not retype or reformat it, and do not patch code that "
+            "is not shown.\n"
             f"Test: {failure['test']}\nError: {failure['error']}\n"
             + (f"\nTraceback:\n{(failure.get('context') or '').strip()}\n"
                if failure.get("context") else "")
+            + (f"\n{excerpt}\n" if excerpt else "")
+            + (f"\n{under_test}\n" if under_test else "")
         )
         try:
             msg = self.chat_fn([{"role": "user", "content": prompt}], model, None)
@@ -821,6 +862,7 @@ class NgeOrchestrator:
         fixes: List[dict] = []
         for f in failures[: self.MAX_FIXES]:
             model = self._route("triage")          # slot-fill / triage -> Super
+            f.setdefault("under_test", self._under_test(f, source_root))
             patch = self._propose_patch(f, model)
             self._emit("fix_attempt", test=f["test"], has_patch=bool(patch))
             if not patch:
