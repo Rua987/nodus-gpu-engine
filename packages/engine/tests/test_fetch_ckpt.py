@@ -86,3 +86,56 @@ def test_a_network_failure_is_reported_not_raised(tmp_path, monkeypatch, capsys)
     assert fc.main(["--dest", str(tmp_path / "w.pt")]) == 2
     err = capsys.readouterr().err
     assert "download failed" in err and fc.RELEASE_URL in err
+
+
+def test_progress_does_not_smear_into_one_line_when_redirected(tmp_path,
+                                                               monkeypatch, capsys):
+    """A redirected run produced a single 30k-character line: `\r` redraws in
+    a terminal but concatenates in a file."""
+    import io as _io
+    import urllib.request
+
+    payload = b"x" * (3 << 20)
+
+    class _Resp(_io.BytesIO):
+        headers = {"Content-Length": str(len(payload))}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda u: _Resp(payload))
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+
+    dest = tmp_path / "w.pt"
+    fc.download(dest, url="http://example.invalid/w.pt")
+    assert dest.read_bytes() == payload
+
+    out = capsys.readouterr().out
+    assert "\r" not in out, "no carriage returns when stdout is not a terminal"
+    assert max(len(l) for l in out.splitlines() or [""]) < 200
+
+
+def test_the_partial_file_is_not_left_behind(tmp_path, monkeypatch):
+    """Download to .part and rename, so an interrupted run cannot leave a
+    truncated file that looks like the checkpoint."""
+    import io as _io
+    import urllib.request
+
+    class _Resp(_io.BytesIO):
+        headers = {"Content-Length": "5"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda u: _Resp(b"nodus"))
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    dest = tmp_path / "w.pt"
+    fc.download(dest, url="http://example.invalid/w.pt")
+    assert dest.is_file()
+    assert not dest.with_suffix(".pt.part").exists()

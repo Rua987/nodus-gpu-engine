@@ -52,19 +52,29 @@ def download(dest: Path, url: str = RELEASE_URL) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
     print(f"fetching {url}\n  -> {dest}  (~{SIZE_MB} MB)")
+    # `\r` redraws in a terminal but concatenates into one enormous line in a
+    # log file - a redirected run produced a single 30k-character line. Only
+    # animate when stdout is a terminal; otherwise report every 10%.
+    live = sys.stdout.isatty()
     with urllib.request.urlopen(url) as r, open(tmp, "wb") as f:
         total = int(r.headers.get("Content-Length") or 0)
-        done = 0
+        done = next_mark = 0
         while True:
             block = r.read(1 << 20)
             if not block:
                 break
             f.write(block)
             done += len(block)
-            if total:
-                pct = 100 * done / total
+            if not total:
+                continue
+            pct = 100 * done / total
+            if live:
                 print(f"\r  {done / 1e6:6.0f} / {total / 1e6:.0f} MB  {pct:5.1f}%",
                       end="", flush=True)
+            elif pct >= next_mark:
+                print(f"  {done / 1e6:6.0f} / {total / 1e6:.0f} MB  {pct:5.1f}%",
+                      flush=True)
+                next_mark += 10
         print()
     tmp.replace(dest)
     return dest
