@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # the live job only: catch drift in the Nebius APIs without paying per push
+    - cron: "17 6 * * 1-5"
 
 jobs:
   pytest:
@@ -58,3 +61,79 @@ jobs:
 
       - name: Nodus MCP client <-> real GPU MCP server
         run: python -m pytest -q tests/test_mcp_bridge_integration.py
+
+  # Real Nemotron + real Token Factory sandboxes. Deliberately NOT on push or
+  # pull_request: it spends Nebius credits, depends on an external service, and
+  # secrets are unavailable to fork PRs. Manual or scheduled only, and it is not
+  # a required check - a Nebius outage must not block a merge.
+  #
+  # It exists because the mock jobs above cannot see any of this. When the
+  # sandboxes were first switched on, the shards were running `pytest` in an
+  # empty container: exit=127, nothing tested, and the run still summarised as
+  # "0 failure(s)" and exited 0. nge.live_check asserts evidence of work rather
+  # than trusting the exit code.
+  live-smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/engine
+    env:
+      # a simulated fleet ledger: no GPU is allocated, so the cost is the
+      # Nemotron calls plus the sandboxes the shards actually run in
+      NGE_FLEET_MODE: mock
+      NGE_SANDBOX: token_factory
+      NEBIUS_API_KEY: ${{ secrets.NEBIUS_API_KEY }}
+      NEBIUS_PROJECT_ID: ${{ secrets.NEBIUS_PROJECT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: packages/engine/requirements.txt
+
+      - name: Check credentials are configured
+        id: creds
+        run: |
+          if [ -z "$NEBIUS_API_KEY" ] || [ -z "$NEBIUS_PROJECT_ID" ]; then
+            echo "NEBIUS_API_KEY / NEBIUS_PROJECT_ID are not set in repository secrets."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install deps
+        if: steps.creds.outputs.present == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt contree-sdk
+
+      - name: Sandbox smoke (auth + spawn + exec)
+        if: steps.creds.outputs.present == 'true'
+        run: python -m nge.sandbox.token_factory
+
+      - name: Live run (2 shards)
+        if: steps.creds.outputs.present == 'true'
+        run: |
+          python -m nge.demo_nebius --live --shards 2 --json > live.json
+          tail -c 400 live.json
+
+      - name: Assert the run actually did the work
+        if: steps.creds.outputs.present == 'true'
+        run: |
+          # --json prints a human summary before the report, so keep from the
+          # first brace onwards
+          python -c "import pathlib; t = pathlib.Path('live.json').read_text(encoding='utf-8'); pathlib.Path('report.json').write_text(t[t.index('{'):], encoding='utf-8')"
+          python -m nge.live_check report.json
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.creds.outputs.present == 'true'
+        with:
+          name: live-run-report
+          path: |
+            packages/engine/report.json
+            packages/engine/out/
+          retention-days: 14
