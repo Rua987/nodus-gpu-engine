@@ -6,8 +6,8 @@ Real wiring against ``contree-sdk`` (``pip install contree-sdk``):
         base_url="https://api.tokenfactory.nebius.com/sandboxes/")))
     img  = client.images.docker("python:3.11-slim")   # import if needed
     sess = img.session()                               # stateful sandbox
-    done = sess.run(args=["/bin/sh", "-c", cmd], files={...}, timeout=...).wait()
-    done.exit_code / done.stdout / done.stderr / done.elapsed
+    done = sess.run(shell=cmd, files={...}, timeout=...).wait()
+    done.exit_code / done.stdout / done.stderr / done.elapsed (timedelta)
     sess.read("path")  -> bytes
 
 Signature-compatible with :class:`MockSandbox`. Needs ``NEBIUS_API_KEY``
@@ -17,6 +17,7 @@ Smoke test:  python -m nge.sandbox.token_factory
 """
 from __future__ import annotations
 
+from datetime import timedelta
 import time
 from typing import Dict
 
@@ -68,18 +69,32 @@ class TokenFactorySandbox(Sandbox):
 
     def exec(self, sandbox_id: str, command: str, timeout: int = 120) -> ExecResult:
         sess = self._sessions[sandbox_id]
-        files = self._pending.pop(sandbox_id, None) or None
+        pending = self._pending.pop(sandbox_id, None) or None
+        # ContreeSDK reads a dict value of type `str` as a *local path* and only
+        # `bytes` as literal content, so passing source text straight through
+        # made it try to open the file whose name was the whole file body.
+        files = ({k: v.encode("utf-8") if isinstance(v, str) else v
+                  for k, v in pending.items()} if pending else None)
         t0 = time.perf_counter()
-        done = sess.run(args=["/bin/sh", "-c", command], files=files,
-                        timeout=timeout).wait()
+        # ContreeSDK takes `shell="<line>"` (or command=+args=); passing the
+        # /bin/sh invocation through `args` alone leaves command unset and the
+        # SDK raises "Either command or shell must be provided".
+        done = sess.run(shell=command, files=files, timeout=timeout).wait()
         self._sessions[sandbox_id] = done
+        # `elapsed` comes back as a timedelta from the SDK, not a number
         dur = getattr(done, "elapsed", None)
+        if isinstance(dur, timedelta):
+            dur = dur.total_seconds()
+        try:
+            dur = float(dur) if dur is not None else None
+        except (TypeError, ValueError):
+            dur = None
         return ExecResult(
             exit_code=int(getattr(done, "exit_code", 0) or 0),
             stdout=getattr(done, "stdout", "") or "",
             stderr=getattr(done, "stderr", "") or "",
-            duration_s=float(dur) if dur is not None
-            else round(time.perf_counter() - t0, 3),
+            duration_s=round(dur if dur is not None
+                             else time.perf_counter() - t0, 3),
         )
 
     def collect(self, sandbox_id: str, paths: list) -> Dict[str, str]:

@@ -102,6 +102,8 @@ class NgeOrchestrator:
     MIN_EFFICIENCY = 0.25
     # how many distinct failures the code agent tries to auto-fix per run
     MAX_FIXES = 3
+    # cap on the source tree shipped into a sandbox (bytes)
+    PAYLOAD_MAX_BYTES = 4 * 1024 * 1024
 
     def __init__(self, config: Optional[_cfg.Config] = None,
                  chat_fn: Optional[Callable] = None, telemetry=None) -> None:
@@ -136,7 +138,8 @@ class NgeOrchestrator:
     # -- slot-fill -------------------------------------------------------
     def _shard_command(self, task: str, plan_names: List[str], target: str,
                        index: int, shards: int) -> str:
-        base = f"python -m pytest {target} -q -p no:cacheprovider"
+        base = (f"pip install -q pytest && "
+                f"python -m pytest {target} -q -p no:cacheprovider")
         model = self._route("slotfill")
         if self.chat_fn is None:
             return f"NGE_SHARD={index}/{shards} {base}"
@@ -157,7 +160,29 @@ class NgeOrchestrator:
         if not cmd:
             self._emit("slotfill_empty", shard=index)
             return fallback
+        # A command the jail will refuse costs the whole shard (exit 126, zero
+        # tests run). Vet it here and keep the deterministic template instead -
+        # the first live run lost every shard to $(...) the model invented.
+        if self.config.jail:
+            from nge import policy
+            ok, reason = policy.check_command(cmd, strict=True)
+            if not ok:
+                self._emit("slotfill_rejected", shard=index, command=cmd,
+                           reason=reason)
+                return fallback
         return cmd
+
+    @staticmethod
+    def _ensure_runner(cmd: str) -> str:
+        """Guarantee the test runner exists, whoever wrote the command.
+
+        A Token Factory sandbox has no pytest. Asking the model nicely in the
+        prompt is not a guarantee - the first live run came back exit=127 on
+        every shard because Nemotron wrote a bare `pytest ...` despite being
+        told to install it first. The environment is the orchestrator's job,
+        not the model's.
+        """
+        return cmd if "pip install" in cmd else f"pip install -q pytest && {cmd}"
 
     # -- feedback loop : agents self-manage their GPU compute ----------
     def _react_to_pressure(self, sr: "ShardResult", tele: Optional[dict],
@@ -284,13 +309,22 @@ class NgeOrchestrator:
         self_heal = bool(scenario.get("self_heal", True))
         auto_fix = bool(scenario.get("auto_fix", True))
 
+        # The sandbox starts from a bare image, so every shard needs the code
+        # under test and a runner. Collected once, seeded into each sandbox.
+        payload = self._payload_files(target, scenario.get("payload"))
+        if payload:
+            self._emit("payload", files=len(payload),
+                       bytes=sum(len(v) for v in payload.values()))
+
         # 3) fan out
         for i, node_id in enumerate(node_ids):
             handlers.gpu_allocate(job=f"shard-{i}")
-            cmd = self._shard_command(task, pr.names, target, i, shards)
+            cmd = self._ensure_runner(
+                self._shard_command(task, pr.names, target, i, shards))
             self._emit("shard_start", index=i, node_id=node_id, command=cmd)
             res = handlers.run_in_sandbox(command=cmd, node_id=node_id,
-                                          collect=collect, timeout=180)
+                                          files=payload, collect=collect,
+                                          timeout=180)
             fails = [{"test": m.group(1), "error": m.group(2)}
                      for m in _FAILED_RE.finditer(res["stdout"])]
             shard_results.append(ShardResult(
@@ -377,6 +411,46 @@ class NgeOrchestrator:
                     out[rel] = p.read_text(encoding="utf-8", errors="replace")
             except (OSError, ValueError):
                 continue
+        return out
+
+    def _payload_files(self, target: str, extra=None) -> Dict[str, str]:
+        """The repo files a shard needs in its sandbox.
+
+        A Token Factory sandbox starts from a bare image: no pytest, and none
+        of our code. Until this existed a --live shard ran `pytest <target>`
+        against an empty container and came back exit=127, which the mock
+        sandbox had been hiding by simulating the whole run.
+
+        Ships the ``*.py`` under ``target`` (plus any ``payload`` paths from
+        the scenario), capped, and confined to the repo.
+        """
+        out: Dict[str, str] = {}
+        roots = [target, *(extra or [])]
+        budget = self.PAYLOAD_MAX_BYTES
+        for rel in roots:
+            try:
+                base = (_REPO_ROOT / rel).resolve()
+                base.relative_to(_REPO_ROOT)           # refuse path escape
+            except (OSError, ValueError):
+                continue
+            if not base.exists():
+                continue
+            files = [base] if base.is_file() else sorted(base.rglob("*.py"))
+            for f in files:
+                if "__pycache__" in f.parts or not f.is_file():
+                    continue
+                try:
+                    text = f.read_text(encoding="utf-8", errors="replace")
+                    key = f.relative_to(_REPO_ROOT).as_posix()
+                except (OSError, ValueError):
+                    continue
+                if key in out:
+                    continue
+                budget -= len(text.encode("utf-8", "replace"))
+                if budget < 0:
+                    self._emit("payload_truncated", at=key, root=rel)
+                    return out
+                out[key] = text
         return out
 
     def _attempt_fixes(self, failures: List[dict], target: str,

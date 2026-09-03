@@ -113,7 +113,16 @@ def test_autofix_loop_patches_and_verifies(cfg):
 
     assert rep.fixes, "the code agent should attempt fixes"
     assert [x for x in rep.fixes if x.get("verified")], "a canned patch should re-test green"
-    assert any(x.get("patch") is None for x in rep.fixes), "a non-fixable failure yields no patch"
+    # A failure with no canned patch must record patch=None. Asserted directly
+    # rather than hoping the deterministic draw includes one - it stopped doing
+    # so when the shard command changed, which is a seed detail, not a bug.
+    from nge.tools import handlers
+    o2 = NgeOrchestrator(config=cfg)
+    handlers.reset_state(cfg)
+    no_patch = o2._attempt_fixes([{"test": "nope.py::test_unknown", "error": "x"}],
+                                 "packages/nodus/tests")
+    assert no_patch and no_patch[0]["patch"] is None
+    assert no_patch[0]["reason"] == "no patch proposed"
 
     kinds = [e["kind"] for e in rep.events]
     assert "fix_attempt" in kinds and "fix_verified" in kinds

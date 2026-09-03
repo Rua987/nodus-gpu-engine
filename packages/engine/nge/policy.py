@@ -54,7 +54,9 @@ DENY_PATTERNS = tuple(re.compile(p, re.I) for p in (
 ALLOW_HEADS = (
     "python -m pytest", "python3 -m pytest", "python -m ", "python3 -m ",
     "pytest",
-    "pip install -r", "pip install --", "pip freeze", "pip list",
+    # a fresh sandbox starts bare and has to install its own test runner;
+    # the sandbox is isolated and disposable, so this is scoped to it
+    "pip install", "pip freeze", "pip list",
     "ruff", "flake8", "mypy", "black --check",
     "echo ", "ls ", "cat ", "head ", "tail ", "wc ",
     "git status", "git diff", "git log", "git show", "git rev-parse",

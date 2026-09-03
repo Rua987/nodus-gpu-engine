@@ -3,6 +3,8 @@
 Covers _build_client guards + create / put_files / exec / collect / destroy
 against a fake shaped like contree-sdk's ContreeSync.
 """
+from datetime import timedelta
+
 import pytest
 
 from nge.sandbox import token_factory as tf
@@ -10,21 +12,32 @@ from nge.sandbox.base import SandboxSpec
 
 
 class _Session:
-    """Mimics a ConTree image/session: run(args=[...], files=...).wait()."""
+    """Mimics a ConTree image/session: run(shell="<line>", files=...).wait().
+
+    The fake used to take ``args=["/bin/sh", "-c", cmd]``, which is not the
+    SDK's contract - the real call raises "Either command or shell must be
+    provided". The test passed against an API that does not exist, so it could
+    never have caught the bug the first live sandbox run found immediately.
+    ``elapsed`` is a timedelta there too, not a float.
+    """
     def __init__(self):
         self.fs = {}
         self.calls = []
         self.exit_code = 0
         self.stdout = ""
         self.stderr = ""
-        self.elapsed = 0.7
+        self.elapsed = timedelta(seconds=0.7)   # SDK returns a timedelta
         self.closed = False
 
-    def run(self, args=None, files=None, timeout=None, **kw):
-        self.calls.append({"args": args, "files": dict(files or {}), "timeout": timeout})
+    def run(self, shell=None, command=None, args=None, files=None,
+            timeout=None, **kw):
+        if shell is None and command is None:
+            raise ValueError("Either command or shell must be provided")
+        cmd = shell if shell is not None else command
+        self.calls.append({"shell": cmd, "files": dict(files or {}),
+                           "timeout": timeout})
         if files:
             self.fs.update(files)
-        cmd = args[-1] if args else ""
         if "pytest" in cmd:
             self.exit_code, self.stdout = 1, "FAILED tests/x.py::t - boom\n1 failed"
         else:
@@ -36,7 +49,8 @@ class _Session:
 
     def read(self, path):
         if path in self.fs:
-            return self.fs[path].encode()
+            v = self.fs[path]
+            return v if isinstance(v, bytes) else v.encode()
         raise FileNotFoundError(path)
 
     def close(self):
@@ -85,9 +99,10 @@ def test_full_flow(sbx):
     assert res.duration_s == 0.7                      # uses ConTree's elapsed
 
     sess = sbx._sessions[sid]
-    assert sess.calls[-1]["args"] == ["/bin/sh", "-c",
-                                      "git apply fix.patch && python -m pytest -q"]
-    assert sess.calls[-1]["files"] == {"fix.patch": "--- a/x\n+++ b/x\n"}
+    assert sess.calls[-1]["shell"] == "git apply fix.patch && python -m pytest -q"
+    # bytes, not str: the SDK reads a str value as a *local path*, which is what
+    # made the first live run try to open a file named after the whole diff
+    assert sess.calls[-1]["files"] == {"fix.patch": b"--- a/x\n+++ b/x\n"}
     assert sess.calls[-1]["timeout"] == 90
 
     got = sbx.collect(sid, ["fix.patch", "nope.txt"])

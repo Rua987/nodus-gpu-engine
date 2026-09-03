@@ -152,7 +152,9 @@ def test_empty_model_reply_falls_back_instead_of_crashing(tmp_path, reply):
     """Regression: `.splitlines()[0]` raised IndexError and killed the run."""
     o = _with_reply(tmp_path, reply)
     cmd = o._shard_command("t", ["bash"], "tests", 0, 1)
-    assert cmd == "NGE_SHARD=0/1 python -m pytest tests -q -p no:cacheprovider"
+    assert cmd.startswith("NGE_SHARD=0/1 ")
+    assert "pip install -q pytest" in cmd   # bare sandbox needs a runner
+    assert "python -m pytest tests -q" in cmd
     assert [e for e in o.events if e["kind"] == "slotfill_empty"]
 
 
