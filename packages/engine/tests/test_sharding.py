@@ -124,3 +124,41 @@ def test_a_plain_plan_records_the_split_without_a_plan_decision(tmp_path, monkey
     o.run({"task": "t", "shards": 2, "target": TARGET})
     assert not [e for e in o.events if e["kind"] == "plan_decision"]
     assert [e for e in o.events if e["kind"] == "shard_split"]
+
+
+# -- pytest flags the sandbox cannot honour ---------------------------------
+
+def test_unknown_pytest_flags_are_detected(tmp_path):
+    o = _orch(tmp_path)
+    f = o._unknown_pytest_flags
+    # core options the bare image really does support
+    assert f("python -m pytest a.py -q -p no:cacheprovider") == set()
+    assert f("pytest a.py -v --tb=short --junitxml=j.xml -k smoke") == set()
+    assert f("pip install -q -r r.txt && pytest a.py -q") == set()
+    # plugin-only and invented options
+    assert f("pytest a.py --html=r.html --self-contained-html") == {
+        "--html", "--self-contained-html"}
+    assert f("pytest a.py --gpu -v") == {"--gpu"}
+    assert f("pytest a.py -n 4") == {"-n"}            # xdist, not installed
+
+
+def test_pip_flags_are_not_mistaken_for_pytest_flags(tmp_path):
+    """Only the pytest segment is inspected; `pip install -q -r x` is fine."""
+    assert _orch(tmp_path)._unknown_pytest_flags(
+        "pip install -q -r req.txt --no-cache-dir && pytest a.py -q") == set()
+
+
+def test_a_command_with_plugin_flags_falls_back(tmp_path):
+    """Live regression: `--html=report.html --self-contained-html` made pytest
+    exit 4 - unrecognised argument, nothing run, shard lost."""
+    def chat_fn(messages, model=None, tools=None):
+        import re as _re
+        own = _re.findall(r"packages/nodus/tests/[\w./-]+\.py",
+                          messages[-1]["content"])
+        return {"role": "assistant",
+                "content": f"pytest {' '.join(own)} -v --html=r.html"}
+
+    o = _orch(tmp_path, chat_fn=chat_fn)
+    rep = o.run({"task": "t", "shards": 2, "target": TARGET})
+    assert [e for e in o.events if e["kind"] == "slotfill_bad_flags"]
+    assert not any("--html" in s.command for s in rep.shards)

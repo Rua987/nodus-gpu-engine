@@ -45,6 +45,18 @@ _FAILED_RE = re.compile(rf"^FAILED\s+({_TEST_ID})(?:\s+-\s+(.*))?$", re.M)
 # files a unified diff touches: "--- a/path" / "+++ b/path"
 _PATCH_FILE_RE = re.compile(r"^(?:---|\+\+\+)\s+[ab]/(\S+)", re.M)
 
+# pytest options that need no plugin. A model that reaches for pytest-html
+# (`--html=... --self-contained-html`) or an invented `--gpu` costs the whole
+# shard: pytest exits 4 on an unrecognised argument, before running anything.
+_PYTEST_FLAGS = frozenset("""
+-q -qq -v -vv -vvv -x -s -l -ra -rA -rf -rE -rs --quiet --verbose --exitfirst
+--tb --maxfail --durations --junitxml --junit-xml --rootdir --capture --color
+-k -m -p --deselect --ignore --ignore-glob --co --collect-only --no-header
+--no-summary --strict-markers --strict-config --disable-warnings -W --lf -ff
+--last-failed --failed-first --cache-clear --showlocals --full-trace --pdb
+--basetemp --import-mode --continue-on-collection-errors -c --override-ini -o
+""".split())
+
 _FIX_HINTS = [
     ("not unique", "Make `old_string` unique or pass replace_all=True."),
     ("out of order", "Sort plan names to match executor step order before asserting."),
@@ -155,7 +167,10 @@ class NgeOrchestrator:
             f"Shard {index} of {shards}. Target path: {target}\n"
             + (f"This shard runs EXACTLY these files, all of them and nothing "
                f"else: {' '.join(own)}\n" if own else "")
-            + "Reply with ONLY the command."
+            + "The sandbox has plain pytest and no plugins: use only core "
+              "options (-q -v -x -k -m --tb= --maxfail= --junitxml=). No "
+              "--html, no invented flags, no $(...) or backticks.\n"
+              "Reply with ONLY the command."
         )
         fallback = f"NGE_SHARD={index}/{shards} {base}"
         try:
@@ -178,6 +193,11 @@ class NgeOrchestrator:
                 self._emit("slotfill_off_target", shard=index, command=cmd,
                            missing=len(missing))
                 return fallback
+        bad = self._unknown_pytest_flags(cmd)
+        if bad:
+            self._emit("slotfill_bad_flags", shard=index, command=cmd,
+                       flags=sorted(bad))
+            return fallback
         # A command the jail will refuse costs the whole shard (exit 126, zero
         # tests run). Vet it here and keep the deterministic template instead -
         # the first live run lost every shard to $(...) the model invented.
@@ -274,6 +294,27 @@ class NgeOrchestrator:
         if source_root and "PYTHONPATH=" not in body:
             body = f"PYTHONPATH={shlex.quote(source_root)} {body}"
         return f"{install} && {body}"
+
+    @staticmethod
+    def _unknown_pytest_flags(cmd: str) -> set:
+        """Options in the pytest segment that plain pytest does not know.
+
+        Live, Nemotron asked for `--html=report.html --self-contained-html`
+        (pytest-html, not installed) and earlier for `--gpu`. Either one makes
+        pytest exit 4 without running a single test, so the shard is lost.
+        """
+        from nge import policy
+        out = set()
+        for seg in policy.split_segments(cmd):
+            if "pytest" not in seg:
+                continue
+            for tok in shlex.split(seg):
+                if not tok.startswith("-") or tok == "-":
+                    continue
+                name = tok.split("=", 1)[0]
+                if name not in _PYTEST_FLAGS:
+                    out.add(name)
+        return out
 
     # -- feedback loop : agents self-manage their GPU compute ----------
     def _react_to_pressure(self, sr: "ShardResult", tele: Optional[dict],
