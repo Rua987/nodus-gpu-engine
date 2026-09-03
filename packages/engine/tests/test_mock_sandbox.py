@@ -35,11 +35,20 @@ def test_verify_patch_command():
     sid = s.create(SandboxSpec(node_id="nb-h100-04"))
     s.put_files(sid, {"fix.patch": "--- a/x\n+++ b/x\n"})
 
-    ok = s.exec(sid, "git apply fix.patch && python -m pytest pkg -q -k test_plan_order")
-    assert ok.exit_code == 0 and "Applied patch" in ok.stdout and "1 passed" in ok.stdout
+    # the live command applies with patch-ng and re-runs the whole test file,
+    # naming the target through NGE_FIX_TEST instead of -k
+    ok = s.exec(sid, "python -m patch_ng --strip 1 fix.patch && "
+                     "NGE_FIX_TEST=test_plan_order python -m pytest pkg/t.py -q")
+    assert ok.exit_code == 0 and "successfully patched" in ok.stdout
+    assert "1 passed" in ok.stdout
 
-    ko = s.exec(sid, "git apply fix.patch && python -m pytest pkg -q -k test_upload_mock")
+    ko = s.exec(sid, "python -m patch_ng --strip 1 fix.patch && "
+                     "NGE_FIX_TEST=test_upload_mock python -m pytest pkg/t.py -q")
     assert ko.exit_code == 1 and "still failing" in ko.stdout
+
+    # the older -k form still parses, so a hand-written command keeps working
+    legacy = s.exec(sid, "git apply fix.patch && python -m pytest pkg -q -k test_plan_order")
+    assert legacy.exit_code == 0
 
 
 def test_collect_returns_requested_paths():

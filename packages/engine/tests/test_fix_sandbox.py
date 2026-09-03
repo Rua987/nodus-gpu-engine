@@ -216,3 +216,134 @@ def test_the_module_source_reaches_the_model(tmp_path):
                      "m")
     assert "def helper(a):" in seen["prompt"]
     assert "VERBATIM" in seen["prompt"], "the model must be told not to retype"
+
+
+# -- a fix must not break its neighbours ------------------------------------
+
+TF = "packages/nodus/tests/test_x.py"
+
+
+def _fix_run(tmp_path, monkeypatch, stdout, failures=None):
+    """Run one fix attempt whose sandbox returns `stdout`."""
+    seen = {}
+
+    def spy(command, node_id=None, files=None, **kw):
+        if "fix.patch" in command:
+            seen["cmd"] = command
+            return {"sandbox_id": "s", "node_id": node_id, "exit_code": 1,
+                    "ok": False, "stdout": stdout, "stderr": "",
+                    "duration_s": 0.1, "artifacts": {}}
+        return {"sandbox_id": "s", "node_id": node_id, "exit_code": 0,
+                "ok": True, "stdout": "", "stderr": "", "duration_s": 0.1,
+                "artifacts": {}}
+    monkeypatch.setattr(handlers, "run_in_sandbox", spy)
+
+    o = _orch(tmp_path)
+    o._propose_patch = lambda f, m: "--- a/x.py\n+++ b/x.py\n@@ -1,1 +1,1 @@\n-a\n+b\n"
+    handlers.reset_state(o.config)
+    fixes = o._attempt_fixes(failures or [{"test": f"{TF}::test_a", "error": "boom"}],
+                             "packages/nodus/tests")
+    return o, fixes, seen
+
+
+def test_the_whole_file_is_re_run_not_just_the_test(tmp_path, monkeypatch):
+    """`-k <test>` only answers 'does this one pass now'."""
+    _, _, seen = _fix_run(tmp_path, monkeypatch, "1 passed in 0.1s")
+    assert TF in seen["cmd"], "the test file must be re-run"
+    assert " -k " not in seen["cmd"], "not just the single test"
+
+
+def test_a_patch_that_breaks_a_neighbour_is_rejected(tmp_path, monkeypatch):
+    """The target test passes, but the patch broke another one in the file.
+    This used to be reported as fix OK."""
+    out = f"FAILED {TF}::test_other - AssertionError\n1 failed, 5 passed"
+    o, fixes, _ = _fix_run(tmp_path, monkeypatch, out)
+    assert fixes[0]["verified"] is False
+    assert fixes[0]["regressions"] == [f"{TF}::test_other"]
+    assert "broke" in fixes[0]["reason"]
+    assert [e for e in o.events if e["kind"] == "fix_regression"]
+
+
+def test_a_pre_existing_failure_is_not_counted_as_a_regression(tmp_path, monkeypatch):
+    """Another test in the file was already red before the patch: the fix is
+    still valid, and the exit code alone could never tell the difference."""
+    out = f"FAILED {TF}::test_already_red - AssertionError\n1 failed, 5 passed"
+    known = [{"test": f"{TF}::test_a", "error": "boom"},
+             {"test": f"{TF}::test_already_red", "error": "was red"}]
+    _, fixes, _ = _fix_run(tmp_path, monkeypatch, out, failures=known)
+    # _attempt_fixes orders by error length, so pick the one we mean rather
+    # than assuming an index
+    fix = next(x for x in fixes if x["test"] == f"{TF}::test_a")
+    assert fix["verified"] is True, fix.get("reason")
+    assert fix["regressions"] == []
+
+
+def test_the_target_still_failing_is_rejected(tmp_path, monkeypatch):
+    out = f"FAILED {TF}::test_a - still broken\n1 failed"
+    _, fixes, _ = _fix_run(tmp_path, monkeypatch, out)
+    assert fixes[0]["verified"] is False
+    assert fixes[0]["reason"] == "target test still failing"
+
+
+def test_empty_output_is_not_a_pass(tmp_path, monkeypatch):
+    """No output means nothing ran - the exact shape of the git: not found bug,
+    where an empty stdout was indistinguishable from a clean pass."""
+    o, fixes, _ = _fix_run(tmp_path, monkeypatch, "")
+    assert fixes[0]["verified"] is False
+    assert fixes[0]["reason"] == "sandbox produced no output - nothing ran"
+    ev = [e for e in o.events if e["kind"] == "fix_rejected"][0]
+    assert ev["target_fixed"] is False, "absence of failures is not a pass"
+
+
+# -- the model sometimes answers nothing at all ------------------------------
+
+def test_an_empty_reply_is_retried_once(tmp_path):
+    """Live, Nemotron returned an empty string for a prompt that had produced
+    a valid diff a run earlier - two runs lost fixes to `has_patch: False`."""
+    calls = []
+    diff = "--- a/x.py\n+++ b/x.py\n@@ -1,1 +1,1 @@\n-a\n+b\n"
+
+    def chat_fn(messages, model=None, tools=None):
+        calls.append(1)
+        return {"content": "" if len(calls) == 1 else f"```diff\n{diff}```"}
+
+    o = _orch(tmp_path, chat_fn=chat_fn)
+    got = o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m")
+    assert got == diff, "the retry's patch must be used"
+    assert len(calls) == 2, "exactly one retry"
+    assert [e for e in o.events if e["kind"] == "patch_retry_succeeded"]
+
+
+def test_two_empty_replies_give_up_and_say_so(tmp_path):
+    o = _orch(tmp_path, chat_fn=lambda m, mo=None, t=None: {"content": ""})
+    assert o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m") is None
+    empties = [e for e in o.events if e["kind"] == "patch_empty"]
+    assert [e["attempt"] for e in empties] == [1, 2]
+    assert empties[0]["reply_chars"] == 0
+
+
+def test_a_good_first_reply_is_not_retried(tmp_path):
+    calls = []
+    diff = "--- a/x.py\n+++ b/x.py\n@@ -1,1 +1,1 @@\n-a\n+b\n"
+
+    def chat_fn(messages, model=None, tools=None):
+        calls.append(1)
+        return {"content": f"```diff\n{diff}```"}
+
+    o = _orch(tmp_path, chat_fn=chat_fn)
+    assert o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m") == diff
+    assert len(calls) == 1, "no wasted call"
+    assert not [e for e in o.events if e["kind"] == "patch_empty"]
+
+
+def test_an_exception_is_not_retried(tmp_path):
+    calls = []
+
+    def boom(*a, **k):
+        calls.append(1)
+        raise TimeoutError("504")
+
+    o = _orch(tmp_path, chat_fn=boom)
+    assert o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m") is None
+    assert len(calls) == 1, "a failing endpoint is not hammered"
+    assert [e for e in o.events if e["kind"] == "patch_error"]

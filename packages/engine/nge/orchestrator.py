@@ -781,13 +781,27 @@ class NgeOrchestrator:
             + (f"\n{excerpt}\n" if excerpt else "")
             + (f"\n{under_test}\n" if under_test else "")
         )
-        try:
-            msg = self.chat_fn([{"role": "user", "content": prompt}], model, None)
-        except Exception as exc:
-            self._emit("patch_error", test=failure.get("test"),
-                       error=f"{type(exc).__name__}: {exc}")
-            return None
-        return llm_text.unified_diff(msg)
+        # Nemotron intermittently answers this prompt with an empty string -
+        # the same request that produced a valid diff a run earlier. Two runs
+        # in a row lost fixes to `has_patch: False` while a one-line prompt to
+        # the same model answered fine, so this is flakiness, not refusal.
+        # One retry, then give up honestly.
+        for attempt in (1, 2):
+            try:
+                msg = self.chat_fn([{"role": "user", "content": prompt}],
+                                   model, None)
+            except Exception as exc:
+                self._emit("patch_error", test=failure.get("test"),
+                           attempt=attempt, error=f"{type(exc).__name__}: {exc}")
+                return None
+            patch = llm_text.unified_diff(msg)
+            if patch:
+                if attempt > 1:
+                    self._emit("patch_retry_succeeded", test=failure.get("test"))
+                return patch
+            self._emit("patch_empty", test=failure.get("test"), attempt=attempt,
+                       reply_chars=len(llm_text.content_of(msg)))
+        return None
 
     def _sources_for_patch(self, patch: str) -> Dict[str, str]:
         """Read the repo files a patch touches, so ``git apply`` has something
@@ -894,19 +908,47 @@ class NgeOrchestrator:
             sources = self._sources_for_patch(patch)
             files.update(sources)
             self._emit("fix_sources", test=f["test"], files=sorted(sources))
+            # Re-run the WHOLE test file, not just the failing test. Verifying
+            # `-k <test>` only answers "does this one pass now" - a patch that
+            # repairs one test and breaks three others was reported fix OK. The
+            # exit code cannot be the criterion either, since the file may hold
+            # other failures that were already red before the patch, so compare
+            # the failure sets instead.
+            test_file = f["test"].split("::")[0] or target
+            before = {x["test"] for x in failures
+                      if str(x.get("test", "")).startswith(test_file + "::")}
             cmd = self._ensure_runner(
                 f"python -m patch_ng --strip 1 fix.patch"
-                f" && python -m pytest {shlex.quote(target)}"
-                f" -q -k {shlex.quote(kw)}",
+                # the mock sandbox needs to know which test is under repair;
+                # harmless in a real one
+                f" && NGE_FIX_TEST={shlex.quote(kw)}"
+                f" python -m pytest {shlex.quote(test_file)} -q --tb=short",
                 source_root, requirements, extra=("patch-ng",))
             res = handlers.run_in_sandbox(
                 command=cmd, node_id=node, files=files, timeout=240,
             )
-            verified = res["exit_code"] == 0 and not res.get("blocked")
+            out = res["stdout"] or ""
+            after = {m.group(1) for m in _FAILED_RE.finditer(out)}
+            regressions = sorted(after - before)
+            # With no output nothing ran, so "the test is not in the failure
+            # list" is vacuous - the shape of the `git: not found` bug, where
+            # an empty stdout looked exactly like a clean pass.
+            ran = bool(out.strip())
+            target_fixed = ran and f["test"] not in after
+            verified = (target_fixed and not regressions
+                        and not res.get("blocked"))
+            if regressions:
+                self._emit("fix_regression", test=f["test"], broke=regressions)
             self._emit("fix_verified" if verified else "fix_rejected",
-                       test=f["test"], node=node)
+                       test=f["test"], node=node,
+                       target_fixed=target_fixed, regressions=len(regressions))
             fixes.append({"test": f["test"], "patch": patch, "verified": verified,
-                          "node": node, "stdout": res["stdout"]})
+                          "node": node, "stdout": res["stdout"],
+                          "regressions": regressions,
+                          "reason": ("broke " + ", ".join(regressions)) if regressions
+                                    else None if target_fixed
+                                    else "sandbox produced no output - nothing ran"
+                                    if not ran else "target test still failing"})
             handlers.gpu_release(node_ids=[node])
         self.fixes = fixes
         return fixes

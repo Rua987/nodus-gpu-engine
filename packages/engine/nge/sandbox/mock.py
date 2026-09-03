@@ -45,16 +45,19 @@ class MockSandbox(Sandbox):
         seed = _seed(sandbox_id, command)
         t0 = time.perf_counter()
 
-        # --- verify an auto-fix: apply fix.patch, then pytest ... -k <kw> ---
+        # --- verify an auto-fix: apply fix.patch, then re-run the test file ---
         # (the live command uses patch-ng: python:3.12-slim ships neither
         #  git nor patch, so `git apply` failed with 127 before running)
+        # The whole file is re-run now, so the target test is named by
+        # NGE_FIX_TEST rather than by `-k`.
         if ("fix.patch" in command and "pytest" in command
                 and ("patch_ng" in command or "git apply" in command)):
-            mk = re.search(r"-k\s+([\w:.-]+)", command)
+            mk = (re.search(r"NGE_FIX_TEST='?([\w:.\[\]-]+)'?", command)
+                  or re.search(r"-k\s+'?([\w:.\[\]-]+)'?", command))
             kw = mk.group(1) if mk else ""
             f = failure_by_test(kw) if kw else None
             fixed = bool(f and f["fixable"])
-            head = "Checking patch fix.patch...\nApplied patch fix.patch cleanly."
+            head = "patching file fix.patch\nsuccessfully patched"
             if fixed:
                 body = (f"1 passed in {0.4 + (seed % 20) / 10:.2f}s")
                 return ExecResult(exit_code=0, stdout=f"{head}\n{body}",
