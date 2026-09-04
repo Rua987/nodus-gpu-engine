@@ -99,7 +99,33 @@ def test_a_real_plan_is_not_degraded(monkeypatch, tmp_path):
     assert "planned by 324M" in r.note
 
 
-def test_a_declining_model_is_distinguished_from_a_missing_one(monkeypatch, tmp_path):
+def test_torch_missing_is_not_reported_as_declined(monkeypatch, tmp_path):
+    """Found on a fresh venv: with weights on disk but torch absent, the
+    planner said "ran but declined this task". It had not run at all -
+    try_plan_tool_names returns None for a load failure exactly as it does for
+    a declined task, so the note claimed more than it knew."""
+    import builtins
+    p = tmp_path / "w.pt"
+    p.write_bytes(b"x")
+    monkeypatch.setenv("NODUS_PLAN_CKPT", str(p))
+
+    real_import = builtins.__import__
+
+    def no_torch(name, *a, **k):
+        if name == "torch":
+            raise ImportError("No module named 'torch'")
+        return real_import(name, *a, **k)
+    monkeypatch.setattr(builtins, "__import__", no_torch)
+
+    r = planner.plan("anything", allow_nemotron=False)
+    assert r.degraded is True and r.source == "heuristic"
+    assert "torch is not installed" in r.note
+    assert "declined" not in r.note, "it never ran - do not say it declined"
+
+
+def test_no_plan_does_not_claim_the_model_declined(monkeypatch, tmp_path):
+    """None from the vendored helper means declined OR invalid OR failed to
+    load; the note must not pick one."""
     p = tmp_path / "w.pt"
     p.write_bytes(b"x")
     monkeypatch.setenv("NODUS_PLAN_CKPT", str(p))
@@ -109,7 +135,8 @@ def test_a_declining_model_is_distinguished_from_a_missing_one(monkeypatch, tmp_
     monkeypatch.setitem(sys.modules, "nodus_plan_local", fake)
 
     r = planner.plan("anything", allow_nemotron=False)
-    assert r.degraded is True and "declined" in r.note
+    assert r.degraded is True
+    assert "declined the task, or" in r.note, "both causes must be named"
     assert "NOT FOUND" not in r.note
 
 

@@ -92,17 +92,35 @@ def plan(task: str, allow_nemotron: Optional[bool] = None,
 
     # 1) local 324M planner - only when the weights are actually on disk
     if exists:
+        # torch is an optional extra (see requirements.txt). Without it the
+        # planner cannot load at all, and try_plan_tool_names returns None the
+        # same way it does for a declined task - so check first rather than
+        # report "declined" for a model that never ran.
         try:
-            from nodus_plan_local import try_plan_tool_names
-            names = try_plan_tool_names(task, ckpt_path=str(ckpt))
-            if names:
-                return PlanResult(names=list(names), source="nodus-324m",
-                                  note=f"planned by 324M ({ckpt.name})")
-            note = ("324M planner ran but declined this task (label != valid); "
-                    "using the hand-written keyword heuristic")
-        except Exception as exc:
-            note = (f"324M planner failed to run: {type(exc).__name__}: {exc}; "
-                    f"using the hand-written keyword heuristic")
+            import torch  # noqa: F401
+            have_torch = True
+        except Exception:
+            have_torch = False
+
+        if not have_torch:
+            note = ("324M planner cannot run: torch is not installed "
+                    "(`pip install torch`); using the hand-written keyword "
+                    "heuristic")
+        else:
+            try:
+                from nodus_plan_local import try_plan_tool_names
+                names = try_plan_tool_names(task, ckpt_path=str(ckpt))
+                if names:
+                    return PlanResult(names=list(names), source="nodus-324m",
+                                      note=f"planned by 324M ({ckpt.name})")
+                # None means declined OR invalid OR failed to load - the
+                # vendored helper does not distinguish, so neither do we
+                note = ("324M planner returned no plan (declined the task, or "
+                        "failed to load the checkpoint); using the "
+                        "hand-written keyword heuristic")
+            except Exception as exc:
+                note = (f"324M planner failed to run: {type(exc).__name__}: "
+                        f"{exc}; using the hand-written keyword heuristic")
 
     # 2) optional Nemotron fallback
     if allow_nemotron is None:
