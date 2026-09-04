@@ -79,13 +79,15 @@ python -m nge.demo_nebius --live
   `images.use(img).session().run(args=["/bin/sh","-c",cmd], files={...}).wait()`).
   Auth = `IAMAuth(token, project_id, base_url=".../sandboxes/")` (shared by
   `nge/nebius_client.py`).
-- **Sandboxes is in beta — free, request access** at
-  <https://tokenfactory.nebius.com/sandboxes/about>. Until granted, the key's
-  `permissions` are all `False` (`spawn`, `import`, …). Verified against the
-  account: **auth + client construction work; the key just lacks beta access.**
-- `NebiusFleet` and `TokenFactorySandbox` are **both implemented** against
-  ConTree and share auth — they unlock together with beta access. `NebiusFleet`
-  telemetry = an `nvidia-smi` (or CPU-fallback) probe run inside each node.
+- **Sandboxes access is granted** on this key: `permissions` reports
+  `spawn: True`. `python -m nge.sandbox.token_factory` spawns a real sandbox,
+  uploads files and runs commands in it.
+- `NebiusFleet` and `TokenFactorySandbox` are both implemented against ConTree
+  and share auth. `NebiusFleet` telemetry = an `nvidia-smi` (or CPU-fallback)
+  probe run inside each node.
+- The image is bare: no pytest, no dependencies, **no git and no patch**. The
+  orchestrator ships the source tree, installs the requirements and applies
+  patches with `patch-ng` — see [`../../docs/FIX_LOOP.md`](../../docs/FIX_LOOP.md).
 
 `--live` sets `NGE_TRACK=nebius` (guard: refuses any non-`nebius:` LLM), routes
 slot-fill through `nodus_agent._chat`, and selects `NebiusFleet` +
@@ -100,22 +102,33 @@ mock for a partial-real run.
 | Routing | `nge/router.py` | Nemotron Ultra / Super / Nano per decision kind |
 | Orchestrator + slot-fill | **Nemotron @ Nebius Token Factory** | Decisions + argument fill |
 | Self-managed compute | `orchestrator._react_to_pressure` | Throttle → re-provision + migrate shard |
-| Code agent | `orchestrator._attempt_fixes` | Per failure: patch → `git apply` + re-test in a fresh sandbox → keep verified |
+| Code agent | `orchestrator._attempt_fixes` | Per failure: patch → apply with `patch-ng` → re-run the whole suite → keep only what breaks nothing else |
 | GPU fleet | **Nebius Cloud** GPU instances | Provision / monitor / release |
 | Capability jail | `nge/policy.py` | Vet every LLM shell command before exec |
 | Execution isolation | **Nebius Token Factory Sandboxes** (ConTree SDK) | Per-shard command execution |
 | Observability | Nodus event log (Grafana MCP reusable) | Per-event annotations |
 
-## What is real vs. skeleton in this milestone
+## What runs for real
 
-| Real (65 tests + MCP integration job) | Blocked on Nebius beta access, not code |
+Sandboxes beta access landed, so `--live` is no longer a skeleton. 291 tests,
+plus an MCP integration job and `live-smoke` — the full pipeline against real
+sandboxes on Ubuntu, on demand and on a weekday cron.
+
+| Verified live | Still open |
 |---|---|
-| `nebius:` backend + reversible register shim — **real Nemotron call verified** | `NebiusFleet` / `TokenFactorySandbox` live runs (need Sandboxes beta access) |
-| Nemotron tier router (`nge/router.py`) | — |
-| Feedback loop: throttle → re-provision + migrate | Nemotron planner fallback beyond stub |
-| Auto-fix loop: patch → apply + re-test in fresh sandbox → keep verified | resume-from-snapshot on migration (needs Token Factory branching) |
-| Capability jail (`nge/policy.py`) enforced in `run_in_sandbox` | Grafana live wiring, demo video |
-| `MockFleet` (deterministic hot-node) + telemetry scoring | — |
+| `nebius:` backend + reversible register shim | Verification covers `packages/nodus` only |
+| Nemotron tier router (`nge/router.py`) | Hunks with no file header are not recovered |
+| 324M planner loading real weights (`nge/fetch_ckpt.py`) | Nemotron sometimes returns nothing (3 retries, 2s backoff) |
+| `TokenFactorySandbox` — auth, spawn, exec, file upload | `fetch_ckpt` and the planner are only exercised on Windows |
+| Real sharding: files split round-robin, distinct commands | resume-from-snapshot on migration (needs Token Factory branching) |
+| Feedback loop: throttle → re-provision + migrate | Grafana live wiring |
+| Auto-fix loop: patch applied and re-verified against the whole suite | — |
+| Capability jail enforced in `run_in_sandbox` | — |
+
+Each verification rule carries the live failure that produced it in
+[`../../docs/FIX_LOOP.md`](../../docs/FIX_LOOP.md); where this has been run and
+what each environment caught is in
+[`../../docs/ENVIRONMENTS.md`](../../docs/ENVIRONMENTS.md).
 | `NebiusFleet` + `TokenFactorySandbox` vs real ConTree SDK — auth verified, fake-SDK tested | — |
 | Real MCP server (`mcp` SDK) ↔ Nodus `McpBridge` — `test_mcp_bridge_integration` | — |
 | `demo_nebius --local`: real Nodus ReAct loop drives `nge-gpu.*` via a local model | — |
@@ -123,10 +136,9 @@ mock for a partial-real run.
 
 ## Build-next checklist (live path)
 
-1. **Request Token Factory Sandboxes beta access** for the key/project
-   (<https://tokenfactory.nebius.com/sandboxes/about>, free). This is the only
-   blocker for `--live` — `NebiusFleet` + `TokenFactorySandbox` are implemented.
-2. `python -m nge.sandbox.token_factory` — real sandbox smoke once access lands.
+1. ~~Request Sandboxes beta access~~ — **granted**; `--live` runs.
+2. `python -m nge.sandbox.token_factory` — real sandbox smoke (auth + spawn +
+   exec + file upload), passing.
 3. Grab the exact **Nemotron 3 Ultra 550b** model id from the Token Factory
    console; set `NEMOTRON_MODEL` (Super 120b is the working default, verified).
 4. Point Nodus' MCP at `nge/tools/mcp.json` and run a real

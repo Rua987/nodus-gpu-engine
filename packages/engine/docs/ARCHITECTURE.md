@@ -6,7 +6,7 @@
 |---|-------|-----------|------|
 | 1 | Brain / DSL | `nge/planner.py` → `packages/nodus/nodus_plan_local.py` | NL task → **ordered tool names** (fixed 8-tool coding vocab). Deterministic; no args. |
 | 2 | Inference | `nge/backends/nebius.py` + `nge/router.py` → `packages/nodus/nodus_backends._chat_openai_compatible` | Nemotron @ Nebius, **tier-routed**: Ultra 550b (plan/orchestrate), Super 120b (slot-fill/triage), Nano 30b (telemetry/healthcheck). |
-| 3 | Runtime | `nge/orchestrator.py` | Deterministic infra frame around the plan; fan-out; **feedback loop** (`_react_to_pressure`: throttling node → re-provision + migrate shard); **auto-fix loop** (`_attempt_fixes`: patch → `git apply` + re-test in a fresh sandbox → keep only verified); event log. |
+| 3 | Runtime | `nge/orchestrator.py` | Deterministic infra frame around the plan; fan-out; **feedback loop** (`_react_to_pressure`: throttling node → re-provision + migrate shard); **auto-fix loop** (`_attempt_fixes`: patch → apply with `patch-ng` in a fresh sandbox → re-run the whole suite → keep only what fixes its target without breaking anything else); event log. |
 | 3b | Capability jail | `nge/policy.py` | Allow/deny gate every LLM-proposed shell command hits before a sandbox runs it. |
 | 4 | Infrastructure | `nge/fleet/` (`MockFleet` \| `NebiusFleet`) | `provision(n)` / `status()` / `allocate()` / `release()` of Nebius GPU nodes + telemetry. |
 | 5 | Execution | `nge/sandbox/` (`MockSandbox` \| `TokenFactorySandbox`) | Isolated `create → put_files → exec → collect → destroy` on a pinned node. |
@@ -14,8 +14,8 @@
 
 `demo_nebius` has three entrypoints against the *same* layers 4–6:
 `--mock` (deterministic orchestrator, CI), `--local` (real Nodus ReAct loop +
-local model over real MCP — no cloud), `--live` (Nemotron @ Nebius + real
-fleet/sandbox — skeleton).
+local model over real MCP — no cloud), `--live` (Nemotron @ Nebius + real fleet/sandbox — running; the CI job
+`live-smoke` exercises it on Ubuntu against real sandboxes).
 
 ## Data flow (the demo scenario)
 
@@ -42,7 +42,7 @@ orchestrator.run()
    ├─ triage(shard stdout)  ─────────────────▶ dedup FAILED lines
    ├─ _attempt_fixes(failures[:3]):             # ── auto-fix loop (code agent) ──
    │     route("triage") ────────────────────▶ Nemotron Super 120b → unified diff
-   │     gpu_provision(1) + run_in_sandbox("git apply fix.patch && pytest -k <t>")
+   │     gpu_provision(1) + run_in_sandbox("patch_ng fix.patch && pytest <suite>")
    │     keep patch iff exit==0               [fix_attempt / fix_verified events]
    ├─ gpu_release()  ────────────────────────▶ all nodes gone (billing stops)
    └─ write out/report_<ts>.md + out/fixes/*.patch  ─▶ artifact (+ full JSON event log)

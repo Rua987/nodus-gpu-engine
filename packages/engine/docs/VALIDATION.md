@@ -1,9 +1,17 @@
 # Pipeline validation runs
 
-Record of end-to-end runs used to validate the pipeline while Token Factory
-**Sandboxes beta access is pending** (the only piece that can't be exercised
-against Nebius yet). Two real LLMs were in the loop across these runs: Nemotron
-via Token Factory (cloud) and a local Ollama model driving the real Nodus agent.
+Record of end-to-end runs used to validate the pipeline.
+
+> **Superseded on 2026-09-03.** These runs were made while Token Factory
+> Sandboxes beta access was still pending, so the infrastructure below is
+> mocked. Access has since been granted and `--live` runs for real — against
+> real sandboxes, in CI as well (`live-smoke`). Kept as the record of what was
+> verified before that, and because switching the sandboxes on immediately
+> exposed four bugs the mock had been hiding: see
+> [`../../docs/ENVIRONMENTS.md`](../../docs/ENVIRONMENTS.md).
+
+Two real LLMs were in the loop across these runs: Nemotron via Token Factory
+(cloud) and a local Ollama model driving the real Nodus agent.
 
 Date: 2026-09-02 · engine @ commit `1907861` · 70 unit tests green + CI.
 

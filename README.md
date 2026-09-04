@@ -3,7 +3,7 @@
 [![engine-tests](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml)
 [![python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-43%20passing%20%C2%B7%20no%20network-brightgreen)](packages/engine/tests)
+[![tests](https://img.shields.io/badge/tests-291%20passing-brightgreen)](packages/engine/tests)
 
 **Agentic engineering platform — Nebius "Coding & Agentic Engineering" track.**
 
@@ -50,21 +50,24 @@ Token Factory        ──▶  isolated exec + capability jail [ execution   ]
 | [`packages/nodus/`](packages/nodus/) | **Vendored, unmodified** snapshot of <https://github.com/Rua987/nodus> — the Nodus runtime (ReAct executor, `bridge/`, backends, MCP). The `nebius:` backend is added by a reversible monkey-patch, never an edit. See [`docs/VENDORING.md`](docs/VENDORING.md). |
 
 
-The auto-fix loop's verification rules each come from a live run that broke without them — including a patch that repaired its target test while breaking 28 others, twelve of them path-security checks. The evidence is in [`docs/FIX_LOOP.md`](docs/FIX_LOOP.md).
+The auto-fix loop's verification rules each come from a live run that broke without them — including a patch that repaired its target test while breaking 28 others, twelve of them path-security checks. The evidence is in [`docs/FIX_LOOP.md`](docs/FIX_LOOP.md), and
+[`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md) records where this has actually been run, what each environment caught, and what is still
+exercised on only one machine.
+
 ## Quick start (mock — no credentials, no network)
 
 ```bash
 cd packages/engine
 pip install -r requirements.txt
-python -m pytest -q                 # 43 tests
+python -m pytest -q                 # 291 tests
 python -m nge.demo_nebius --mock    # -> out/report_<ts>.md  +  .html (self-contained)
 ```
 
 The mock run: `plan (→Ultra)` → `gpu_provision(3×H100)` → 3 sandboxes run a
 sharded pytest (commands vetted by the jail) → a hot node throttles → the engine
 re-provisions and migrates that shard by itself → **the code agent proposes a
-patch per failure, applies + re-tests it in a fresh sandbox, keeps the verified
-ones** → `gpu_release` → consolidated report (triage + `fixes/*.patch`).
+patch per failure, applies it in a fresh sandbox and re-runs the whole suite,
+keeping only what fixes its target without breaking anything else** → `gpu_release` → consolidated report (triage + `fixes/*.patch`).
 
 ```bash
 python -m nge.demo_nebius --mock --watch    # live fleet view: util/temp bars, migration, fixes
@@ -75,8 +78,12 @@ python -m nge.demo_nebius --mock --watch    # live fleet view: util/temp bars, m
 1. **Code + Infrastructure in one loop** — `orchestrator._react_to_pressure`:
    GPU telemetry drives compute reallocation while the plan executes.
 2. **A code agent, not just a test runner** — `orchestrator._attempt_fixes`:
-   propose a patch → `git apply` + re-test in a fresh GPU sandbox → keep only
-   what re-tests green; unverifiable failures are flagged for a human.
+   propose a patch → apply it with `patch-ng` in a fresh GPU sandbox → re-run
+   the **whole suite** and keep only what fixes its target *without breaking
+   anything else*. A patch that repairs one test and breaks another is
+   rejected and named. Unverifiable failures are flagged for a human.
+   See [`docs/FIX_LOOP.md`](docs/FIX_LOOP.md) for the evidence behind each
+   rule — including the patch that fixed its target while breaking 28 tests.
 3. **Multi-tier Nemotron routing** — `nge/router.py`: Ultra 550b (plan),
    Super 120b (slot-fill / triage / patch), Nano 30b (fast telemetry checks).
 4. **Deterministic execution + capability jail** — `nge/policy.py` gates every
@@ -87,9 +94,20 @@ Architecture: [`packages/engine/docs/ARCHITECTURE.md`](packages/engine/docs/ARCH
 
 ## Live path
 
-`packages/engine/docs/NEBIUS_TRACK.md` lists what's wired vs. skeleton
-(`NebiusFleet` network calls and `TokenFactorySandbox._build_client` are the
-remaining TODOs; everything else runs).
+`--live` runs for real: the 324M planner, Nemotron (tier-routed) and Token
+Factory sandboxes, all at once. `NebiusFleet` and `TokenFactorySandbox` are
+wired and exercised — the CI job `live-smoke` runs the whole pipeline on
+Ubuntu against real sandboxes on demand and on a weekday cron.
+
+```bash
+cd packages/engine
+python -m nge.sandbox.token_factory                    # auth + spawn + exec
+NGE_FLEET_MODE=mock python -m nge.demo_nebius --live   # no GPU allocated
+```
+
+`NGE_FLEET_MODE=mock` keeps the fleet ledger simulated, so the cost is the
+Nemotron calls plus the sandboxes the shards run in. Needs `NEBIUS_API_KEY`
+and `NEBIUS_PROJECT_ID` (files under `packages/engine/` or environment).
 
 ## License
 
