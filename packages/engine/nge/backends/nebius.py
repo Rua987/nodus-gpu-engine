@@ -60,21 +60,32 @@ def chat_nebius(messages: list, model: str, tools: Optional[list]) -> dict:
 
 
 def nemotron_plan_fallback(task: str, allowed_tools: List[str]) -> Optional[List[str]]:
-    """Skeleton: ask Nemotron for an ordered tool-name plan when the local 324M
-    planner declines. Wired but intentionally minimal for this milestone.
+    """Ask Nemotron for an ordered tool-name plan when the 324M planner cannot.
+
+    Only reached with ``NGE_PLAN_FALLBACK=nemotron``. Names outside
+    ``allowed_tools`` are dropped: the executor only knows that vocabulary, and
+    a hallucinated tool would fail downstream instead of here.
+
+    The reply used to go through a bare ``json.loads`` on the whole text, which
+    handled exactly one of the shapes a model answers with - a ```json fence,
+    prose around the array, or an empty reply all returned None silently.
     """
+    from nge import llm_text
+
     prompt = (
         "You plan tool steps for a coding agent.\n"
-        "Reply with ONLY a JSON array of tool names in order.\n"
+        "Reply with ONLY a JSON array of tool names in order, no prose.\n"
         f"Allowed tools: {', '.join(allowed_tools)}\n"
         f"Task: {task}"
     )
-    msg = chat_nebius([{"role": "user", "content": prompt}], _cfg.load().nemotron_model, None)
-    import json
     try:
-        names = json.loads((msg.get("content") or "").strip())
-        if isinstance(names, list) and all(isinstance(n, str) for n in names):
-            return [n for n in names if n in allowed_tools]
-    except (ValueError, TypeError):
-        pass
-    return None
+        msg = chat_nebius([{"role": "user", "content": prompt}],
+                          _cfg.load().nemotron_model, None)
+    except Exception:
+        return None                      # a flaky model must not break planning
+
+    names = llm_text.json_array(msg)
+    if not names or not all(isinstance(n, str) for n in names):
+        return None
+    kept = [n for n in names if n in allowed_tools]
+    return kept or None

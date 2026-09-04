@@ -118,6 +118,16 @@ Each of these silently lost a correct patch in a live run:
 | whole block indented | dedented, preserving the ` `/`-`/`+` column |
 | context that exists nowhere in the file | refused before a node is provisioned |
 
+## The same lesson applies to every model reply
+
+`nemotron_plan_fallback` (reached only with `NGE_PLAN_FALLBACK=nemotron`) had
+none of this: it called `json.loads` on the whole reply. Measured against five
+realistic answers, four were silently dropped — a ```json fence, an unlabelled
+fence, prose around the array, and an empty reply. `llm_text.json_array()`
+handles them the way `unified_diff` handles diffs. Tool names outside the fixed
+vocabulary are dropped too: the executor only knows those eight, so an invented
+name would fail downstream instead of here.
+
 ## Why a patch was not produced
 
 Three causes that used to share one name:

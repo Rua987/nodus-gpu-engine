@@ -193,3 +193,23 @@ def test_hunks_without_a_file_header_are_identified():
     assert not lt.has_hunks_without_header(f"```diff\n--- a/x.py\n+++ b/x.py\n{BODY}```")
     assert not lt.has_hunks_without_header("I cannot fix this.")
     assert not lt.has_hunks_without_header("")
+
+
+# -- json_array --------------------------------------------------------------
+
+def test_json_array_handles_the_shapes_models_use():
+    assert lt.json_array({"content": '["a", "b"]'}) == ["a", "b"]
+    assert lt.json_array({"content": '```json\n["a"]\n```'}) == ["a"]
+    assert lt.json_array({"content": '```\n["a"]\n```'}) == ["a"]
+    assert lt.json_array({"content": 'Plan:\n["a", "b"]\nDone.'}) == ["a", "b"]
+
+
+def test_json_array_is_total():
+    for msg in [None, {}, {"content": ""}, {"content": "no array"},
+                {"content": "["}, {"content": '{"a": 1}'}, 42]:
+        assert lt.json_array(msg) is None
+
+
+def test_json_array_respects_strings_and_nesting():
+    assert lt.json_array({"content": '["a]b", "c"]'}) == ["a]b", "c"]
+    assert lt.json_array({"content": '[["x"], ["y"]]'}) == [["x"], ["y"]]

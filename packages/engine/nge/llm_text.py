@@ -181,6 +181,49 @@ def unified_diff(msg) -> Optional[str]:
     return None
 
 
+def json_array(msg) -> Optional[list]:
+    """The first JSON array in a reply, or None.
+
+    Same job as :func:`json_object` for ``[...]``. Written because
+    ``nemotron_plan_fallback`` used a bare ``json.loads`` on the whole reply,
+    which loses four of the five shapes a model actually answers with - a
+    ```json fence being the likeliest of them.
+    """
+    import json as _json
+
+    text = content_of(msg)
+    if not text.strip():
+        return None
+    for cand in [b.strip() for b in fenced_blocks(text)] + [text]:
+        start = cand.find("[")
+        if start < 0:
+            continue
+        depth, in_str, esc = 0, False, False
+        for i in range(start, len(cand)):
+            c = cand[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif c == "\\":
+                    esc = True
+                elif c == '"':
+                    in_str = False
+                continue
+            if c == '"':
+                in_str = True
+            elif c == "[":
+                depth += 1
+            elif c == "]":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        obj = _json.loads(cand[start:i + 1])
+                    except ValueError:
+                        break
+                    return obj if isinstance(obj, list) else None
+    return None
+
+
 def json_object(msg) -> Optional[dict]:
     """The first JSON object in a reply, or None.
 
