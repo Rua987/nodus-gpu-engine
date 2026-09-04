@@ -46,6 +46,31 @@ test that *did* restore the separators (`s_stripped.replace('/', '\\')`). The
 mistake is not systematic — which is exactly why the loop cannot rely on the
 model being careful.
 
+### Measured: how often a "fixed" patch was really a regression
+
+Four live runs after the check was widened, counting patches whose target test
+passed against patches that also broke something else:
+
+| run | target fixed | regressions |
+|---|---|---|
+| 1 | 1 | 1 |
+| 2 | 2 | 2 |
+| 3 | 1 | 1 |
+| 4 | 1 | 1 |
+| **total** | **5** | **5** |
+
+Every patch that repaired its target broke something else. Under the old
+`-k <test>` check all five would have been reported `fix OK`, which means the
+1/3 and 2/3 scores recorded before the widening were very likely all false
+positives — the drop to 0/3 is the measurement getting honest, not the system
+getting worse.
+
+Read this as a property of *this corpus*, not a general rate: the failures all
+sit in `repair_llm_file_path`, Windows path tests running on Linux, and the
+model "fixes" them by normalising separators, which mechanically breaks the
+neighbouring cases of the same function. Another codebase would give another
+ratio. What generalises is only that the narrow check could not see any of it.
+
 ### The criterion is failure sets, not the exit code
 
 The suite legitimately contains other red tests, so a non-zero exit proves
