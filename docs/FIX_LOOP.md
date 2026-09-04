@@ -138,7 +138,10 @@ the same answer.
 
 - The verified suite is `packages/nodus`. A patch touching `packages/engine`
   is not checked by it.
-- The success rate is noisy: consecutive live runs have scored 0/3 through 2/3.
-  A single run measures nothing; only the mechanisms are stable.
+- The success rate varies run to run (0/3 through 2/3), so a single run
+  measures nothing. But not all of that spread was noise: the scores recorded
+  *before* verification was widened counted patches that broke other tests, and
+  every one of the five measured since turned out to be a regression. Treat any
+  figure from before that change as an upper bound, not a result.
 - Hunks with no file header are not recovered. Guessing the target file would
   apply the diff to the wrong one.
