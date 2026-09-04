@@ -134,7 +134,7 @@ Three causes that used to share one name:
 
 | event | `why` | retried? |
 |---|---|---|
-| `patch_empty` | model returned nothing | yes — 3 attempts, 2s backoff |
+| `patch_empty` | model returned nothing | yes — 4 attempts, 2s linear backoff |
 | `patch_unparsed` | hunks with no file header | no |
 | `patch_unparsed` | no diff in the reply | no |
 
@@ -143,6 +143,26 @@ returned nothing four times in one run and answered twice a few minutes later,
 while a 5541-char and a 1500-char version of it both succeeded — so it is the
 service, not the request. A refusal is a considered reply; asking again buys
 the same answer.
+
+**Why four.** `bench/retry_distribution.py` repeats one real call up to six
+times and records which attempt finally answers. Over 20 trials:
+
+| attempt | answered | cumulative |
+|---|---|---|
+| 1 | 14 | 70% |
+| 2 | 5 | 95% |
+| 3 | 0 | 95% |
+| 4 | 1 | 100% |
+| 5–6 | 0 | 100% |
+
+Three attempts reach 19/20, four reach 20/20, and nothing was ever recovered at
+five or six — so a fifth buys nothing. The extra call only happens when three
+have already failed, which was 1 trial in 20.
+
+Two caveats. n=20, so a single success at rank 4 is thin evidence. And the
+service was in a good phase (70% first try) while an earlier run had 16 empty
+replies out of 26 — this measures a good window, not a bad one. Re-run the
+bench rather than trusting the table if the retry behaviour matters to you.
 
 ## What this does not do
 

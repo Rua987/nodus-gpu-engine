@@ -346,7 +346,7 @@ def test_two_empty_replies_give_up_and_say_so(tmp_path):
     o = _orch(tmp_path, chat_fn=lambda m, mo=None, t=None: {"content": ""})
     assert o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m") is None
     empties = [e for e in o.events if e["kind"] == "patch_empty"]
-    assert [e["attempt"] for e in empties] == [1, 2, 3]
+    assert [e["attempt"] for e in empties] == [1, 2, 3, 4]
     assert empties[0]["reply_chars"] == 0
 
 
@@ -405,7 +405,7 @@ def test_an_exception_is_not_retried(tmp_path):
 def test_only_an_empty_reply_is_retried(tmp_path):
     """An empty answer is flakiness; a refusal or a headerless diff is a
     considered reply, and asking again just spends a request."""
-    for content, expect_calls in (("", 3),
+    for content, expect_calls in (("", 4),
                                   ("I will not patch this.", 1),
                                   ("```diff\n@@ -1,1 +1,1 @@\n-a\n+b\n```", 1)):
         calls = []

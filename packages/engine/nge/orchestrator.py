@@ -793,13 +793,13 @@ class NgeOrchestrator:
         # in a row lost fixes to `has_patch: False` while a one-line prompt to
         # the same model answered fine, so this is flakiness, not refusal.
         # One retry, then give up honestly.
-        for attempt in (1, 2, 3):
+        for attempt in (1, 2, 3, 4):
             if attempt > 1:
-                # Four consecutive calls came back empty in one run, while the
-                # same prompt answered twice in a row minutes later - a window
-                # of service flakiness, not something about the request (a
-                # 5541-char and a 1500-char version of it both succeeded).
-                # Retrying instantly just spends the window; wait it out.
+                # Retrying instantly just spends the flaky window; wait it
+                # out. Four attempts, not three: measured over 20 real calls
+                # (bench/retry_distribution.py), 70% answer first try, 95% by
+                # the second, and one needed a *fourth*. Nothing was recovered
+                # at five or six, so a fifth attempt buys nothing.
                 time.sleep(self.RETRY_DELAY_S * (attempt - 1))
             try:
                 msg = self.chat_fn([{"role": "user", "content": prompt}],
