@@ -18,6 +18,16 @@ class _Cfg:
 
 # -- resolution --------------------------------------------------------------
 
+def _with_torch(monkeypatch):
+    """State that torch is available, whatever the machine has.
+
+    planner.plan() checks torch before touching the model, so a test about the
+    *model's* behaviour must say it is there. Patching planner.have_torch is
+    reliable; mocking sys.modules or __import__ is not, and that is what made
+    these three tests pass locally and fail across the whole CI matrix."""
+    monkeypatch.setattr(planner, "have_torch", lambda: True)
+
+
 def test_resolves_the_vendored_default_when_nothing_is_set(monkeypatch):
     monkeypatch.delenv("NODUS_PLAN_CKPT", raising=False)
     assert planner.resolve_ckpt(None) == planner.DEFAULT_CKPT
@@ -85,6 +95,7 @@ def test_the_324m_planner_is_not_even_called_without_weights(monkeypatch, tmp_pa
 
 
 def test_a_real_plan_is_not_degraded(monkeypatch, tmp_path):
+    _with_torch(monkeypatch)
     p = tmp_path / "w.pt"
     p.write_bytes(b"x")
     monkeypatch.setenv("NODUS_PLAN_CKPT", str(p))
@@ -104,18 +115,10 @@ def test_torch_missing_is_not_reported_as_declined(monkeypatch, tmp_path):
     planner said "ran but declined this task". It had not run at all -
     try_plan_tool_names returns None for a load failure exactly as it does for
     a declined task, so the note claimed more than it knew."""
-    import builtins
     p = tmp_path / "w.pt"
     p.write_bytes(b"x")
     monkeypatch.setenv("NODUS_PLAN_CKPT", str(p))
-
-    real_import = builtins.__import__
-
-    def no_torch(name, *a, **k):
-        if name == "torch":
-            raise ImportError("No module named 'torch'")
-        return real_import(name, *a, **k)
-    monkeypatch.setattr(builtins, "__import__", no_torch)
+    monkeypatch.setattr(planner, "have_torch", lambda: False)
 
     r = planner.plan("anything", allow_nemotron=False)
     assert r.degraded is True and r.source == "heuristic"
@@ -124,6 +127,7 @@ def test_torch_missing_is_not_reported_as_declined(monkeypatch, tmp_path):
 
 
 def test_no_plan_does_not_claim_the_model_declined(monkeypatch, tmp_path):
+    _with_torch(monkeypatch)
     """None from the vendored helper means declined OR invalid OR failed to
     load; the note must not pick one."""
     p = tmp_path / "w.pt"
@@ -141,6 +145,7 @@ def test_no_plan_does_not_claim_the_model_declined(monkeypatch, tmp_path):
 
 
 def test_a_raising_model_degrades_instead_of_exploding(monkeypatch, tmp_path):
+    _with_torch(monkeypatch)
     p = tmp_path / "w.pt"
     p.write_bytes(b"x")
     monkeypatch.setenv("NODUS_PLAN_CKPT", str(p))

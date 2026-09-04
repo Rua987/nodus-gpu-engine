@@ -60,6 +60,21 @@ def _heuristic(task: str) -> List[str]:
     return names or ["bash", "write_file"]
 
 
+def have_torch() -> bool:
+    """Whether the planner's runtime dependency is importable.
+
+    A named function rather than an inline try/import so tests can state the
+    answer directly. Mocking the import machinery instead made three tests
+    pass on a machine with torch and fail in CI without it - the failure that
+    turned the whole matrix red.
+    """
+    try:
+        import torch  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
 def resolve_ckpt(config=None) -> Path:
     """Checkpoint path: config value, then ``$NODUS_PLAN_CKPT``, then the
     vendored default. Returned whether or not it exists."""
@@ -96,13 +111,7 @@ def plan(task: str, allow_nemotron: Optional[bool] = None,
         # planner cannot load at all, and try_plan_tool_names returns None the
         # same way it does for a declined task - so check first rather than
         # report "declined" for a model that never ran.
-        try:
-            import torch  # noqa: F401
-            have_torch = True
-        except Exception:
-            have_torch = False
-
-        if not have_torch:
+        if not have_torch():
             note = ("324M planner cannot run: torch is not installed "
                     "(`pip install torch`); using the hand-written keyword "
                     "heuristic")
