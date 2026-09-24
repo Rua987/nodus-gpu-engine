@@ -224,18 +224,21 @@ def run_react_personal(args, *, provider: str, default_model: str) -> int:
     model = args.model or default_model
     task = args.task or _LOCAL_TASK
 
+    # A deepseek model name that routes to Ollama is a config mistake, not a
+    # missing-server problem - check it first so it's reported as such even
+    # when Ollama also happens to be down (it always is on a clean machine).
+    if provider == "deepseek" and _needs_ollama(model):
+        print(f"[{provider}] model {model!r} routes to Ollama, not DeepSeek API.\n"
+              f"Use {_DEFAULT_DEEPSEEK!r} or deepseek-reasoner.",
+              file=sys.stderr)
+        return 2
+
     if _needs_ollama(model) and not _ollama_up():
         print(f"[{provider}] Ollama not reachable at "
               f"{os.environ.get('OLLAMA_URL', 'http://localhost:11434')} - "
               f"start it (`ollama serve`) and `ollama pull {model}`.",
               file=sys.stderr)
         return 3
-
-    if provider == "deepseek" and _needs_ollama(model):
-        print(f"[{provider}] model {model!r} routes to Ollama, not DeepSeek API.\n"
-              f"Use {_DEFAULT_DEEPSEEK!r} or deepseek-reasoner.",
-              file=sys.stderr)
-        return 2
 
     cfg_path = write_config(_ENGINE_DIR / "out" / f"mcp.{provider}.json",
                             fleet_mode="mock", sandbox_mode="mock")
