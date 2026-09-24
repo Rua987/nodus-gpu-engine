@@ -24,7 +24,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Sequence
 
 from nge import config as _cfg
 from nge import llm_text
@@ -585,7 +585,8 @@ class NgeOrchestrator:
     # -- feedback loop : agents self-manage their GPU compute ----------
     def _react_to_pressure(self, sr: "ShardResult", tele: Optional[dict],
                            target: str, collect: list,
-                           gpu_type: str = "H100") -> None:
+                           gpu_type: str = "H100",
+                           reserved_ids: Optional[Sequence[str]] = None) -> None:
         """If the shard's node is throttling / inefficient, migrate the shard
         onto a freshly provisioned healthy node. Bounded to one remediation
         per shard.
@@ -593,6 +594,15 @@ class NgeOrchestrator:
         ``tele`` is the telemetry reading already taken by the run loop for this
         node - reused verbatim so the pressure event, the remediation record and
         the report all quote the exact same numbers (no second poll).
+
+        ``reserved_ids``: nodes already earmarked for shards the fan-out loop
+        has not reached yet. They report ``state=ready`` (nothing has called
+        gpu_allocate on them so far) but are not spare capacity - picking one
+        as a replacement here starves that later shard's own allocate() once
+        every genuinely-idle node is gone. Regression: with more hot nodes
+        than slack (padding beyond ``shards``), the fan-out loop hit
+        "no ready node in fleet" a few shards before the end, because earlier
+        migrations had already claimed later shards' nodes.
         """
         if sr.migrated_from is not None or not tele:
             return
@@ -619,13 +629,17 @@ class NgeOrchestrator:
 
         from nge.fleet import placement as _place
         needs = _place.WorkloadNeeds()
-        # Don't move fire→fire: score ready nodes; provision only if none fit.
+        reserved = set(reserved_ids or ())
+        # Don't move fire→fire, and don't move fire→a house someone else is
+        # about to move into: score ready nodes minus the ones still reserved
+        # for shards the fan-out loop hasn't reached, provision only if none fit.
         repl = None
         decision = None
         for attempt in (1, 2):
             ready = [n for n in handlers.gpu_status()["nodes"]
                      if (n.get("state") or "") == "ready"
-                     and n.get("id") != sr.node_id]
+                     and n.get("id") != sr.node_id
+                     and n.get("id") not in reserved]
             decision = _place.pick_replacement(
                 ready, needs=needs, exclude_ids=[sr.node_id])
             self._emit("gpu_placement", shard=sr.index, attempt=attempt,
@@ -831,7 +845,8 @@ class NgeOrchestrator:
             # (same telemetry reading - no second poll)
             if self_heal:
                 self._react_to_pressure(shard_results[-1], tele, target,
-                                        collect, gpu_type)
+                                        collect, gpu_type,
+                                        reserved_ids=node_ids[i + 1:])
 
             sr = shard_results[-1]
             # a shard that produced pytest output is a usable baseline for its
