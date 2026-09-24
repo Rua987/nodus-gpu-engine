@@ -1,17 +1,38 @@
-"""Nebius AI Studio backend (OpenAI-compatible) serving Nemotron models.
+"""Nebius Token Factory backend (OpenAI-compatible) serving Nemotron models.
 
-Nebius AI Studio exposes an OpenAI-compatible ``/chat/completions`` endpoint, so
-we reuse Nodus' own generic helper ``nodus_backends._chat_openai_compatible``
-(URL + Bearer key + tool schemas) and its response normaliser. Nothing here
-duplicates the ReAct loop.
+HTTP is done here (not via vendored ``_chat_openai_compatible``) so we can set
+``max_tokens``, record ``usage``, and surface ``finish_reason`` without editing
+``packages/nodus/``.
 """
 from __future__ import annotations
 
+import os
 from typing import List, Optional
 
+import requests
+
 from nge import config as _cfg
+from nge.backends import usage as _usage
 
 BACKEND_NAME = "nebius"
+
+DEFAULT_MAX_TOKENS = 2048
+SLOT_MAX_TOKENS = 256
+PATCH_MAX_TOKENS = 2048  # default; override with NGE_PATCH_MAX_TOKENS
+
+
+class ModelUnavailableError(RuntimeError):
+    """Token Factory returned 429 or 5xx — no silent failover to another tier."""
+
+    def __init__(self, model: str, status: Optional[int], detail: str = ""):
+        self.model = model
+        self.status = status
+        msg = f"model unavailable: {model}"
+        if status is not None:
+            msg += f" (HTTP {status})"
+        if detail:
+            msg += f": {detail}"
+        super().__init__(msg)
 
 
 def is_nebius_model(model: str) -> bool:
@@ -27,12 +48,7 @@ def nebius_model_id(model: str) -> str:
 
 
 def assert_nebius_track(model: str) -> None:
-    """When NGE_TRACK=nebius, block any non-Nebius LLM backend.
-
-    Symmetric to ``nodus_backends.assert_hackathon_llm_model`` but for the
-    Nebius "Coding & Agentic Engineering" submission. Leaves the Agentic Cinema
-    guard (``NODUS_HACKATHON``) untouched.
-    """
+    """When NGE_TRACK=nebius, block any non-Nebius LLM backend."""
     if not _cfg.hackathon_track():
         return
     if not is_nebius_model(model):
@@ -42,11 +58,89 @@ def assert_nebius_track(model: str) -> None:
         )
 
 
-def chat_nebius(messages: list, model: str, tools: Optional[list]) -> dict:
-    """One chat turn against Nebius AI Studio. Returns an Ollama-style message."""
-    assert_nebius_track(model)
-    import nodus_backends as nb  # vendored, on sys.path via nge/__init__
+def resolve_max_tokens(explicit: Optional[int] = None) -> int:
+    if explicit is not None:
+        return max(1, int(explicit))
+    raw = (os.environ.get("NGE_NEMOTRON_MAX_TOKENS") or "").strip()
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            pass
+    return DEFAULT_MAX_TOKENS
 
+
+def resolve_patch_max_tokens() -> int:
+    """Ceiling for patch/triage replies only."""
+    raw = (os.environ.get("NGE_PATCH_MAX_TOKENS") or "").strip()
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            pass
+    return PATCH_MAX_TOKENS
+
+
+def _chat_nebius_http(messages: list, model_id: str, tools: Optional[list],
+                      url: str, api_key: str, max_tokens: int) -> dict:
+    """POST chat/completions with max_tokens; record usage; return message."""
+    import nodus_backends as nb  # vendored normaliser only
+
+    payload: dict = {
+        "model": model_id,
+        "messages": messages,
+        "stream": False,
+        "max_tokens": max_tokens,
+    }
+    if tools:
+        payload["tools"] = tools
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        resp = requests.post(url, json=payload, headers=headers,
+                             timeout=nb.API_TIMEOUT)
+    except requests.RequestException as exc:
+        raise ModelUnavailableError(model_id, None, str(exc)) from exc
+
+    if resp.status_code == 429 or resp.status_code >= 500:
+        raise ModelUnavailableError(
+            model_id, resp.status_code, (resp.text or "")[:200])
+    # Unknown / wrong id often returns 404 — treat as unavailable for failover.
+    if resp.status_code == 404:
+        raise ModelUnavailableError(
+            model_id, 404, (resp.text or "")[:200])
+
+    resp.raise_for_status()
+    data = resp.json()
+    usage = data.get("usage") or {}
+    pin = usage.get("prompt_tokens")
+    pout = usage.get("completion_tokens")
+    if pin is not None:
+        try:
+            pin = int(pin)
+        except (TypeError, ValueError):
+            pin = None
+    if pout is not None:
+        try:
+            pout = int(pout)
+        except (TypeError, ValueError):
+            pout = None
+    _usage.record(model_id, pin, pout, max_tokens)
+    msg = nb._normalize_openai_message(data)
+    choices = data.get("choices") or []
+    if choices:
+        fr = choices[0].get("finish_reason")
+        if fr:
+            msg["finish_reason"] = fr
+    return msg
+
+
+def chat_nebius(messages: list, model: str, tools: Optional[list] = None,
+                max_tokens: Optional[int] = None) -> dict:
+    """One chat turn against Nebius Token Factory. Returns an Ollama-style message."""
+    assert_nebius_track(model)
     cfg = _cfg.load()
     api_key = cfg.nebius_api_key()
     if not api_key:
@@ -54,8 +148,10 @@ def chat_nebius(messages: list, model: str, tools: Optional[list]) -> dict:
             "Nebius API key missing - create packages/engine/.nebius_api_key "
             "or set NEBIUS_API_KEY"
         )
-    return nb._chat_openai_compatible(
-        messages, nebius_model_id(model), tools, cfg.nebius_chat_url, api_key
+    cap = resolve_max_tokens(max_tokens)
+    return _chat_nebius_http(
+        messages, nebius_model_id(model), tools,
+        cfg.nebius_chat_url, api_key, cap,
     )
 
 
@@ -63,12 +159,7 @@ def nemotron_plan_fallback(task: str, allowed_tools: List[str]) -> Optional[List
     """Ask Nemotron for an ordered tool-name plan when the 324M planner cannot.
 
     Only reached with ``NGE_PLAN_FALLBACK=nemotron``. Names outside
-    ``allowed_tools`` are dropped: the executor only knows that vocabulary, and
-    a hallucinated tool would fail downstream instead of here.
-
-    The reply used to go through a bare ``json.loads`` on the whole text, which
-    handled exactly one of the shapes a model answers with - a ```json fence,
-    prose around the array, or an empty reply all returned None silently.
+    ``allowed_tools`` are dropped.
     """
     from nge import llm_text
 
@@ -80,9 +171,10 @@ def nemotron_plan_fallback(task: str, allowed_tools: List[str]) -> Optional[List
     )
     try:
         msg = chat_nebius([{"role": "user", "content": prompt}],
-                          _cfg.load().nemotron_model, None)
+                          _cfg.load().nemotron_model, None,
+                          max_tokens=SLOT_MAX_TOKENS)
     except Exception:
-        return None                      # a flaky model must not break planning
+        return None
 
     names = llm_text.json_array(msg)
     if not names or not all(isinstance(n, str) for n in names):

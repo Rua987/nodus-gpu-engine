@@ -15,7 +15,7 @@ from nge.mission import (Mission, parse_mission, parse_mission_llm,
 
 def _fn(payload):
     """A chat_fn returning a fixed reply."""
-    return lambda messages, model, tools: {"content": payload}
+    return lambda messages, model, tools=None, max_tokens=None: {"content": payload}
 
 
 # -- field validation --------------------------------------------------------

@@ -124,6 +124,8 @@ class NgeOrchestrator:
     PAYLOAD_MAX_BYTES = 4 * 1024 * 1024
     # backoff between patch attempts when the model answers nothing
     RETRY_DELAY_S = 2.0
+    # plan names that mean "change the tree" - without them autofix stays off
+    FIX_TOOLS = frozenset({"edit_file", "write_file"})
 
     def __init__(self, config: Optional[_cfg.Config] = None,
                  chat_fn: Optional[Callable] = None, telemetry=None) -> None:
@@ -150,10 +152,50 @@ class NgeOrchestrator:
     def _route(self, decision: str) -> str:
         """Pick the Nemotron tier for a decision and log it. Returns model id."""
         from nge import router
+        from nge.backends import usage as _usage
         rec = router.route(decision, self.config)
         self.routes.append(rec)
         self._emit("model_route", **rec)
+        _usage.record_route(rec["tier"], decision)
         return rec["model"]
+
+    def _invoke_chat(self, messages, model, tools=None,
+                     max_tokens: Optional[int] = None,
+                     decision: Optional[str] = None):
+        """Call ``chat_fn``; on Nano/Ultra 429/5xx, one hop to Super (logged)."""
+        if self.chat_fn is None:
+            raise RuntimeError("chat_fn is not set")
+        from nge.backends.nebius import ModelUnavailableError
+        from nge.backends import usage as _usage
+        from nge import router
+        from nge.backends.usage import guess_tier
+
+        def _call(mdl):
+            try:
+                return self.chat_fn(messages, mdl, tools, max_tokens=max_tokens)
+            except TypeError:
+                return self.chat_fn(messages, mdl, tools)
+
+        try:
+            return _call(model)
+        except ModelUnavailableError as exc:
+            _usage.record_error(getattr(exc, "model", model) or model,
+                                getattr(exc, "status", None))
+            tier = router.tier_for(decision) if decision else guess_tier(model)
+            if tier == "super":
+                raise
+            super_m = self.config.nemotron_super
+            self._emit("model_failover", decision=decision or "?",
+                       from_tier=tier, from_model=model, to_model=super_m,
+                       status=getattr(exc, "status", None),
+                       error=str(exc))
+            _usage.record_failover(model, super_m, decision or "")
+            try:
+                return _call(super_m)
+            except ModelUnavailableError as exc2:
+                _usage.record_error(getattr(exc2, "model", super_m) or super_m,
+                                    getattr(exc2, "status", None))
+                raise
 
     # -- slot-fill -------------------------------------------------------
     def _shard_command(self, task: str, plan_names: List[str], target: str,
@@ -166,6 +208,7 @@ class NgeOrchestrator:
         model = self._route("slotfill")
         if self.chat_fn is None:
             return f"NGE_SHARD={index}/{shards} {base}"
+        from nge.backends.nebius import SLOT_MAX_TOKENS, ModelUnavailableError
         prompt = (
             "Fill ONE shell command for this shard of a distributed test run.\n"
             f"Task: {task}\nPlan: {plan_names}\n"
@@ -179,7 +222,15 @@ class NgeOrchestrator:
         )
         fallback = f"NGE_SHARD={index}/{shards} {base}"
         try:
-            msg = self.chat_fn([{"role": "user", "content": prompt}], model, None)
+            msg = self._invoke_chat([{"role": "user", "content": prompt}],
+                                    model, None, max_tokens=SLOT_MAX_TOKENS,
+                                    decision="slotfill")
+        except ModelUnavailableError as exc:
+            self._emit("model_unavailable", shard=index,
+                       model=getattr(exc, "model", model),
+                       status=getattr(exc, "status", None),
+                       error=str(exc))
+            return fallback
         except Exception as exc:                     # a flaky model must not
             self._emit("slotfill_error", shard=index,   # take the run down
                        error=f"{type(exc).__name__}: {exc}")
@@ -545,6 +596,17 @@ class NgeOrchestrator:
         """
         if sr.migrated_from is not None or not tele:
             return
+        # Token Factory CPU sandboxes report power=0 → efficiency=0. That is a
+        # *setup* (no nvidia-smi), not a throttling H100. Only remediate when
+        # metrics are from a real GPU probe or the synthetic mock fleet.
+        from nge.fleet import telemetry as _tele
+        if not _tele.has_real_gpu_metrics(tele):
+            self._emit("gpu_telemetry_non_gpu", shard=sr.index,
+                       node_id=sr.node_id,
+                       probe_kind=tele.get("probe_kind"),
+                       gpu_class=tele.get("gpu_class"),
+                       why="no nvidia-smi metrics — skip efficiency heal")
+            return
         pressured = (tele["health"] == "throttle"
                      or tele["efficiency"] < self.MIN_EFFICIENCY)
         if not pressured:
@@ -555,9 +617,38 @@ class NgeOrchestrator:
                    health=tele["health"], efficiency=tele["efficiency"],
                    temp_c=tele["temp_c"], power_w=tele["power_w"])
 
-        repl = handlers.gpu_provision(n=1, gpu_type=gpu_type)["nodes"][-1]["id"]
+        from nge.fleet import placement as _place
+        needs = _place.WorkloadNeeds()
+        # Don't move fire→fire: score ready nodes; provision only if none fit.
+        repl = None
+        decision = None
+        for attempt in (1, 2):
+            ready = [n for n in handlers.gpu_status()["nodes"]
+                     if (n.get("state") or "") == "ready"
+                     and n.get("id") != sr.node_id]
+            decision = _place.pick_replacement(
+                ready, needs=needs, exclude_ids=[sr.node_id])
+            self._emit("gpu_placement", shard=sr.index, attempt=attempt,
+                       chosen=decision.node_id, score=decision.score,
+                       reason=decision.reason,
+                       refused=decision.refused[:8])
+            if decision.node_id:
+                repl = decision.node_id
+                break
+            # No cool house free — open one more, then re-score (mock
+            # replacements are healthy; Compute must still pass the filter).
+            handlers.gpu_provision(n=1, gpu_type=gpu_type)
+
+        if not repl:
+            self._emit("gpu_placement_refused", shard=sr.index,
+                       from_node=sr.node_id,
+                       reason=(decision.reason if decision
+                               else "no destination"),
+                       refused=(decision.refused[:8] if decision else []))
+            return
+
         self._emit("gpu_provision_replacement", node_id=repl, for_shard=sr.index)
-        handlers.gpu_allocate(job=f"shard-{sr.index}-retry")
+        handlers.gpu_allocate(job=f"shard-{sr.index}-retry", node_id=repl)
         res = handlers.run_in_sandbox(command=sr.command, node_id=repl,
                                       collect=collect, timeout=180)
         old_node = sr.node_id
@@ -569,7 +660,8 @@ class NgeOrchestrator:
                        for m in _FAILED_RE.finditer(res["stdout"])]
         rec = {"shard": sr.index, "from": old_node, "to": repl,
                "reason": tele["health"], "efficiency": tele["efficiency"],
-               "temp_c": tele["temp_c"], "power_w": tele["power_w"]}
+               "temp_c": tele["temp_c"], "power_w": tele["power_w"],
+               "placement_score": decision.score if decision else None}
         self.remediations.append(rec)
         self._emit("gpu_remediation", **rec)
 
@@ -595,6 +687,16 @@ class NgeOrchestrator:
         self.routes.clear()
         self.remediations.clear()
         self.fixes.clear()
+
+        from nge.fleet.capabilities import preflight
+        caps = preflight(self.config, emit=self._emit)
+        # Always visible even without --watch (avoid blind live starts)
+        try:
+            from nge.fleet.capabilities import format_banner
+            print(format_banner(caps), flush=True)
+        except Exception:
+            pass
+
         self._emit("run_start", task=task, shards=shards, gpu_type=gpu_type,
                    fleet_mode=self.config.fleet_mode, sandbox_mode=self.config.sandbox_mode,
                    jail=self.config.jail)
@@ -660,6 +762,10 @@ class NgeOrchestrator:
         # mean "go look first", so the file list is discovered from the tree;
         # otherwise the whole target goes to every shard (the old behaviour,
         # kept only as an explicit, logged choice rather than an accident).
+        # Auto-fix is also plan-gated: without edit_file/write_file the
+        # planner never asked to change code, so we triage only (see
+        # _plan_allows_autofix). That makes the 324M (or heuristic) decide
+        # something visible - not just fill a report field.
         wants_discovery = bool({"glob", "grep"} & set(pr.names))
         test_files = self._discover_test_files(target) if wants_discovery else []
         if wants_discovery:
@@ -750,14 +856,28 @@ class NgeOrchestrator:
         # prioritize complex failures (longer error messages) - more likely to be systemic
 
         # 5) code agent: propose a patch per failure, apply + re-test in a
-        #    fresh sandbox, keep only the verified ones
-        if auto_fix:
+        #    fresh sandbox, keep only the verified ones - but only when the
+        #    *plan* asked to edit/write. Mission can still disable autofix.
+        if not auto_fix:
+            self._emit("autofix_skipped", reason="disabled by mission",
+                       would_have_tried=min(len(failures), self.MAX_FIXES))
+        elif not self._plan_allows_autofix(pr.names):
+            self._emit("plan_gated_autofix", allowed=False, plan=list(pr.names),
+                       source=pr.source, need=sorted(self.FIX_TOOLS))
+            self._emit("autofix_skipped", reason="plan_has_no_edit_tools",
+                       plan=list(pr.names), source=pr.source,
+                       would_have_tried=min(len(failures), self.MAX_FIXES))
+        else:
+            self._emit("plan_gated_autofix", allowed=True, plan=list(pr.names),
+                       source=pr.source,
+                       because=[n for n in pr.names if n in self.FIX_TOOLS])
             fixes.extend(self._attempt_fixes(
                 failures, target, gpu_type, source_root, requirements,
                 payload, covered))
-        else:
-            self._emit("autofix_skipped", reason="disabled by mission",
-                       would_have_tried=min(len(failures), self.MAX_FIXES))
+
+    @classmethod
+    def _plan_allows_autofix(cls, names) -> bool:
+        return bool(cls.FIX_TOOLS & set(names or ()))
 
     # -- code agent : propose fix -> apply + re-test in a fresh sandbox ----
     def _propose_patch(self, failure: dict, model: str) -> Optional[str]:
@@ -793,6 +913,8 @@ class NgeOrchestrator:
         # in a row lost fixes to `has_patch: False` while a one-line prompt to
         # the same model answered fine, so this is flakiness, not refusal.
         # One retry, then give up honestly.
+        from nge.backends.nebius import ModelUnavailableError, resolve_patch_max_tokens
+        patch_cap = resolve_patch_max_tokens()
         for attempt in (1, 2, 3, 4):
             if attempt > 1:
                 # Retrying instantly just spends the flaky window; wait it
@@ -802,11 +924,27 @@ class NgeOrchestrator:
                 # at five or six, so a fifth attempt buys nothing.
                 time.sleep(self.RETRY_DELAY_S * (attempt - 1))
             try:
-                msg = self.chat_fn([{"role": "user", "content": prompt}],
-                                   model, None)
+                msg = self._invoke_chat([{"role": "user", "content": prompt}],
+                                        model, None, max_tokens=patch_cap,
+                                        decision="triage")
+            except ModelUnavailableError as exc:
+                self._emit("model_unavailable", test=failure.get("test"),
+                           attempt=attempt, model=getattr(exc, "model", model),
+                           status=getattr(exc, "status", None),
+                           error=str(exc))
+                return None
             except Exception as exc:
                 self._emit("patch_error", test=failure.get("test"),
                            attempt=attempt, error=f"{type(exc).__name__}: {exc}")
+                return None
+            # Hit the output ceiling: do not treat as empty-flake retry.
+            if (msg or {}).get("finish_reason") == "length":
+                text = llm_text.content_of(msg)
+                self._emit("patch_truncated", test=failure.get("test"),
+                           attempt=attempt, max_tokens=patch_cap,
+                           reply_chars=len(text),
+                           reply_head=text.strip()[:200],
+                           why="finish_reason=length")
                 return None
             patch = llm_text.unified_diff(msg)
             if patch:
@@ -915,17 +1053,28 @@ class NgeOrchestrator:
             patch = self._propose_patch(f, model)
             self._emit("fix_attempt", test=f["test"], has_patch=bool(patch))
             if not patch:
-                fixes.append({"test": f["test"], "verified": False,
-                              "patch": None, "reason": "no patch proposed"})
+                from nge.fix_cause import annotate_fix
+                row = {"test": f["test"], "verified": False,
+                       "patch": None, "reason": "no patch proposed"}
+                row.update(annotate_fix(
+                    f, reason="no patch proposed", verified=False,
+                    has_patch=False, all_failures=failures))
+                fixes.append(row)
                 continue
 
             patch = self._relocate_hunks(patch)
             missing = self._patch_context_missing(patch)
             if missing:
                 self._emit("fix_context_invented", test=f["test"], files=missing)
-                fixes.append({"test": f["test"], "patch": patch, "verified": False,
-                              "reason": "patch context does not exist in "
-                                        + ", ".join(sorted(set(missing)))})
+                from nge.fix_cause import annotate_fix
+                why = ("patch context does not exist in "
+                       + ", ".join(sorted(set(missing))))
+                row = {"test": f["test"], "patch": patch, "verified": False,
+                       "reason": why}
+                row.update(annotate_fix(
+                    f, reason=why, verified=False, has_patch=True,
+                    all_failures=failures))
+                fixes.append(row)
                 continue
 
             node = handlers.gpu_provision(n=1, gpu_type=gpu_type)["nodes"][-1]["id"]
@@ -990,13 +1139,22 @@ class NgeOrchestrator:
             self._emit("fix_verified" if verified else "fix_rejected",
                        test=f["test"], node=node,
                        target_fixed=target_fixed, regressions=len(regressions))
-            fixes.append({"test": f["test"], "patch": patch, "verified": verified,
-                          "node": node, "stdout": res["stdout"],
-                          "regressions": regressions,
-                          "reason": ("broke " + ", ".join(regressions)) if regressions
-                                    else None if target_fixed
-                                    else "sandbox produced no output - nothing ran"
-                                    if not ran else "target test still failing"})
+            if regressions:
+                why = "broke " + ", ".join(regressions)
+            elif verified:
+                why = "re-tested green in a fresh sandbox"
+            elif not ran:
+                why = "sandbox produced no output - nothing ran"
+            else:
+                why = "target test still failing"
+            from nge.fix_cause import annotate_fix
+            row = {"test": f["test"], "patch": patch, "verified": verified,
+                   "node": node, "stdout": res["stdout"],
+                   "regressions": regressions, "reason": why}
+            row.update(annotate_fix(
+                f, reason=why, verified=verified, has_patch=True,
+                regressions=regressions, all_failures=failures))
+            fixes.append(row)
             handlers.gpu_release(node_ids=[node])
         self.fixes = fixes
         return fixes
@@ -1053,11 +1211,23 @@ class NgeOrchestrator:
         # -- auto-fixes ------------------------------------------------------
         fixes = fixes or []
         verified = [x for x in fixes if x.get("verified")]
-        lines += ["", "## Auto-fixes (code agent)", "",
+        gated = [e for e in self.events if e.get("kind") == "plan_gated_autofix"]
+        gate = gated[-1] if gated else None
+        lines += ["", "## Auto-fixes (code agent)", ""]
+        if gate is not None and not gate.get("allowed"):
+            lines += [
+                f"_Skipped — plan `{gate.get('plan')}` has no "
+                f"`edit_file`/`write_file` (source={gate.get('source')}). "
+                f"The planner did not ask to change code, so the engine "
+                f"triages only._",
+                "",
+            ]
+        lines += [
                   f"Attempted {len(fixes)} / {len(failures)} failure(s) · "
                   f"**{len(verified)} patched & re-tested green** in a fresh sandbox.", ""]
         if fixes:
-            lines += ["| test | patch | verified |", "|---|---|---|"]
+            lines += ["| test | patch | verified | urgency | why |",
+                      "|---|---|---|---|---|"]
             fix_dir = out_dir / "fixes"
             for x in fixes:
                 pf = "-"
@@ -1067,7 +1237,12 @@ class NgeOrchestrator:
                     (fix_dir / fn).write_text(x["patch"], encoding="utf-8")
                     pf = f"`fixes/{fn}`"
                 mark = "✅" if x.get("verified") else ("—" if not x.get("patch") else "❌ still red")
-                lines.append(f"| `{x['test']}` | {pf} | {mark} |")
+                why = (x.get("reason") or "").replace("|", "/")
+                lines.append(
+                    f"| `{x['test']}` | {pf} | {mark} | "
+                    f"**{x.get('urgency', '?')}** | {why} |")
+                if x.get("cause"):
+                    lines.append(f"| | | | | _{x['cause']}_ · {x.get('fragility', '')} |")
 
         lines += ["", "## Consolidated failures", ""]
         if not failures:

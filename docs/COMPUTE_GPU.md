@@ -1,0 +1,130 @@
+# Nebius Compute GPU — PLAN (avant tout spawn)
+
+> **Statut : PLAN ONLY.** Aucune VM GPU tant qu’il n’y a pas un **Go budget** séparé.  
+> Dernière écriture : **2026-09-10**.  
+> Lié : `ENGINE_BACKLOG.md` (M1/M2/M13) · `RISKS_TO_STRENGTHS.md` · `AUTORESEARCH_VISION.md` (perso).
+
+Objectif : `probe_kind=nvidia-smi` sur un **device NVIDIA réel**, pour que heal + placement deviennent une **preuve**, pas seulement un mock.
+
+---
+
+## 0. Décision d’archi — **A** (verrouillée pour ce plan)
+
+| | **A (retenu)** | B (rejeté pour l’instant) |
+|--|----------------|---------------------------|
+| Fleet / télémétrie / heal | **Compute** VM GPU | Tout sur la VM |
+| Exécution pytest / patch | **Token Factory Contree** (déjà câblé) | SSH + pytest sur la VM |
+| Pourquoi A | Moins de surface SSH ; TF déjà OK pour exec ; Compute = honnêteté GPU | Plus simple conceptuellement, plus de boulot ops |
+
+Analogie : Contree = **atelier** où on répare le code ; Compute = **thermomètre + garage** pour les vraies machines chaudes.
+
+---
+
+## 1. Ce qui existe déjà (ne pas refaire)
+
+- [x] `fleet_mode=compute` → `ComputeGpuFleet` (provision = `NotImplementedError`)
+- [x] `check_credentials()` — lit env, **0 API, 0 VM**
+- [x] Placement `pick_replacement` (temp/mem/util) — prêt à consommer de vrais status
+- [x] Heal gated si pas `has_real_gpu_metrics`
+- [x] Mock filmable + live Contree (cpu-fallback)
+
+Dernier check creds (typique chez toi) : tout `false` → `ready_for_wire=false`.
+
+---
+
+## 2. Phases (ordre strict)
+
+### Phase 0 — Prérequis (€0 machine, temps humain)
+**But :** pouvoir dire « auth Compute OK » sans créer de VM.
+
+1. `pip install nebius` (SDK)
+2. Service account + fichier clé **ou** `NEBIUS_IAM_TOKEN`
+3. Renseigner : `NEBIUS_PROJECT_ID` (ou folder), `NEBIUS_SUBNET_ID`
+4. Relancer : `python -c "from nge.fleet.compute import check_credentials; print(...)"`  
+   → viser `ready_for_wire=true`, `spawn_allowed` reste **false**
+5. Noter région / quotas GPU console
+
+**Go pour Phase 0 :** oui quand tu as 30–60 min + accès console Nebius.  
+**Pas de spawn.**
+
+### Phase 1 — Wire lecture seule (encore €0 GPU)
+**But :** SDK parle au cloud **sans** créer d’instance.
+
+1. Client auth SA → list platforms / images (read-only)
+2. Doc des IDs réels : platform `gpu-h100-sxm` (ou H200), preset, image CUDA boot
+3. Tests mock du client (pas de réseau en CI)
+
+**Go Phase 1 :** après Phase 0 verte.
+
+### Phase 2 — Probe sur **1** VM éphémère (Go € obligatoire)
+**But :** un `nvidia-smi` CSV → `probe_kind=nvidia-smi`, puis **destroy**.
+
+1. Flag dur : `NGE_COMPUTE_SPAWN=1` + confirmation CLI `--i-know-cost`
+2. `provision(1)` → wait READY → SSH ou agent → probe
+3. `status()` remplit temp/util/mem/power + `gpu_class`
+4. `release` / delete **toujours** dans un `finally`
+5. Budget plafond : ex. **max 20–30 min** wall clock pour le premier essai
+
+**Go Phase 2 :** top-up solde + phrase explicite « Go spawn 1× H100 test ».  
+Sans ça → **Non**.
+
+### Phase 3 — Brancher heal live (archi A)
+**But :** orchestrateur utilise Compute pour télémétrie/remediation ; shards restent Contree.
+
+1. `NGE_FLEET_MODE=compute` + `NGE_SANDBOX=token_factory` (hybride)
+2. Pressure → placement sur status **réels** → migrate = re-run shard (comme aujourd’hui)
+3. Preuve : event `gpu_remediation` avec `probe_kind=nvidia-smi` (pas synthetic)
+4. Film / HTML optionnel (perso ou juges selon timing)
+
+### Phase 4 — (optionnel, plus tard) Exec sur Compute
+Seulement si Contree devient limitant. = glissement vers archi B partielle. **Hors plan court.**
+
+---
+
+## 3. Trancher avant le code Phase 2–3
+
+| Question | Options | Reco plan |
+|----------|---------|-----------|
+| Comment sonder la VM ? | SSH + `nvidia-smi` · agent léger · API monitoring | **SSH + nvidia-smi CSV** (simple, prouvable) |
+| Qui crée le subnet ? | Déjà en console · script | Console d’abord (Phase 0) |
+| Taille premier essai | 1× H100 · H200 | **1× H100** preset doc |
+| Lien juges | Avant / après deadline | Pitch mock **inchangé** ; Compute = preuve perso ou add-on |
+
+---
+
+## 4. Coût & garde-fous
+
+- Facturation **à la minute** → timer + delete obligatoire.
+- `spawn_allowed=False` tant que `NGE_COMPUTE_SPAWN` unset.
+- Solde TF (~$2 vu plus tôt) **insuffisant** pour expérimenter longtemps → **top-up** avant Phase 2.
+- Aucun train AutoResearch / LINUS sur cette VM sans **Go** séparé.
+
+---
+
+## 5. Definition of Done (par phase)
+
+| Phase | Done quand |
+|-------|------------|
+| 0 | `check_credentials()["ready_for_wire"] is True` |
+| 1 | Script read-only liste platform/image OK |
+| 2 | 1 run : provision → `nvidia-smi` → delete ; log `probe_kind=nvidia-smi` |
+| 3 | 1 live hybride : pressure réelle → placement → remediation loguée |
+
+---
+
+## 6. Ce qu’on ne fait **pas** dans ce plan
+
+- Spawn « pour voir » sans Go  
+- Promettre aux juges que le heal live H100 est déjà là  
+- Remplacer le film mock A2  
+- Fusionner AutoResearch dans Compute dès le jour 1  
+
+---
+
+## 7. Prochain Go concret (à toi)
+
+1. **Go Phase 0** — installer SDK + SA + env (0 € GPU)  
+2. Ensuite seulement **Go Phase 1** (API read-only)  
+3. Puis **Go Phase 2** = phrase du type : *« Go spawn 1 H100 max 30 min »*
+
+Sans Phase 0, tout le reste est du papier.

@@ -61,7 +61,13 @@ class ConsoleWatch:
 
     # -- telemetry sink ----------------------------------------------
     def record(self, kind: str, **f) -> None:
-        if kind == "run_start":
+        if kind == "capabilities":
+            heal = "heal ON" if f.get("heal_enabled") else "heal gated"
+            self._log.append(self._c(
+                f"capabilities  host={f.get('host_summary')}  "
+                f"expect={f.get('expect_probe')}  {heal}",
+                _GREEN if f.get("heal_enabled") else _YELLOW))
+        elif kind == "run_start":
             self._title = f"fleet  ({f.get('fleet_mode')}/{f.get('sandbox_mode')}, jail={f.get('jail')})"
             self._log.append("run start")
         elif kind == "plan":
@@ -87,12 +93,33 @@ class ConsoleWatch:
             t = f.get("telemetry") or {}
             if t.get("id") in self._nodes:
                 self._nodes[t["id"]].update(t)
+            pk = t.get("probe_kind")
+            if pk and pk not in ("synthetic",):
+                self._log.append(self._c(
+                    f"probe  {t.get('id')}  {pk}"
+                    + (f"  {t.get('gpu_name')}" if t.get("gpu_name") else "")
+                    + (f"  class={t.get('gpu_class')}" if t.get("gpu_class") else ""),
+                    _YELLOW if pk != "nvidia-smi" else _GREEN))
+        elif kind == "gpu_telemetry_non_gpu":
+            self._log.append(self._c(
+                f"probe non-GPU  {f.get('node_id')}  "
+                f"{f.get('probe_kind')} — heal skipped ({f.get('why')})",
+                _YELLOW))
         elif kind == "gpu_pressure":
             nd = self._nodes.setdefault(f["node_id"], {})
             nd["pressured"] = True
             self._log.append(self._c(
                 f"! pressure  shard {f['shard']} on {f['node_id']}: "
                 f"{f['health']}  {f.get('temp_c')}C / {f.get('power_w')}W", _RED))
+        elif kind == "gpu_placement":
+            chosen = f.get("chosen") or "(none)"
+            self._log.append(self._c(
+                f"placement  shard {f.get('shard')}: pick {chosen}  "
+                f"score={f.get('score')}  ({f.get('reason')})", _CYAN))
+        elif kind == "gpu_placement_refused":
+            self._log.append(self._c(
+                f"placement REFUSED  shard {f.get('shard')}: {f.get('reason')}",
+                _RED))
         elif kind == "gpu_remediation":
             src, dst = f["from"], f["to"]
             if src in self._nodes:
@@ -108,6 +135,23 @@ class ConsoleWatch:
             self._log.append(f"release: {', '.join(f.get('released', []))}")
         elif kind == "triage":
             self._log.append(f"triage: {f.get('unique_failures')} unique failure(s)")
+        elif kind == "plan_gated_autofix":
+            if f.get("allowed"):
+                self._log.append(self._c(
+                    f"plan gate OK  autofix on  ({', '.join(f.get('because') or [])})",
+                    _GREEN))
+            else:
+                self._log.append(self._c(
+                    f"plan gate  autofix OFF  plan={f.get('plan')}  "
+                    f"(need edit_file|write_file)", _YELLOW))
+        elif kind == "patch_truncated":
+            self._log.append(self._c(
+                f"patch truncated  {f.get('test')}  "
+                f"(max_tokens={f.get('max_tokens')})", _YELLOW))
+        elif kind == "model_unavailable":
+            self._log.append(self._c(
+                f"model unavailable  {f.get('model')}  "
+                f"HTTP {f.get('status')}", _RED))
         elif kind == "fix_attempt":
             self._log.append(f"fix?  {f.get('test')}  "
                              + ("patch proposed" if f.get("has_patch") else "no patch"))

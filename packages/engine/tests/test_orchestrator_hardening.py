@@ -11,7 +11,7 @@ from nge import config as _cfg
 from nge.orchestrator import _REPO_ROOT, NgeOrchestrator
 from nge.tools import handlers
 
-SCENARIO = {"task": "run tests", "shards": 3, "gpu_type": "A100",
+SCENARIO = {"task": "run tests and fix failures", "shards": 3, "gpu_type": "A100",
             "target": "packages/nodus/tests"}
 
 
@@ -180,6 +180,50 @@ def test_a_raising_model_does_not_take_the_run_down(tmp_path):
     assert [e for e in o.events if e["kind"] == "patch_error"]
 
 
+def test_slotfill_model_unavailable_is_honest(tmp_path):
+    from nge.backends.nebius import ModelUnavailableError
+
+    def boom(*a, **k):
+        raise ModelUnavailableError("nvidia/nemotron-super", 429, "rate")
+
+    o = NgeOrchestrator(config=_cfg.load(
+        fleet_mode="mock", sandbox_mode="mock", out_dir=tmp_path), chat_fn=boom)
+    cmd = o._shard_command("t", [], "tests", 1, 3)
+    assert cmd.startswith("NGE_SHARD=1/3")
+    ev = [e for e in o.events if e["kind"] == "model_unavailable"]
+    assert ev and ev[0]["status"] == 429
+    assert not [e for e in o.events if e["kind"] == "slotfill_error"]
+    assert not [e for e in o.events if e["kind"] == "model_failover"]
+
+
+def test_nano_unavailable_failovers_to_super(tmp_path):
+    """Nano/Ultra 429/5xx → one hop to Super; event + usage ledger."""
+    from nge.backends import usage as _usage
+    from nge.backends.nebius import ModelUnavailableError
+
+    _usage.reset_usage()
+    cfg = _cfg.load(fleet_mode="mock", sandbox_mode="mock", out_dir=tmp_path)
+    seen = []
+
+    def chat(messages, model, tools=None, max_tokens=None):
+        seen.append(model)
+        if "nano" in (model or "").lower():
+            raise ModelUnavailableError(model, 503, "nano down")
+        return {"content": "ok", "role": "assistant"}
+
+    o = NgeOrchestrator(config=cfg, chat_fn=chat)
+    out = o._invoke_chat([{"role": "user", "content": "x"}],
+                         cfg.nemotron_nano, decision="healthcheck")
+    assert out["content"] == "ok"
+    assert len(seen) == 2
+    assert "nano" in seen[0].lower()
+    assert seen[1] == cfg.nemotron_super
+    fo = [e for e in o.events if e["kind"] == "model_failover"]
+    assert fo and fo[0]["from_tier"] == "nano"
+    assert _usage.failover_count() == 1
+    _usage.reset_usage()
+
+
 def test_patch_survives_a_mislabelled_fence(tmp_path):
     diff = "--- a/x.py\n+++ b/x.py\n@@ -3,1 +3,1 @@\n-a\n+b"
     o = _with_reply(tmp_path, {"content": f"```python\n{diff}\n```"})
@@ -201,7 +245,21 @@ def test_failed_regex_rejects_shell_metacharacters():
 
 # -- 3. mission intents must reach the orchestrator -------------------------
 
-def test_auto_fix_off_skips_the_code_agent(tmp_path):
+def test_intents_default_to_on(tmp_path, monkeypatch):
+    from nge import planner
+    # Deterministic: a real 324M on this task may omit edit_file and gate
+    # autofix off - the intent under test is mission defaults, not the model.
+    monkeypatch.setattr(planner, "plan", lambda *a, **k: planner.PlanResult(
+        names=["bash", "edit_file"], source="stub"))
+    o = _orch(tmp_path)
+    rep = o.run(SCENARIO)                      # no self_heal / auto_fix keys
+    assert rep.remediations and rep.fixes
+
+
+def test_auto_fix_off_skips_the_code_agent(tmp_path, monkeypatch):
+    from nge import planner
+    monkeypatch.setattr(planner, "plan", lambda *a, **k: planner.PlanResult(
+        names=["bash", "edit_file"], source="stub"))
     o = _orch(tmp_path)
     rep = o.run({**SCENARIO, "auto_fix": False})
     assert rep.fixes == []
@@ -209,7 +267,10 @@ def test_auto_fix_off_skips_the_code_agent(tmp_path):
     assert skipped and skipped[0]["reason"] == "disabled by mission"
 
 
-def test_self_heal_off_leaves_the_hot_node_alone(tmp_path):
+def test_self_heal_off_leaves_the_hot_node_alone(tmp_path, monkeypatch):
+    from nge import planner
+    monkeypatch.setattr(planner, "plan", lambda *a, **k: planner.PlanResult(
+        names=["bash", "edit_file"], source="stub"))
     o = _orch(tmp_path)
     rep = o.run({**SCENARIO, "self_heal": False})
     assert rep.remediations == []
@@ -217,10 +278,20 @@ def test_self_heal_off_leaves_the_hot_node_alone(tmp_path):
     assert not [e for e in o.events if e["kind"] == "gpu_remediation"]
 
 
-def test_intents_default_to_on(tmp_path):
+def test_cpu_fallback_telemetry_does_not_trigger_heal(tmp_path):
+    """TF microVMs without nvidia-smi must not look like a dying H100."""
+    from nge.orchestrator import ShardResult
     o = _orch(tmp_path)
-    rep = o.run(SCENARIO)                      # no self_heal / auto_fix keys
-    assert rep.remediations and rep.fixes
+    sr = ShardResult(index=0, node_id="nb-h100-00", command="true",
+                     exit_code=0, duration_s=0.1, failures=[])
+    tele = {"id": "nb-h100-00", "health": "ok", "efficiency": 0.0,
+            "temp_c": 0.0, "power_w": 0.0, "probe_kind": "cpu-fallback",
+            "gpu_class": "none"}
+    o._react_to_pressure(sr, tele, "tests", collect=[], gpu_type="H100")
+    assert sr.migrated_from is None
+    assert not o.remediations
+    ev = [e for e in o.events if e["kind"] == "gpu_telemetry_non_gpu"]
+    assert ev and ev[0]["probe_kind"] == "cpu-fallback"
 
 
 def test_mission_intents_survive_the_round_trip(tmp_path):
@@ -234,7 +305,10 @@ def test_mission_intents_survive_the_round_trip(tmp_path):
 
 # -- gpu_type must follow the scenario --------------------------------------
 
-def test_gpu_type_propagates_to_replacement_and_fix_nodes(tmp_path):
+def test_gpu_type_propagates_to_replacement_and_fix_nodes(tmp_path, monkeypatch):
+    from nge import planner
+    monkeypatch.setattr(planner, "plan", lambda *a, **k: planner.PlanResult(
+        names=["bash", "edit_file"], source="stub"))
     o = _orch(tmp_path)
     o.run(SCENARIO)                                   # gpu_type A100
     ids = [e["node_id"] for e in o.events

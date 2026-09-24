@@ -25,7 +25,7 @@ From a fresh clone and an empty venv, on Windows:
 
 ```bash
 pip install -r requirements.txt     # requests + pytest only — torch is optional
-python -m pytest -q                 # 291 pass, 3 clean skips (mcp, patch_ng, nodus_agent)
+python -m pytest -q                 # 310 pass, 3 clean skips (mcp, patch_ng, nodus_agent)
 python -m nge.demo_nebius --mock    # runs, produces its artefact
 python -m nge.fetch_ckpt            # 988 MB, SHA256-verified, writes .nodus_plan_ckpt
 ```
@@ -38,7 +38,7 @@ in a venv containing nothing else.
 
 | path | Windows (local) | Ubuntu (CI) |
 |---|---|---|
-| 291 unit tests | yes | yes — Python 3.10 / 3.11 / 3.12 |
+| 310 unit tests | yes | yes — Python 3.10 / 3.11 / 3.12 |
 | MCP client ↔ GPU MCP server | yes | yes |
 | `--mock` demo | yes | yes |
 | `--live` (real Nemotron + real sandboxes) | yes | yes — `live-smoke`, manual or weekday cron |
@@ -59,3 +59,45 @@ Local Linux was attempted and abandoned: WSL Ubuntu 24.04 here has neither
 `pip` nor `python3-venv`, and Docker Desktop was not running. Both are fixable,
 neither was worth changing someone's machine for while CI already covers the
 same ground.
+
+## Liens
+
+- Suivi vivant : [`ENGINE_BACKLOG.md`](ENGINE_BACKLOG.md)
+- Compute GPU : [`COMPUTE_GPU.md`](COMPUTE_GPU.md)
+- Track juges : [`packages/engine/docs/NEBIUS_TRACK.md`](../packages/engine/docs/NEBIUS_TRACK.md)
+
+## Token Factory nodes ≠ physical H100
+
+`--live` with `fleet=nebius` provisions **Token Factory Contree microVMs**.
+Contree's spawn API exposes CPU/disk limits only — **no GPU device passthrough**
+today. Node ids like `nb-h100-00` are **labels**, not proof of an H100.
+
+| `probe_kind` | Meaning | Heal on low efficiency? |
+|--------------|---------|-------------------------|
+| `nvidia-smi` | Real NVIDIA metrics (+ `gpu_name` / `gpu_class`) | Yes (class thresholds) |
+| `cpu-fallback` | No driver/device — CPU load only (temp/power = 0) | **No** |
+| `failed` | Probe did not run (e.g. wrong Contree `run` API) | **No** |
+| `synthetic` | MockFleet demo numbers | Yes (demo feedback loop) |
+
+`gpu_class`: `datacenter` (H100/A100/…) vs `consumer` (GeForce/RTX) vs `none` /
+`synthetic`. Thresholds differ (e.g. throttle ~87 °C DC vs ~83 °C consumer).
+
+### Image (`NGE_FLEET_IMAGE`)
+
+Default: `python:3.12-slim`. You can point at another OCI tag Contree can
+`images.use` / import (e.g. a CUDA base) — useful for deps — but a CUDA **name**
+does **not** attach a GPU on TF. Heal stays gated unless you set
+`NGE_FLEET_HAS_GPU=1` (only when you know the runtime exposes an NVIDIA device).
+
+Real H100/H200 confirmation needs a **Nebius Compute GPU VM** (or future Contree
+GPU support), not the default sandbox path.
+
+### Preflight (no blind start)
+
+Every orchestrated run prints a `[capabilities]` banner first:
+
+- **host tools** — is `nvidia-smi` / `dcgmi` on the machine running the engine?
+  (H100/H200 use `nvidia-smi` too; `dcgmi` is optional datacenter tooling.)
+- **fleet expect** — mock → synthetic; TF → `cpu-fallback` unless
+  `NGE_FLEET_HAS_GPU=1`.
+- Hard gate: `NGE_REQUIRE_REAL_GPU=1` refuses start when heal would be blind.

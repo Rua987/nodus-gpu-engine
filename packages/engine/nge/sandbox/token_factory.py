@@ -18,13 +18,41 @@ Smoke test:  python -m nge.sandbox.token_factory
 from __future__ import annotations
 
 from datetime import timedelta
+import os
 import time
-from typing import Dict
+from typing import Dict, Optional, Tuple
 
 from nge.nebius_client import DEFAULT_TF_BASE_URL, build_contree_client
 from nge.sandbox.base import ExecResult, Sandbox, SandboxSpec
 
 DEFAULT_IMAGE = "python:3.12-slim"
+# Contree file GET/upload occasionally times out mid-live; retry before failing.
+DEFAULT_RETRIES = 4
+DEFAULT_RETRY_S = 2.0
+
+
+def _retry_budget() -> Tuple[int, float]:
+    try:
+        n = max(1, int(os.environ.get("NGE_CONTREE_RETRIES") or DEFAULT_RETRIES))
+    except ValueError:
+        n = DEFAULT_RETRIES
+    try:
+        delay = max(0.0, float(os.environ.get("NGE_CONTREE_RETRY_S") or DEFAULT_RETRY_S))
+    except ValueError:
+        delay = DEFAULT_RETRY_S
+    return n, delay
+
+
+def _transient_contree(exc: BaseException) -> bool:
+    name = type(exc).__name__
+    msg = str(exc).lower()
+    if "timeout" in name.lower() or "timeout" in msg:
+        return True
+    if any(s in name for s in ("Connection", "Connect", "Transport", "Network")):
+        return True
+    if "429" in msg or "503" in msg or "502" in msg or "504" in msg:
+        return True
+    return False
 
 
 class TokenFactorySandbox(Sandbox):
@@ -38,6 +66,7 @@ class TokenFactorySandbox(Sandbox):
         self._sessions: Dict[str, object] = {}     # sid -> ConTree session
         self._pending: Dict[str, dict] = {}        # sid -> files to seed on next exec
         self._n = 0
+        self.last_retries = 0                      # attempts beyond the first
 
     # -- client -----------------------------------------------------------
     def _build_client(self):
@@ -76,12 +105,32 @@ class TokenFactorySandbox(Sandbox):
         files = ({k: v.encode("utf-8") if isinstance(v, str) else v
                   for k, v in pending.items()} if pending else None)
         t0 = time.perf_counter()
-        # ContreeSDK takes `shell="<line>"` (or command=+args=); passing the
-        # /bin/sh invocation through `args` alone leaves command unset and the
-        # SDK raises "Either command or shell must be provided".
-        done = sess.run(shell=command, files=files, timeout=timeout).wait()
+        attempts, delay = _retry_budget()
+        self.last_retries = 0
+        last_exc: Optional[BaseException] = None
+        done = None
+        for attempt in range(1, attempts + 1):
+            try:
+                # ContreeSDK takes `shell="<line>"` (or command=+args=); passing
+                # /bin/sh via args alone raises "Either command or shell…".
+                done = sess.run(shell=command, files=files, timeout=timeout).wait()
+                self.last_retries = attempt - 1
+                break
+            except Exception as exc:
+                last_exc = exc
+                if attempt < attempts and _transient_contree(exc):
+                    self.last_retries = attempt
+                    time.sleep(delay * attempt)
+                    continue
+                if pending:
+                    self._pending[sandbox_id] = dict(pending)
+                raise
+        if done is None:
+            if pending:
+                self._pending[sandbox_id] = dict(pending)
+            raise last_exc or RuntimeError("contree exec failed")
+
         self._sessions[sandbox_id] = done
-        # `elapsed` comes back as a timedelta from the SDK, not a number
         dur = getattr(done, "elapsed", None)
         if isinstance(dur, timedelta):
             dur = dur.total_seconds()

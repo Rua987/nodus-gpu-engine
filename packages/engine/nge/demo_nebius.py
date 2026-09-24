@@ -1,13 +1,13 @@
 """End-to-end demo of the Nodus-GPU Engine.
 
-    python -m nge.demo_nebius --mock     # deterministic orchestrator, no creds, CI
-    python -m nge.demo_nebius --local    # REAL Nodus ReAct loop, local Ollama model
-                                         #   -> real MCP calls to the GPU tools
-    python -m nge.demo_nebius --live     # Nemotron @ Nebius + real fleet/sandbox (skeleton)
+    python -m nge.demo_nebius --mock      # deterministic orchestrator, no creds, CI
+    python -m nge.demo_nebius --local     # REAL Nodus ReAct + Ollama (free)
+    python -m nge.demo_nebius --deepseek  # PERSONAL: ReAct + DeepSeek API (off Nebius track)
+    python -m nge.demo_nebius --live      # Nemotron @ Nebius (hackathon path)
 
-``--mock`` is the judge path. ``--local`` proves the same tool + MCP wiring the
-Nebius path will use, driven by a local model instead of Nemotron (no cloud,
-no credits). ``--live`` swaps the model id + fleet/sandbox mode.
+``--mock`` is the judge path. ``--local`` / ``--deepseek`` prove MCP tool wiring
+with a non-Nebius model. ``--live`` is the submission path (``NGE_TRACK=nebius``).
+``--deepseek`` must never set that track.
 """
 from __future__ import annotations
 
@@ -24,6 +24,9 @@ _ENGINE_DIR = Path(__file__).resolve().parent.parent
 _DEFAULT_SCENARIO = _ENGINE_DIR / "scenarios" / "fleet_test_triage.json"
 _REPO_ROOT = _ENGINE_DIR.parent.parent
 
+_DEFAULT_OLLAMA = "qwen3.5:2b"
+_DEFAULT_DEEPSEEK = "deepseek-chat"
+
 _LOCAL_TASK = (
     "Do exactly these two tool calls with the nge-gpu tools, then stop:\n"
     "1. nge-gpu.gpu_provision with n=2 and gpu_type=\"H100\"\n"
@@ -38,12 +41,13 @@ def _load_scenario(path: Path) -> dict:
 
 
 def _live_chat_fn(model):
+    """Route live chat through ``chat_nebius`` so max_tokens + usage apply."""
     from nge.backends import register
+    from nge.backends.nebius import chat_nebius
     register.apply()
-    import nodus_agent as na
 
-    def chat_fn(messages, mdl=model, tools=None):
-        return na._chat(messages, mdl, tools)
+    def chat_fn(messages, mdl=None, tools=None, max_tokens=None):
+        return chat_nebius(messages, mdl or model, tools, max_tokens=max_tokens)
     return chat_fn
 
 
@@ -58,17 +62,33 @@ def run_orchestrated(args, live: bool) -> int:
         os.environ.setdefault("NGE_TRACK", "nebius")
         # env can pin either half back to mock for a partial-real run, e.g.
         #   NGE_FLEET_MODE=mock python -m nge.demo_nebius --live
-        #   -> real Nemotron + real Token Factory sandbox, simulated fleet ledger
         cfg = _cfg.load(fleet_mode=os.environ.get("NGE_FLEET_MODE") or "nebius",
                         sandbox_mode=os.environ.get("NGE_SANDBOX") or "token_factory")
+        from nge.backends import usage as _usage
+        from nge.backends.nebius import resolve_max_tokens
+        _usage.reset_usage()
+        _usage.set_jsonl_path(cfg.out_dir / "nemotron_usage.jsonl")
         chat_fn = _live_chat_fn(cfg.nemotron_model)
         print(f"[live] Nemotron={cfg.nemotron_model}  "
               f"fleet={cfg.fleet_mode}  sandbox={cfg.sandbox_mode}")
+        print(f"[live] max_tokens default={resolve_max_tokens()} "
+              f"(slot=256 patch=2048; override NGE_NEMOTRON_MAX_TOKENS)")
     else:
         cfg = _cfg.load(fleet_mode="mock", sandbox_mode="mock")
         chat_fn = None
         if not args.watch:
             print("[mock] deterministic run - no credentials, no network")
+
+    if getattr(args, "heuristic_plan", False):
+        from dataclasses import replace
+        # Missing ckpt → planner falls back to keyword heuristic (edit_file on
+        # the default triage task) so the autofix gate opens for judge films.
+        cfg = replace(
+            cfg,
+            nodus_plan_ckpt=str(Path("__nge_force_heuristic__") / "missing.pt"),
+        )
+        print("[planner] --heuristic-plan: skip 324M -> keyword plan "
+              "(expect edit_file -> autofix ON on default scenario)")
 
     # --mission overrides the scenario file: the engineer states the what,
     # the model (when there is one) extracts the how, the regex is the floor.
@@ -96,15 +116,40 @@ def run_orchestrated(args, live: bool) -> int:
     orch = NgeOrchestrator(config=cfg, chat_fn=chat_fn, telemetry=watch)
     try:
         report = orch.run(scenario)
-    except (NotImplementedError, RuntimeError) as exc:
-        print(f"\n[live blocked] {type(exc).__name__}: {exc}\n"
-              "The live path (NebiusFleet + TokenFactorySandbox) is wired and "
-              "authenticates; it needs Token Factory Sandboxes beta access on "
-              "the key. Use --mock for the working end-to-end path.",
-              file=sys.stderr)
-        return 3
+    except Exception as exc:
+        from nge.fleet.capabilities import RealGpuRequired
+        if isinstance(exc, RealGpuRequired):
+            print(f"\n[capabilities refused] {exc}", file=sys.stderr)
+            return 2
+        if isinstance(exc, (NotImplementedError, RuntimeError)):
+            print(f"\n[live blocked] {type(exc).__name__}: {exc}\n"
+                  "The live path (NebiusFleet + TokenFactorySandbox) is wired and "
+                  "authenticates; it needs Token Factory Sandboxes beta access on "
+                  "the key. Use --mock for the working end-to-end path.",
+                  file=sys.stderr)
+            return 3
+        raise
 
     print(f"\nplan({report.plan_source}): {report.plan_names}")
+    gated = [e for e in report.events if e.get("kind") == "plan_gated_autofix"]
+    if gated and not gated[-1].get("allowed"):
+        print("  plan gate: autofix OFF "
+              "(plan has no edit_file/write_file — triage only)")
+    elif gated and gated[-1].get("allowed"):
+        print(f"  plan gate: autofix ON  because={gated[-1].get('because')}")
+    if live:
+        from nge.backends import usage as _usage
+        print(_usage.format_summary())
+        fos = [e for e in report.events if e.get("kind") == "model_failover"]
+        if fos:
+            print(f"[usage] failovers this run: {len(fos)}")
+        # Honest: routes alone ≠ billed Ultra/Nano (324M plan, heal-gated Nano)
+        billed = _usage.snapshot()
+        routed = {r["tier"] for r in report.routes}
+        billed_tiers = {_usage.guess_tier(m) for m in billed}
+        gap = routed - billed_tiers
+        if gap:
+            print(f"[usage] routed but not billed this run: {', '.join(sorted(gap))}")
     tiers = {}
     for r in report.routes:
         tiers.setdefault(r["tier"], set()).add(r["decision"])
@@ -133,7 +178,7 @@ def run_orchestrated(args, live: bool) -> int:
     return 0 if report.ok else 1
 
 
-# ── real Nodus ReAct loop, local Ollama model (--local) ─────────────────────
+# ── personal ReAct path (--local Ollama / --deepseek API) ───────────────────
 
 def _ollama_up() -> bool:
     import urllib.request
@@ -145,25 +190,60 @@ def _ollama_up() -> bool:
         return False
 
 
-def run_local(args) -> int:
+def _needs_ollama(model: str) -> bool:
+    """True when the model is served by local Ollama (not a cloud API id)."""
+    try:
+        import nodus_backends as nb
+        return nb.detect_backend(model) == "ollama"
+    except Exception:
+        return True
+
+
+def _refuse_nebius_track(label: str):
+    """Personal modes must not run under the hackathon guard."""
+    if _cfg.hackathon_track():
+        print(f"[{label}] refused: NGE_TRACK=nebius is the hackathon path.\n"
+              "Unset NGE_TRACK (or set it empty) for personal Ollama/DeepSeek.",
+              file=sys.stderr)
+        return 2
+    return None
+
+
+def run_react_personal(args, *, provider: str, default_model: str) -> int:
+    """Real Nodus ReAct + nge-gpu MCP; fleet/sandbox stay mock.
+
+    ``provider`` is only a banner label (``local`` / ``deepseek``) — the real
+    backend comes from ``nodus_backends.detect_backend(model)``.
+    """
+    blocked = _refuse_nebius_track(provider)
+    if blocked is not None:
+        return blocked
+
     from nge.mcp_config import write_config
 
-    model = args.model or "qwen3.5:2b"
+    model = args.model or default_model
     task = args.task or _LOCAL_TASK
 
-    if not _ollama_up():
-        print("[local] Ollama not reachable at "
+    if _needs_ollama(model) and not _ollama_up():
+        print(f"[{provider}] Ollama not reachable at "
               f"{os.environ.get('OLLAMA_URL', 'http://localhost:11434')} - "
-              "start it (`ollama serve`) and `ollama pull " + model + "`.",
+              f"start it (`ollama serve`) and `ollama pull {model}`.",
               file=sys.stderr)
         return 3
 
-    cfg_path = write_config(_ENGINE_DIR / "out" / "mcp.local.json",
+    if provider == "deepseek" and _needs_ollama(model):
+        print(f"[{provider}] model {model!r} routes to Ollama, not DeepSeek API.\n"
+              f"Use {_DEFAULT_DEEPSEEK!r} or deepseek-reasoner.",
+              file=sys.stderr)
+        return 2
+
+    cfg_path = write_config(_ENGINE_DIR / "out" / f"mcp.{provider}.json",
                             fleet_mode="mock", sandbox_mode="mock")
-    print(f"[local] model={model}  mcp={cfg_path.name}  (real ReAct loop, no cloud)")
+    print(f"[{provider}] PERSONAL (off Nebius track)  model={model}  "
+          f"mcp={cfg_path.name}  fleet=mock")
 
     from nge.nodus_patches import neutralize_mcp_prompt
-    neutralize_mcp_prompt()  # drop Nodus' Godot-flavoured MCP system block
+    neutralize_mcp_prompt()
 
     import nodus_agent as na
     result = na.run_agent(
@@ -186,9 +266,14 @@ def run_local(args) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Nodus-GPU Engine demo")
     mode = ap.add_mutually_exclusive_group()
-    mode.add_argument("--mock", action="store_true", help="deterministic orchestrator (default)")
-    mode.add_argument("--local", action="store_true", help="real Nodus ReAct loop + local Ollama")
-    mode.add_argument("--live", action="store_true", help="Nemotron @ Nebius + real fleet/sandbox")
+    mode.add_argument("--mock", action="store_true",
+                      help="deterministic orchestrator (default)")
+    mode.add_argument("--local", action="store_true",
+                      help="personal: ReAct + local Ollama (free)")
+    mode.add_argument("--deepseek", action="store_true",
+                      help="personal: ReAct + DeepSeek API (off Nebius track)")
+    mode.add_argument("--live", action="store_true",
+                      help="hackathon: Nemotron @ Nebius + real fleet/sandbox")
     ap.add_argument("--scenario", default=str(_DEFAULT_SCENARIO))
     ap.add_argument("--mission", default=None,
                     help="natural-language mission, overrides --scenario "
@@ -199,16 +284,24 @@ def main(argv=None) -> int:
                     help="--mock/--live: live fleet console view (util/temp bars, migration)")
     ap.add_argument("--watch-delay", type=float, default=0.6,
                     help="seconds between --watch frames (default 0.6)")
-    # --local options
-    ap.add_argument("--model", default=None, help="Ollama model (default qwen3.5:2b)")
-    ap.add_argument("--task", default=None, help="override the --local task")
+    ap.add_argument("--heuristic-plan", action="store_true",
+                    help="skip 324M checkpoint; keyword plan (often unlocks "
+                         "autofix via edit_file — judge film of verified patches)")
+    ap.add_argument("--model", default=None,
+                    help="override model (--local default qwen3.5:2b; "
+                         "--deepseek default deepseek-chat)")
+    ap.add_argument("--task", default=None, help="override the ReAct task")
     ap.add_argument("--max-rounds", type=int, default=14)
     ap.add_argument("--text-tools", action="store_true",
-                    help="--local: JSON-text tool mode (models without native tool calling)")
+                    help="JSON-text tool mode (models without native tool calling)")
     args = ap.parse_args(argv)
 
     if args.local:
-        return run_local(args)
+        return run_react_personal(args, provider="local",
+                                  default_model=_DEFAULT_OLLAMA)
+    if args.deepseek:
+        return run_react_personal(args, provider="deepseek",
+                                  default_model=_DEFAULT_DEEPSEEK)
     return run_orchestrated(args, live=bool(args.live))
 
 

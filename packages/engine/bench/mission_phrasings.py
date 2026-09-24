@@ -7,10 +7,10 @@ a green suite say almost nothing about a sentence a real engineer types. This
 corpus exists to break that loop: every case here was written *against* the
 parser, not with it.
 
-    python -m bench.mission_phrasings              # regex only, no network
-    python -m bench.mission_phrasings --llm        # regex + Nemotron
-
 Measured 2026-09-03:  regex 5/19  |  regex + nemotron-3-super-120b  18/19
+
+    python -m bench.mission_phrasings              # regex only, no network
+    python -m bench.mission_phrasings --llm --i-know-cost
 
 Adding a case is the point. Do NOT tune the regexes until a case passes -
 that is the overfitting this file is here to detect. Either the model handles
@@ -83,11 +83,27 @@ def run(parser, label: str) -> int:
 
 def main(argv) -> int:
     if "--llm" in argv:
+        if "--i-know-cost" not in argv:
+            print("refusing: --llm calls Nemotron. Re-run with --i-know-cost.",
+                  file=sys.stderr)
+            return 2
         from nge import config as _cfg
-        from nge.backends.nebius import chat_nebius
-        model = _cfg.load().nemotron_model
-        print(f"# regex + {model}\n")
-        run(lambda t: parse_mission_llm(t, chat_nebius, model), "regex + llm")
+        from nge.backends import usage as _usage
+        from nge.backends.nebius import SLOT_MAX_TOKENS, chat_nebius, resolve_max_tokens
+        cfg = _cfg.load()
+        model = cfg.nemotron_model
+        _usage.reset_usage()
+        _usage.set_jsonl_path(cfg.out_dir / "nemotron_usage.jsonl")
+        print(f"# regex + {model}  max_tokens={resolve_max_tokens(SLOT_MAX_TOKENS)}\n")
+
+        def _chat(messages, mdl, tools=None, max_tokens=None):
+            return chat_nebius(messages, mdl, tools,
+                               max_tokens=max_tokens or SLOT_MAX_TOKENS)
+
+        hits = run(lambda t: parse_mission_llm(t, _chat, model), "regex + llm")
+        print()
+        print(_usage.format_summary())
+        return 0 if hits else 1
     else:
         print("# regex only (no network)\n")
         run(parse_mission, "regex")

@@ -3,7 +3,7 @@
 [![engine-tests](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml)
 [![python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-291%20passing-brightgreen)](packages/engine/tests)
+[![tests](https://img.shields.io/badge/tests-310%20passing-brightgreen)](packages/engine/tests)
 
 **Agentic engineering platform — Nebius "Coding & Agentic Engineering" track.**
 
@@ -52,16 +52,21 @@ Token Factory        ──▶  isolated exec + capability jail [ execution   ]
 
 The auto-fix loop's verification rules each come from a live run that broke without them — including a patch that repaired its target test while breaking 28 others, twelve of them path-security checks. The evidence is in [`docs/FIX_LOOP.md`](docs/FIX_LOOP.md), and
 [`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md) records where this has actually been run, what each environment caught, and what is still
-exercised on only one machine.
+exercised on only one machine. Before picking the next upgrade lever (more
+tools, more retries, slot-fill, infra), re-run the failure taxonomy in
+[`docs/MEASURE_BEFORE_LEVER.md`](docs/MEASURE_BEFORE_LEVER.md)
+(`bench/failure_taxonomy*.py`).
 
 ## Quick start (mock — no credentials, no network)
 
 ```bash
 cd packages/engine
 pip install -r requirements.txt
-python -m pytest -q                 # 291 tests
+python -m pytest -q                 # 310 tests
 python -m nge.demo_nebius --mock    # -> out/report_<ts>.md  +  .html (self-contained)
 ```
+
+Judge oral script (`--mock --watch`): [`packages/engine/docs/JUDGE_DRY_RUN.md`](packages/engine/docs/JUDGE_DRY_RUN.md).
 
 The mock run: `plan (→Ultra)` → `gpu_provision(3×H100)` → 3 sandboxes run a
 sharded pytest (commands vetted by the jail) → a hot node throttles → the engine
@@ -91,6 +96,9 @@ python -m nge.demo_nebius --mock --watch    # live fleet view: util/temp bars, m
 
 Full judge-facing doc: [`packages/engine/docs/NEBIUS_TRACK.md`](packages/engine/docs/NEBIUS_TRACK.md).
 Architecture: [`packages/engine/docs/ARCHITECTURE.md`](packages/engine/docs/ARCHITECTURE.md).
+Judge dry-run script: [`packages/engine/docs/JUDGE_DRY_RUN.md`](packages/engine/docs/JUDGE_DRY_RUN.md).
+The 324M plan gates auto-fix: without `edit_file`/`write_file` in the plan, the
+engine triages only (`plan_gated_autofix`).
 
 ## Live path
 
@@ -108,6 +116,8 @@ NGE_FLEET_MODE=mock python -m nge.demo_nebius --live   # no GPU allocated
 `NGE_FLEET_MODE=mock` keeps the fleet ledger simulated, so the cost is the
 Nemotron calls plus the sandboxes the shards run in. Needs `NEBIUS_API_KEY`
 and `NEBIUS_PROJECT_ID` (files under `packages/engine/` or environment).
+Every `nebius:` call is capped (`max_tokens`, default 2048) and usage is
+appended to `out/nemotron_usage.jsonl`. LLM benches require `--i-know-cost`.
 
 ## License
 

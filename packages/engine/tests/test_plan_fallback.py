@@ -14,7 +14,7 @@ TOOLS = ["bash", "read_file", "edit_file", "write_file"]
 
 
 def _reply(content):
-    return lambda messages, model, tools: {"content": content}
+    return lambda messages, model, tools=None, max_tokens=None: {"content": content}
 
 
 @pytest.mark.parametrize("content,expected", [

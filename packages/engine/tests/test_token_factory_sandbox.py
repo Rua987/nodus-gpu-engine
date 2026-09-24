@@ -157,3 +157,24 @@ def test_build_client_constructs_contree(monkeypatch):
     assert isinstance(client, _FakeClient)
     assert seen["token"] == "sk-test" and seen["project_id"] == "proj-abc"
     assert seen["base_url"].endswith("/sandboxes/")
+
+
+def test_exec_retries_transient_timeout(sbx, monkeypatch):
+    monkeypatch.setenv("NGE_CONTREE_RETRIES", "3")
+    monkeypatch.setenv("NGE_CONTREE_RETRY_S", "0")
+    sid = sbx.create(SandboxSpec(image="python:3.12-slim"))
+    sess = sbx._sessions[sid]
+    n = {"i": 0}
+
+    def flaky(*, shell=None, command=None, args=None, files=None, timeout=None, **kw):
+        n["i"] += 1
+        if n["i"] < 3:
+            raise TimeoutError("ApiTimeoutError read")
+        return _Session.run(sess, shell=shell, files=files, timeout=timeout)
+
+    sess.run = flaky
+    sbx.put_files(sid, {"a.py": "x=1\n"})
+    res = sbx.exec(sid, "echo ok", timeout=30)
+    assert res.exit_code == 0
+    assert sbx.last_retries == 2
+    assert n["i"] == 3

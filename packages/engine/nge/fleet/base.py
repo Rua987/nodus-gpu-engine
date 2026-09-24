@@ -28,8 +28,12 @@ class GpuNodeStatus:
     mem_total_gb: float
     temp_c: float
     power_w: float
-    health: str                    # ok | warm | throttle
+    health: str                    # ok | warm | throttle | unknown
     efficiency: float = 0.0
+    # How metrics were obtained — not the *label* on the node (nb-h100-*).
+    probe_kind: str = "unknown"    # nvidia-smi | cpu-fallback | synthetic | failed
+    gpu_class: str = "none"        # datacenter | consumer | synthetic | none
+    gpu_name: str = ""             # nvidia-smi product name when known
 
     def as_dict(self) -> Dict:
         return self.__dict__.copy()
@@ -47,7 +51,7 @@ class GpuFleet(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def allocate(self, job: str) -> GpuNode:
+    def allocate(self, job: str, node_id: Optional[str] = None) -> GpuNode:
         ...
 
     @abc.abstractmethod

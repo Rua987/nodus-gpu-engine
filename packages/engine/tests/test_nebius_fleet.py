@@ -10,11 +10,13 @@ def test_parse_probe_gpu_line():
     assert m["util_pct"] == 12.0
     assert m["mem_used_gb"] == 40.0 and m["mem_total_gb"] == 80.0
     assert m["temp_c"] == 63.0 and m["power_w"] == 410.5
+    assert m["probe_kind"] == "nvidia-smi"
 
 
 def test_parse_probe_cpu_line():
     m = _parse_probe("35, 512, 3928, 0, 0")
     assert m["util_pct"] == 35.0 and m["temp_c"] == 0.0 and m["power_w"] == 0.0
+    assert m["probe_kind"] == "cpu-fallback"
 
 
 def test_parse_probe_garbage():
@@ -35,8 +37,10 @@ class _Session:
     def __init__(self, probe_out):
         self.probe_out = probe_out
         self.closed = False
+        self.last_run = None
 
-    def run(self, args=None, **kw):
+    def run(self, shell=None, command=None, args=None, files=None, timeout=None, **kw):
+        self.last_run = {"shell": shell, "command": command, "args": args}
         return _Res(self.probe_out)
 
     def close(self):
@@ -90,6 +94,23 @@ def test_status_parses_real_probe(fleet):
     assert r.temp_c == 70.0 and r.power_w == 500.0
     assert r.health in ("ok", "warm", "throttle")
     assert 0.0 <= r.efficiency <= 1.0
+    assert r.probe_kind == "nvidia-smi"
+    # Contree contract: probe must use shell=, not args=/bin/sh -c
+    sess = fleet._nodes["nb-h100-00"]["session"]
+    assert sess.last_run["shell"]
+    assert not sess.last_run.get("args")
+
+
+def test_status_cpu_fallback_tagged(monkeypatch):
+    from nge import config as _cfg
+    client = _Client(probe_out="cpu-fallback,35,512,3928,0,0,\n")
+    monkeypatch.setattr(NebiusFleet, "_client_ready", lambda self: client)
+    f = NebiusFleet(_cfg.load(fleet_mode="nebius"))
+    f.provision(1)
+    rows = f.status()
+    assert rows[0].probe_kind == "cpu-fallback"
+    assert rows[0].gpu_class == "none"
+    assert rows[0].temp_c == 0.0
 
 
 def test_status_handles_probe_failure(monkeypatch):
@@ -110,6 +131,7 @@ def test_status_handles_probe_failure(monkeypatch):
     f.provision(1)
     rows = f.status()
     assert rows[0].health == "unknown" and rows[0].util_pct == 0.0
+    assert rows[0].probe_kind == "failed"
 
 
 def test_release_closes_sessions(fleet):

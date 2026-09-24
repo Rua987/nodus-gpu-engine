@@ -75,7 +75,9 @@ def test_model_routing_is_recorded(cfg):
     assert "super" in tiers            # slot-fill -> Super
     assert "nano" in tiers             # pressure healthcheck -> Nano
     for r in rep.routes:
-        assert r["model"].startswith("nebius:nvidia/nemotron-3-")
+        m = r["model"].lower()
+        assert m.startswith("nebius:nvidia/")
+        assert "nemotron" in m
     kinds = [e["kind"] for e in rep.events]
     assert "model_route" in kinds
 
@@ -109,7 +111,10 @@ def test_healthy_shards_are_not_migrated(cfg):
     assert rep.shards[1].migrated_from is None
 
 
-def test_autofix_loop_patches_and_verifies(cfg):
+def test_autofix_loop_patches_and_verifies(cfg, monkeypatch):
+    from nge import planner
+    monkeypatch.setattr(planner, "plan", lambda *a, **k: planner.PlanResult(
+        names=["bash", "read_file", "edit_file", "write_file"], source="stub"))
     rep = NgeOrchestrator(config=cfg).run(SCENARIO)
 
     assert rep.fixes, "the code agent should attempt fixes"
@@ -140,7 +145,10 @@ def test_autofix_loop_patches_and_verifies(cfg):
     assert patches and any("--- a/" in p.read_text(encoding="utf-8") for p in patches)
 
 
-def test_autofix_is_deterministic(cfg):
+def test_autofix_is_deterministic(cfg, monkeypatch):
+    from nge import planner
+    monkeypatch.setattr(planner, "plan", lambda *a, **k: planner.PlanResult(
+        names=["bash", "edit_file", "write_file"], source="stub"))
     a = NgeOrchestrator(config=cfg).run(SCENARIO)
     b = NgeOrchestrator(config=cfg).run(SCENARIO)
     assert [(x["test"], x.get("verified"), x.get("patch")) for x in a.fixes] == \

@@ -40,10 +40,14 @@ TOOL_SCHEMAS: List[dict] = [
     },
     {
         "name": "gpu_allocate",
-        "description": "Reserve one ready node for a named job.",
+        "description": "Reserve one ready node for a named job (optional node_id).",
         "parameters": {
             "type": "object",
-            "properties": {"job": {"type": "string", "description": "Job name"}},
+            "properties": {
+                "job": {"type": "string", "description": "Job name"},
+                "node_id": {"type": "string",
+                            "description": "Prefer this ready node (placement)"},
+            },
             "required": ["job"],
         },
     },
@@ -123,8 +127,8 @@ def gpu_status(node_id: Optional[str] = None) -> dict:
     return {"count": len(rows), "nodes": [r.as_dict() for r in rows]}
 
 
-def gpu_allocate(job: str) -> dict:
-    node = _STATE.fleet.allocate(job)
+def gpu_allocate(job: str, node_id: Optional[str] = None) -> dict:
+    node = _STATE.fleet.allocate(job, node_id=node_id or None)
     return {"node_id": node.id, "job": job, "state": node.state}
 
 

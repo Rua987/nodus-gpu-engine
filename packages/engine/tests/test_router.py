@@ -19,7 +19,11 @@ def test_model_for_resolves_ids():
     assert router.model_for("slotfill", cfg) == cfg.nemotron_super
     assert router.model_for("healthcheck", cfg) == cfg.nemotron_nano
     for m in (cfg.nemotron_ultra, cfg.nemotron_super, cfg.nemotron_nano):
-        assert m.startswith("nebius:nvidia/nemotron-3-")
+        assert m.lower().startswith("nebius:nvidia/")
+        assert "nemotron" in m.lower()
+    assert "ultra" in cfg.nemotron_ultra.lower()
+    assert "super" in cfg.nemotron_super.lower()
+    assert "nano" in cfg.nemotron_nano.lower()
 
 
 def test_route_record():

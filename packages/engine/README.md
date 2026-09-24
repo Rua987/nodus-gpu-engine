@@ -50,21 +50,21 @@ Fully deterministic.
    reproducible; every LLM-proposed shell command passes `nge/policy.py` before
    it can touch a sandbox.
 
-## Local end-to-end (real ReAct loop, no cloud, no credits)
+## Personal ReAct (off Nebius track)
 
 ```bash
 pip install -r requirements-local.txt   # adds the mcp SDK (1.x)
-ollama pull qwen3.5:2b                   # any local model works
+# free — Ollama
+ollama pull qwen3.5:2b
 python -m nge.demo_nebius --local
+# personal API — DeepSeek (needs DEEPSEEK_API_KEY); never sets NGE_TRACK=nebius
+python -m nge.demo_nebius --deepseek
 ```
 
-`--local` runs the **real Nodus ReAct executor** driven by a local Ollama model
-(Nemotron stand-in). Nodus connects to `nge/tools/gpu_mcp_server.py` — a real
-MCP server on the official SDK — and the model drives `nge-gpu.gpu_provision`,
-`gpu_status`, `run_in_sandbox`, `gpu_release` over stdio MCP. Same tool + MCP
-wiring the Nebius path uses; only the model id and fleet/sandbox mode change for
-`--live`. The `test_mcp_bridge_integration.py` suite exercises this path in CI
-(no Ollama needed).
+`--local` / `--deepseek` run the **real Nodus ReAct executor** against mock
+fleet/sandbox MCP tools. They **refuse** to start if `NGE_TRACK=nebius` (that
+guard is for `--live` / Devpost only). Same tool wiring as Nebius; different
+provider. CI covers MCP without a model via `test_mcp_bridge_integration.py`.
 
 Real transcript (`qwen3.5:2b`, 3 rounds):
 

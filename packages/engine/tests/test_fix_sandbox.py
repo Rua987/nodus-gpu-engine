@@ -402,6 +402,40 @@ def test_an_exception_is_not_retried(tmp_path):
     assert [e for e in o.events if e["kind"] == "patch_error"]
 
 
+def test_finish_reason_length_emits_patch_truncated(tmp_path):
+    """Hit the output ceiling → honest stop, not empty-flake retry."""
+    calls = []
+
+    def chat_fn(messages, model=None, tools=None, max_tokens=None):
+        calls.append(max_tokens)
+        return {"content": "```diff\n--- a/x.py\n+++ b/x.py\n@@",
+                "finish_reason": "length"}
+
+    o = _orch(tmp_path, chat_fn=chat_fn)
+    assert o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m") is None
+    assert len(calls) == 1, "truncated is not flakiness — do not retry"
+    trunc = [e for e in o.events if e["kind"] == "patch_truncated"]
+    assert trunc and trunc[0]["why"] == "finish_reason=length"
+    assert not [e for e in o.events if e["kind"] == "patch_empty"]
+
+
+def test_model_unavailable_on_patch_is_not_failover(tmp_path):
+    from nge.backends.nebius import ModelUnavailableError
+
+    calls = []
+
+    def boom(*a, **k):
+        calls.append(1)
+        raise ModelUnavailableError("nvidia/nemotron-super", 503, "down")
+
+    o = _orch(tmp_path, chat_fn=boom)
+    assert o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m") is None
+    assert len(calls) == 1
+    ev = [e for e in o.events if e["kind"] == "model_unavailable"]
+    assert ev and ev[0]["status"] == 503
+    assert not [e for e in o.events if e["kind"] == "patch_error"]
+
+
 def test_only_an_empty_reply_is_retried(tmp_path):
     """An empty answer is flakiness; a refusal or a headerless diff is a
     considered reply, and asking again just spends a request."""

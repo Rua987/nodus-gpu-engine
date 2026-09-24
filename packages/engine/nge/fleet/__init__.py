@@ -1,7 +1,8 @@
-"""GPU fleet layer - provision / monitor / free Nebius cloud GPUs.
+"""GPU fleet layer - provision / monitor / free nodes.
 
-``mock``   -> deterministic fleet with synthetic telemetry (no creds, CI)
-``nebius`` -> Nebius cloud GPU instances (live path, skeleton)
+``mock``    -> deterministic fleet with synthetic telemetry (no creds, CI)
+``nebius``  -> Token Factory Contree microVMs (CPU; probe cpu-fallback)
+``compute`` -> Nebius AI Cloud GPU VMs (skeleton — real H100/H200 path)
 """
 from nge.fleet.base import GpuFleet, GpuNode, GpuNodeStatus
 
@@ -14,6 +15,9 @@ def build_fleet(mode: str, config=None) -> GpuFleet:
     if mode == "nebius":
         from nge.fleet.nebius import NebiusFleet
         return NebiusFleet(config)
+    if mode == "compute":
+        from nge.fleet.compute import ComputeGpuFleet
+        return ComputeGpuFleet(config)
     raise ValueError(f"unknown fleet mode: {mode!r}")
 
 

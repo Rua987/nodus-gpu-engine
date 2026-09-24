@@ -20,15 +20,15 @@ _TRUTHY = {"1", "true", "yes", "on"}
 DEFAULT_NEBIUS_BASE_URL = "https://api.tokenfactory.us-central1.nebius.com/v1"
 LEGACY_NEBIUS_BASE_URL = "https://api.studio.nebius.com/v1"
 
-# Nemotron 3 family on Token Factory (ids per nebius.com/services/token-factory/nemotron):
-#   nvidia/nemotron-3-super-120b-a12b  - hybrid MoE, multi-agent + complex reasoning (default)
-#   nvidia/nemotron-3-nano-30b-a3b     - compact MoE, efficient reasoning/chat/coding
-#   Nemotron 3 Ultra 550b             - long-running autonomous agents / deep research
-#                                        (id suffix not yet confirmed publicly)
+# Nemotron 3 family on Token Factory (ids from GET /v1/models — case-sensitive):
+#   nvidia/nemotron-3-super-120b-a12b
+#   nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B
+#   nvidia/Nemotron-3-Ultra-550b-a55b
 DEFAULT_NEMOTRON_MODEL = "nebius:nvidia/nemotron-3-super-120b-a12b"
-NEMOTRON_ULTRA_MODEL = "nebius:nvidia/nemotron-3-ultra-550b"       # confirm exact id
+# IDs must match Token Factory /v1/models exactly (case-sensitive).
+NEMOTRON_ULTRA_MODEL = "nebius:nvidia/Nemotron-3-Ultra-550b-a55b"
 NEMOTRON_SUPER_MODEL = "nebius:nvidia/nemotron-3-super-120b-a12b"
-NEMOTRON_NANO_MODEL = "nebius:nvidia/nemotron-3-nano-30b-a3b"
+NEMOTRON_NANO_MODEL = "nebius:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
 
 NEBIUS_PREFIX = "nebius:"
 
@@ -80,6 +80,7 @@ class Config:
     nebius_project_id: str = ""
     nodus_plan_ckpt: str = ""        # 324M planner weights; "" -> vendored default
     nebius_region: str = "eu-north1"
+    nebius_fleet_image: str = "python:3.12-slim"  # TF microVM image (CPU by default)
     jail: bool = True                 # capability jail on run_in_sandbox
     out_dir: Path = field(default=_ENGINE_DIR / "out")
 
@@ -114,6 +115,7 @@ def load(**overrides) -> Config:
         nebius_project_id=load_value("nebius_project_id", "NEBIUS_PROJECT_ID"),
         nodus_plan_ckpt=load_value("nodus_plan_ckpt", "NODUS_PLAN_CKPT"),
         nebius_region=_env("NEBIUS_REGION", "eu-north1"),
+        nebius_fleet_image=_env("NGE_FLEET_IMAGE", "python:3.12-slim") or "python:3.12-slim",
         jail=_env("NGE_JAIL", "on").lower() not in ("0", "off", "false", "no"),
         out_dir=Path(_env("NGE_OUT_DIR") or (_ENGINE_DIR / "out")),
     )

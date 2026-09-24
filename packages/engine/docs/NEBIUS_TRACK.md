@@ -31,9 +31,15 @@ applicative DSL down to GPU resource management.
 ```bash
 cd packages/engine
 pip install -r requirements.txt          # requests + pytest only
-python -m pytest -q                       # 46 tests, no network
+python -m pytest -q                       # 310 tests, no network
 python -m nge.demo_nebius --mock          # deterministic end-to-end
+python -m nge.demo_nebius --mock --watch  # same run, live fleet view
+# Judge film with verified patches (keyword plan unlocks edit_file):
+python -m nge.demo_nebius --mock --watch --heuristic-plan
 ```
+
+Oral script: [`JUDGE_DRY_RUN.md`](JUDGE_DRY_RUN.md). Capture with autofix:
+`out/report_20260905T232100Z.html` (2/3 verified + GPU migrate).
 
 ### Optional — real ReAct loop, no cloud
 
@@ -72,9 +78,10 @@ python -m nge.demo_nebius --live
 
 - "AI Studio" is now **Token Factory**. OpenAI-compatible base URL:
   `https://api.tokenfactory.us-central1.nebius.com/v1`
-- Nemotron 3 on Token Factory: `nvidia/nemotron-3-super-120b-a12b` (default),
-  `nvidia/nemotron-3-nano-30b-a3b`, and **Nemotron 3 Ultra 550b** (long-running
-  autonomous agents - exact id string still to grab from the console).
+- Nemotron 3 on Token Factory (ids case-sensitive from `/v1/models`):
+  `nvidia/nemotron-3-super-120b-a12b` (default),
+  `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`,
+  `nvidia/Nemotron-3-Ultra-550b-a55b`.
 - Sandboxes are driven by the **ConTree SDK** (`contree-sdk`, `ContreeSync`,
   `images.use(img).session().run(args=["/bin/sh","-c",cmd], files={...}).wait()`).
   Auth = `IAMAuth(token, project_id, base_url=".../sandboxes/")` (shared by
@@ -90,9 +97,30 @@ python -m nge.demo_nebius --live
   patches with `patch-ng` — see [`../../docs/FIX_LOOP.md`](../../docs/FIX_LOOP.md).
 
 `--live` sets `NGE_TRACK=nebius` (guard: refuses any non-`nebius:` LLM), routes
-slot-fill through `nodus_agent._chat`, and selects `NebiusFleet` +
+slot-fill / patch through `nge.backends.nebius.chat_nebius` (capped
+`max_tokens` + usage ledger), and selects `NebiusFleet` +
 `TokenFactorySandbox`. `NGE_FLEET_MODE=mock` pins just the fleet ledger back to
 mock for a partial-real run.
+
+### Tier ≠ provider (honest routing)
+
+- **tier** (`ultra` / `super` / `nano`) = *role* of the decision kind in
+  `router.py` (plan→ultra, slotfill/triage→super, healthcheck→nano).
+- **model** = Token Factory id actually billed (ledger / report).
+- **No** silent failover Super→Nano if Super returns 429/5xx: event
+  `model_unavailable`, decision fails honestly.
+- Patch cut by `max_tokens` → `patch_truncated` (not retried as empty).
+  Override ceiling with `NGE_PATCH_MAX_TOKENS`.
+- **DeepSeek / non-Nebius models**: blocked when `NGE_TRACK=nebius`. Personal
+  multi-provider experiments stay off the submission path:
+  `python -m nge.demo_nebius --local` (Ollama) or `--deepseek` (API). Both
+  refuse to start if `NGE_TRACK=nebius` is set.
+- Fleet telemetry: see [`ENVIRONMENTS.md`](../../../docs/ENVIRONMENTS.md)
+  (« Token Factory nodes ≠ physical H100 »). Event `gpu_telemetry_non_gpu`
+  means heal was skipped on purpose. Probe uses Contree ``shell=``; slim TF
+  nodes report ``cpu-fallback``. ``NGE_FLEET_IMAGE`` selects the OCI tag;
+  ``NGE_FLEET_HAS_GPU=1`` only when a real NVIDIA device is present.
+
 
 ## Stack map
 
@@ -110,7 +138,7 @@ mock for a partial-real run.
 
 ## What runs for real
 
-Sandboxes beta access landed, so `--live` is no longer a skeleton. 291 tests,
+Sandboxes beta access landed, so `--live` is no longer a skeleton. 310 tests,
 plus an MCP integration job and `live-smoke` — the full pipeline against real
 sandboxes on Ubuntu, on demand and on a weekday cron.
 
@@ -118,7 +146,7 @@ sandboxes on Ubuntu, on demand and on a weekday cron.
 |---|---|
 | `nebius:` backend + reversible register shim | Verification covers `packages/nodus` only |
 | Nemotron tier router (`nge/router.py`) | Hunks with no file header are not recovered |
-| 324M planner loading real weights (`nge/fetch_ckpt.py`) | Nemotron sometimes returns nothing (3 retries, 2s backoff) |
+| 324M planner loading real weights (`nge/fetch_ckpt.py`) | Nemotron sometimes returns nothing (4 retries, 2s backoff; measured) |
 | `TokenFactorySandbox` — auth, spawn, exec, file upload | `fetch_ckpt` and the planner are only exercised on Windows |
 | Real sharding: files split round-robin, distinct commands | resume-from-snapshot on migration (needs Token Factory branching) |
 | Feedback loop: throttle → re-provision + migrate | Grafana live wiring |

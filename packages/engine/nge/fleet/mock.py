@@ -47,7 +47,14 @@ class MockFleet(GpuFleet):
         self._nodes.extend(new)
         return list(new)
 
-    def allocate(self, job: str) -> GpuNode:
+    def allocate(self, job: str, node_id: Optional[str] = None) -> GpuNode:
+        if node_id:
+            for node in self._nodes:
+                if node.id == node_id and node.state == "ready":
+                    node.state = "allocated"
+                    node.job = job
+                    return node
+            raise RuntimeError(f"node {node_id!r} not ready for allocate")
         for node in self._nodes:
             if node.state == "ready":
                 node.state = "allocated"
@@ -90,6 +97,9 @@ class MockFleet(GpuFleet):
                 mem_used_gb=mem_used, mem_total_gb=mem_total, temp_c=temp,
                 power_w=power, health=telemetry.health_from_metrics(temp, util, power),
                 efficiency=telemetry.efficiency_score(util, power),
+                probe_kind=telemetry.PROBE_SYNTHETIC,
+                gpu_class=telemetry.CLASS_SYNTHETIC,
+                gpu_name=f"mock-{node.gpu_type}",
             ))
         return out
 

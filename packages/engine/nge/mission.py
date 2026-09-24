@@ -191,7 +191,12 @@ def parse_mission_llm(text: str, chat_fn, model: str) -> Mission:
     prompt = _EXTRACT_PROMPT.format(text=text.strip(),
                                     gpus=", ".join(_GPU_TYPES))
     try:
-        msg = chat_fn([{"role": "user", "content": prompt}], model, None)
+        from nge.backends.nebius import SLOT_MAX_TOKENS
+        try:
+            msg = chat_fn([{"role": "user", "content": prompt}], model, None,
+                          max_tokens=SLOT_MAX_TOKENS)
+        except TypeError:
+            msg = chat_fn([{"role": "user", "content": prompt}], model, None)
     except Exception as exc:
         base.derived.append(f"llm extraction failed ({type(exc).__name__}), regex only")
         return base
