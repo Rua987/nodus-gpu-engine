@@ -73,11 +73,14 @@ def record_failover(from_model: str, to_model: str, decision: str = "") -> None:
 
 
 def record(model: str, prompt_tokens: Optional[int],
-           completion_tokens: Optional[int], max_tokens: int) -> None:
+           completion_tokens: Optional[int], max_tokens: int,
+           reasoning_tokens: Optional[int] = None,
+           thinking: Optional[bool] = None) -> None:
     mid = (model or "").strip() or "?"
     row = _ledger.setdefault(mid, {
         "calls": 0, "prompt_tokens": 0, "completion_tokens": 0,
         "prompt_unknown": 0, "completion_unknown": 0,
+        "reasoning_tokens": 0,
         "tier": guess_tier(mid),
     })
     row["calls"] += 1
@@ -89,9 +92,12 @@ def record(model: str, prompt_tokens: Optional[int],
         row["completion_unknown"] += 1
     else:
         row["completion_tokens"] += int(completion_tokens)
+    if reasoning_tokens is not None:
+        row["reasoning_tokens"] += int(reasoning_tokens)
     _append_jsonl({
         "kind": "chat", "model": mid, "tier": row["tier"],
         "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
+        "reasoning_tokens": reasoning_tokens, "thinking": thinking,
         "max_tokens": max_tokens,
     })
 
@@ -148,9 +154,11 @@ def format_summary() -> str:
         short = model.split("/")[-1] if "/" in model else model
         err = _errors.get(model, 0)
         err_s = f"  err={err}" if err else ""
+        rsn = r.get("reasoning_tokens") or 0
+        rsn_s = f" (reasoning={rsn})" if rsn else ""
         lines.append(
-            f"[usage] {tier:<5} {short}  calls={calls}  in={pin}  out={pout}  "
-            f"~${est:.4f}{err_s}")
+            f"[usage] {tier:<5} {short}  calls={calls}  in={pin}  out={pout}"
+            f"{rsn_s}  ~${est:.4f}{err_s}")
     # Routes with zero chats (e.g. plan→ultra but 324M ran)
     billed_tiers = {guess_tier(m) for m in rows}
     for tier, n in sorted(_routes.items()):

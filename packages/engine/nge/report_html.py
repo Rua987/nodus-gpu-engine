@@ -131,10 +131,20 @@ def _timeline(events) -> str:
                             f'{t.get("power_w")} W &middot; '
                             f'<span class="{_esc_attr(t.get("health"))}">{_esc(str(t.get("health","")).upper())}</span></div>')
         elif k == "patch_truncated":
+            rsn = e.get("reasoning_tokens")
             rows.append(
                 f'<div class="pill">patch truncated <code>{_esc(e.get("test"))}</code> '
                 f'{_esc(e.get("max_tokens"))} tokens, '
-                f'{_esc(e.get("reply_chars", 0))}-char reply</div>'
+                f'{_esc(e.get("reply_chars", 0))}-char reply'
+                + (f', {_esc(rsn)} spent reasoning' if rsn else "") + '</div>'
+            )
+        elif k == "slotfill_truncated":
+            rsn = e.get("reasoning_tokens")
+            rows.append(
+                f'<div class="pill">slot-fill shard {_esc(e.get("shard"))} cut at '
+                f'{_esc(e.get("max_tokens"))} tokens'
+                + (f' ({_esc(rsn)} reasoning)' if rsn else "")
+                + ' &rarr; template command</div>'
             )
         elif k == "gpu_pressure":
             rows.append(f'<div class="pill pressure">! pressure shard {e["shard"]} on '
@@ -431,9 +441,11 @@ def render(rep: Dict[str, Any], path) -> Path:
         why = f.get("reason") or ""
         tr = trunc.get(f.get("test") or "")
         if tr and not f.get("patch"):
+            rsn = tr.get("reasoning_tokens")
             why = (
                 f"Super truncated ({tr.get('max_tokens')} tokens, "
-                f"{tr.get('reply_chars', 0)}-char reply)"
+                f"{tr.get('reply_chars', 0)}-char reply"
+                + (f", {rsn} spent reasoning" if rsn else "") + ")"
             )
         why = _esc(why)
         extras = ""

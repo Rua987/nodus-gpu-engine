@@ -165,11 +165,13 @@ def test_chat_fn_slotfill_is_used(cfg):
         prompt = messages[-1]["content"]
         own = re.findall(r"packages/nodus/tests/[\w./-]+\.py", prompt)
         return {"role": "assistant",
-                "content": f"python -m pytest {' '.join(own)} -q -k smoke"}
+                "content": f"python -m pytest {' '.join(own)} -q --tb=line"}
 
     rep = NgeOrchestrator(config=cfg, chat_fn=chat_fn).run(SCENARIO)
     assert calls, "chat_fn should be called for slot-fill"
-    assert any("-k smoke" in s.command for s in rep.shards)
+    # a reporting option is the model's to choose; -k/-x would shrink the
+    # run and are refused (test_thinking.py)
+    assert any("--tb=line" in s.command for s in rep.shards)
 
 
 def test_a_command_that_drops_the_shards_files_is_rejected(cfg):

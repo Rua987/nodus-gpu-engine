@@ -96,9 +96,10 @@ def main(argv) -> int:
         _usage.set_jsonl_path(cfg.out_dir / "nemotron_usage.jsonl")
         print(f"# regex + {model}  max_tokens={resolve_max_tokens(SLOT_MAX_TOKENS)}\n")
 
-        def _chat(messages, mdl, tools=None, max_tokens=None):
+        def _chat(messages, mdl, tools=None, max_tokens=None, thinking=None):
             return chat_nebius(messages, mdl, tools,
-                               max_tokens=max_tokens or SLOT_MAX_TOKENS)
+                               max_tokens=max_tokens or SLOT_MAX_TOKENS,
+                               thinking=thinking)
 
         hits = run(lambda t: parse_mission_llm(t, _chat, model), "regex + llm")
         print()

@@ -59,6 +59,18 @@ _PYTEST_FLAGS = frozenset("""
 --basetemp --import-mode --continue-on-collection-errors -c --override-ini -o
 """.split())
 
+# Known to pytest, but they change *what runs*, not how it is reported. Live,
+# once slot-fill stopped being starved by reasoning, Nemotron added `-x` on
+# every shard (the prompt listed it as allowed): each shard stopped at its
+# first failure, the run saw 2 failures instead of 5, and the whole-suite
+# re-run during verification then blamed patches for the 3 it had hidden.
+# `--pdb` would park the sandbox on a prompt until the timeout.
+_NARROWING_FLAGS = frozenset("""
+-x --exitfirst --maxfail -k -m --deselect --ignore --ignore-glob --co
+--collect-only --lf --last-failed --ff -ff --failed-first --sw --stepwise
+--pdb --trace
+""".split())
+
 _FIX_HINTS = [
     ("not unique", "Make `old_string` unique or pass replace_all=True."),
     ("out of order", "Sort plan names to match executor step order before asserting."),
@@ -161,7 +173,8 @@ class NgeOrchestrator:
 
     def _invoke_chat(self, messages, model, tools=None,
                      max_tokens: Optional[int] = None,
-                     decision: Optional[str] = None):
+                     decision: Optional[str] = None,
+                     thinking: Optional[bool] = None):
         """Call ``chat_fn``; on Nano/Ultra 429/5xx, one hop to Super (logged)."""
         if self.chat_fn is None:
             raise RuntimeError("chat_fn is not set")
@@ -171,6 +184,13 @@ class NgeOrchestrator:
         from nge.backends.usage import guess_tier
 
         def _call(mdl):
+            # chat_fn may predate either keyword; drop what it does not take
+            if thinking is not None:
+                try:
+                    return self.chat_fn(messages, mdl, tools,
+                                        max_tokens=max_tokens, thinking=thinking)
+                except TypeError:
+                    pass
             try:
                 return self.chat_fn(messages, mdl, tools, max_tokens=max_tokens)
             except TypeError:
@@ -208,7 +228,8 @@ class NgeOrchestrator:
         model = self._route("slotfill")
         if self.chat_fn is None:
             return f"NGE_SHARD={index}/{shards} {base}"
-        from nge.backends.nebius import SLOT_MAX_TOKENS, ModelUnavailableError
+        from nge.backends.nebius import (SLOT_MAX_TOKENS, ModelUnavailableError,
+                                         resolve_thinking)
         prompt = (
             "Fill ONE shell command for this shard of a distributed test run.\n"
             f"Task: {task}\nPlan: {plan_names}\n"
@@ -216,7 +237,8 @@ class NgeOrchestrator:
             + (f"This shard runs EXACTLY these files, all of them and nothing "
                f"else: {' '.join(own)}\n" if own else "")
             + "The sandbox has plain pytest and no plugins: use only core "
-              "options (-q -v -x -k -m --tb= --maxfail= --junitxml=). No "
+              "output options (-q -v --tb= --junitxml=). Every test in those "
+              "files must run: no -x, --maxfail, -k, -m or deselection. No "
               "--html, no invented flags, no $(...) or backticks.\n"
               "Reply with ONLY the command."
         )
@@ -224,7 +246,8 @@ class NgeOrchestrator:
         try:
             msg = self._invoke_chat([{"role": "user", "content": prompt}],
                                     model, None, max_tokens=SLOT_MAX_TOKENS,
-                                    decision="slotfill")
+                                    decision="slotfill",
+                                    thinking=resolve_thinking("short"))
         except ModelUnavailableError as exc:
             self._emit("model_unavailable", shard=index,
                        model=getattr(exc, "model", model),
@@ -237,7 +260,14 @@ class NgeOrchestrator:
             return fallback
         cmd = llm_text.first_command(msg)
         if not cmd:
-            self._emit("slotfill_empty", shard=index)
+            # Cut by the ceiling is a budget problem, not a model that had
+            # nothing to say - live, every such reply was 256/256 reasoning.
+            if (msg or {}).get("finish_reason") == "length":
+                self._emit("slotfill_truncated", shard=index,
+                           max_tokens=SLOT_MAX_TOKENS,
+                           reasoning_tokens=(msg or {}).get("reasoning_tokens"))
+            else:
+                self._emit("slotfill_empty", shard=index)
             return fallback
         # The model is free to phrase the command, not to change the work.
         # Live, Nemotron answered `pytest packages/nodus/tests -v --gpu` for a
@@ -253,6 +283,11 @@ class NgeOrchestrator:
         if bad:
             self._emit("slotfill_bad_flags", shard=index, command=cmd,
                        flags=sorted(bad))
+            return fallback
+        narrowed = self._narrowing_pytest_flags(cmd)
+        if narrowed:
+            self._emit("slotfill_narrowed", shard=index, command=cmd,
+                       flags=sorted(narrowed))
             return fallback
         # A command the jail will refuse costs the whole shard (exit 126, zero
         # tests run). Vet it here and keep the deterministic template instead -
@@ -562,6 +597,29 @@ class NgeOrchestrator:
         return f"{install} && {body}"
 
     @staticmethod
+    def _pytest_option_names(cmd: str) -> set:
+        """Option names given to pytest - only those *after* the pytest word,
+        so the ``-m`` of ``python -m pytest`` is not read as pytest's ``-m``."""
+        from nge import policy
+        out = set()
+        for seg in policy.split_segments(cmd):
+            toks = shlex.split(seg)
+            at = next((i for i, t in enumerate(toks)
+                       if t == "pytest" or t.endswith("/pytest")), None)
+            if at is None:
+                continue
+            for tok in toks[at + 1:]:
+                if tok.startswith("-") and tok != "-":
+                    out.add(tok.split("=", 1)[0])
+        return out
+
+    @classmethod
+    def _narrowing_pytest_flags(cls, cmd: str) -> set:
+        """Options that would make a shard run less than the files it owns.
+        (A bundle such as ``-xvs`` is already refused as an unknown option.)"""
+        return cls._pytest_option_names(cmd) & _NARROWING_FLAGS
+
+    @staticmethod
     def _unknown_pytest_flags(cmd: str) -> set:
         """Options in the pytest segment that plain pytest does not know.
 
@@ -569,18 +627,8 @@ class NgeOrchestrator:
         (pytest-html, not installed) and earlier for `--gpu`. Either one makes
         pytest exit 4 without running a single test, so the shard is lost.
         """
-        from nge import policy
-        out = set()
-        for seg in policy.split_segments(cmd):
-            if "pytest" not in seg:
-                continue
-            for tok in shlex.split(seg):
-                if not tok.startswith("-") or tok == "-":
-                    continue
-                name = tok.split("=", 1)[0]
-                if name not in _PYTEST_FLAGS:
-                    out.add(name)
-        return out
+        return {n for n in NgeOrchestrator._pytest_option_names(cmd)
+                if n not in _PYTEST_FLAGS}
 
     # -- feedback loop : agents self-manage their GPU compute ----------
     def _react_to_pressure(self, sr: "ShardResult", tele: Optional[dict],
@@ -928,8 +976,11 @@ class NgeOrchestrator:
         # in a row lost fixes to `has_patch: False` while a one-line prompt to
         # the same model answered fine, so this is flakiness, not refusal.
         # One retry, then give up honestly.
-        from nge.backends.nebius import ModelUnavailableError, resolve_patch_max_tokens
+        from nge.backends.nebius import (ModelUnavailableError,
+                                         resolve_patch_max_tokens,
+                                         resolve_thinking)
         patch_cap = resolve_patch_max_tokens()
+        patch_thinking = resolve_thinking("patch")
         for attempt in (1, 2, 3, 4):
             if attempt > 1:
                 # Retrying instantly just spends the flaky window; wait it
@@ -941,7 +992,8 @@ class NgeOrchestrator:
             try:
                 msg = self._invoke_chat([{"role": "user", "content": prompt}],
                                         model, None, max_tokens=patch_cap,
-                                        decision="triage")
+                                        decision="triage",
+                                        thinking=patch_thinking)
             except ModelUnavailableError as exc:
                 self._emit("model_unavailable", test=failure.get("test"),
                            attempt=attempt, model=getattr(exc, "model", model),
@@ -955,11 +1007,15 @@ class NgeOrchestrator:
             # Hit the output ceiling: do not treat as empty-flake retry.
             if (msg or {}).get("finish_reason") == "length":
                 text = llm_text.content_of(msg)
+                reasoning = (msg or {}).get("reasoning_tokens")
                 self._emit("patch_truncated", test=failure.get("test"),
                            attempt=attempt, max_tokens=patch_cap,
                            reply_chars=len(text),
                            reply_head=text.strip()[:200],
-                           why="finish_reason=length")
+                           reasoning_tokens=reasoning,
+                           why=("reasoning used the whole budget"
+                                if reasoning and not text.strip()
+                                else "finish_reason=length"))
                 return None
             patch = llm_text.unified_diff(msg)
             if patch:

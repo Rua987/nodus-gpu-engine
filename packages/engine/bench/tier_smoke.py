@@ -60,8 +60,9 @@ def _failover_live(cfg, max_tokens: int) -> None:
     before_fo = _usage.failover_count()
     snap0 = _usage.snapshot()
 
-    def chat(messages, model, tools=None, max_tokens=None):
-        return chat_nebius(messages, model, tools, max_tokens=max_tokens)
+    def chat(messages, model, tools=None, max_tokens=None, thinking=None):
+        return chat_nebius(messages, model, tools, max_tokens=max_tokens,
+                           thinking=thinking)
 
     o = NgeOrchestrator(config=cfg, chat_fn=chat)
     print(f"[failover] live  bad={BAD_NANO.split(':')[-1]} → super")

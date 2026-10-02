@@ -46,8 +46,9 @@ def _live_chat_fn(model):
     from nge.backends.nebius import chat_nebius
     register.apply()
 
-    def chat_fn(messages, mdl=None, tools=None, max_tokens=None):
-        return chat_nebius(messages, mdl or model, tools, max_tokens=max_tokens)
+    def chat_fn(messages, mdl=None, tools=None, max_tokens=None, thinking=None):
+        return chat_nebius(messages, mdl or model, tools, max_tokens=max_tokens,
+                           thinking=thinking)
     return chat_fn
 
 
@@ -65,14 +66,19 @@ def run_orchestrated(args, live: bool) -> int:
         cfg = _cfg.load(fleet_mode=os.environ.get("NGE_FLEET_MODE") or "nebius",
                         sandbox_mode=os.environ.get("NGE_SANDBOX") or "token_factory")
         from nge.backends import usage as _usage
-        from nge.backends.nebius import resolve_max_tokens
+        from nge.backends.nebius import (resolve_max_tokens,
+                                         resolve_patch_max_tokens,
+                                         resolve_thinking)
         _usage.reset_usage()
         _usage.set_jsonl_path(cfg.out_dir / "nemotron_usage.jsonl")
         chat_fn = _live_chat_fn(cfg.nemotron_model)
         print(f"[live] Nemotron={cfg.nemotron_model}  "
               f"fleet={cfg.fleet_mode}  sandbox={cfg.sandbox_mode}")
         print(f"[live] max_tokens default={resolve_max_tokens()} "
-              f"(slot=256 patch=2048; override NGE_NEMOTRON_MAX_TOKENS)")
+              f"slot=256 patch={resolve_patch_max_tokens()}  "
+              f"reasoning short={resolve_thinking('short')} "
+              f"patch={resolve_thinking('patch')} "
+              f"(NGE_THINKING_SHORT / NGE_THINKING_PATCH)")
     else:
         cfg = _cfg.load(fleet_mode="mock", sandbox_mode="mock")
         chat_fn = None

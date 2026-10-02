@@ -14,7 +14,10 @@ TOOLS = ["bash", "read_file", "edit_file", "write_file"]
 
 
 def _reply(content):
-    return lambda messages, model, tools=None, max_tokens=None: {"content": content}
+    # same signature as the real chat_nebius: a narrower fake raises TypeError,
+    # which the fallback swallows as "no plan" and every case reads as None
+    return (lambda messages, model, tools=None, max_tokens=None, thinking=None:
+            {"content": content})
 
 
 @pytest.mark.parametrize("content,expected", [

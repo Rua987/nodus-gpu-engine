@@ -49,6 +49,7 @@ KIND_BUCKET = {
     "slotfill_off_target": "A",
     "slotfill_bad_flags": "A",
     "slotfill_rejected": "A",
+    "slotfill_narrowed": "A",
     # X — parse / format de réponse
     "patch_unparsed": "X",
     # I — infra / fleet / sandbox / env
@@ -66,7 +67,14 @@ KIND_BUCKET = {
     # Q — patch produit mais rejeté à la vérif (signal utile, hors A/X/I/F)
     "fix_rejected": "Q",
     "fix_regression": "Q",
+    # T — réponse coupée par max_tokens (raisonnement compris). Absent avant
+    # 2026-10-01 : un patch_truncated n'était compté nulle part, donc un run
+    # live où tout était tronqué ressortait « A=0 X=0 F=0 ».
+    "slotfill_truncated": "T",
+    "patch_truncated": "T",
 }
+
+BUCKETS = ("A", "X", "I", "F", "T", "Q")
 
 
 def _orch(out: Path, chat_fn=None) -> NgeOrchestrator:
@@ -182,6 +190,24 @@ def probe_patch_headerless(out: Path):
     return o.events, "X"
 
 
+def _budget_spent(m, mo=None, t=None):
+    # the live shape: every token went to reasoning, nothing reached content
+    return {"content": "", "finish_reason": "length", "reasoning_tokens": 256}
+
+
+def probe_slotfill_truncated(out: Path):
+    o = _orch(out, chat_fn=_budget_spent)
+    handlers.reset_state(o.config)
+    o.run({**SCENARIO, "shards": 2, "auto_fix": False})
+    return o.events, "T"
+
+
+def probe_patch_truncated(out: Path):
+    o = _orch(out, chat_fn=_budget_spent)
+    o._propose_patch({"test": "t.py::test_a", "error": "e"}, "m")
+    return o.events, "T"
+
+
 PROBES = [
     ("baseline_mock", probe_baseline),
     ("slotfill_off_target", probe_slotfill_off_target),
@@ -192,6 +218,8 @@ PROBES = [
     ("patch_retry", probe_patch_retry),
     ("patch_prose", probe_patch_prose),
     ("patch_headerless", probe_patch_headerless),
+    ("slotfill_truncated", probe_slotfill_truncated),
+    ("patch_truncated", probe_patch_truncated),
 ]
 
 
@@ -207,9 +235,9 @@ def _run_live(out: Path):
     _usage.reset_usage()
     _usage.set_jsonl_path(cfg.out_dir / "nemotron_usage.jsonl")
 
-    def chat_fn(messages, mdl=None, tools=None, max_tokens=None):
+    def chat_fn(messages, mdl=None, tools=None, max_tokens=None, thinking=None):
         return chat_nebius(messages, mdl or cfg.nemotron_model, tools,
-                           max_tokens=max_tokens)
+                           max_tokens=max_tokens, thinking=thinking)
 
     o = NgeOrchestrator(config=cfg, chat_fn=chat_fn)
     handlers.reset_state(o.config)
@@ -231,8 +259,8 @@ def main() -> int:
               "Re-run with --i-know-cost.", file=sys.stderr)
         return 2
 
-    totals = Counter()
     rows = []
+    live = None
     hits = 0
 
     print("=== sondes déterministes (0b) ===\n")
@@ -243,7 +271,6 @@ def main() -> int:
             out.mkdir()
             events, expect = fn(out)
             dist = _classify(events)
-            totals.update(dist)
             # la sonde « réussit » si le bucket attendu apparaît
             ok = dist[expect] > 0
             hits += ok
@@ -253,8 +280,7 @@ def main() -> int:
                   f"buckets={dict(dist)}  kinds={kinds[:8]}")
             rows.append({
                 "probe": name, "expect": expect, "hit": ok,
-                "A": dist["A"], "X": dist["X"], "I": dist["I"],
-                "F": dist["F"], "Q": dist["Q"],
+                **{b: dist[b] for b in BUCKETS},
                 "kinds": " ".join(kinds),
             })
 
@@ -265,42 +291,49 @@ def main() -> int:
                 live_out.mkdir()
                 events = _run_live(live_out)
                 dist = _classify(events)
-                totals.update(dist)
+                live = dist
                 kinds = [e["kind"] for e in events if e.get("kind") in KIND_BUCKET]
                 print(f"live buckets={dict(dist)}")
                 print(f"live kinds={kinds}")
                 rows.append({
                     "probe": "live_nemotron", "expect": "-", "hit": True,
-                    "A": dist["A"], "X": dist["X"], "I": dist["I"],
-                    "F": dist["F"], "Q": dist["Q"],
+                    **{b: dist[b] for b in BUCKETS},
                     "kinds": " ".join(kinds),
                 })
             except Exception as exc:
                 print(f"live FAILED: {type(exc).__name__}: {exc}")
 
     print(f"\n=== couverture sondes: {hits}/{len(PROBES)} ont émis le bucket attendu ===")
-    print("\n=== cumul events classés ===")
-    for k in ("A", "X", "I", "F", "Q"):
-        print(f"  {k}: {totals[k]}")
+    print("(sondes plantées : elles prouvent le classifieur, ce ne sont pas "
+          "des fréquences — docs/MEASURE_BEFORE_LEVER.md)")
 
-    core = totals["A"] + totals["X"] + totals["I"] + totals["F"]
-    if core == 0:
-        decision = "Aucun event A/X/I/F — instrumentation ou sondes cassées"
+    # Décider sur les sondes reviendrait à mesurer ce qu'on a planté : la
+    # version précédente sommait sondes + baseline mock et concluait « I ».
+    # sandbox_env est informatif (un par run), pas une panne.
+    if live is None:
+        decision = "pas de --live : aucun signal terrain, pas de décision de levier"
     else:
-        # ignore Q pour la décision de levier 0b
-        top = max(("A", "X", "I", "F"), key=lambda k: totals[k])
-        share = 100 * totals[top] / core
-        levers = {
-            "A": "Go harnais / slot-fill (args), pas le 324M",
-            "X": "Go parse / format de réponse (diff, mission)",
-            "I": "Go engine infra (fleet, sandbox, jail déjà partiellement là)",
-            "F": "Go flakiness modèle (retry déjà à 4 — mesurer avant d'augmenter)",
-        }
-        print(f"\n  dominant A/X/I/F: {top} ({share:.0f}% du cœur)")
-        decision = levers[top]
-        # honesté: les sondes A/X/F sont plantées — le baseline I est le seul « naturel »
-        print("  (rappel: A/X/F viennent surtout des sondes plantées; "
-              "I baseline_mock = signal naturel mock)")
+        field = {b: live[b] for b in ("A", "X", "F", "T")}
+        field["I"] = max(0, live["I"] - 1)          # retire sandbox_env
+        print("\n=== live seul (signal terrain, n=1 run) ===")
+        for k in ("A", "X", "I", "F", "T", "Q"):
+            print(f"  {k}: {field.get(k, live[k])}")
+        core = sum(field.values())
+        if core == 0:
+            decision = ("live sans panne A/X/I/F/T"
+                        + (f" ; Q={live['Q']} -> boucle de vérif" if live["Q"] else ""))
+        else:
+            top = max(field, key=lambda k: field[k])
+            levers = {
+                "A": "Go harnais / slot-fill (args), pas le 324M",
+                "X": "Go parse / format de réponse (diff, mission)",
+                "I": "Go engine infra (fleet, sandbox, jail)",
+                "F": "Go flakiness modèle (retry déjà à 4 — mesurer avant d'augmenter)",
+                "T": "Go budget de tokens (raisonnement on/off, max_tokens), pas des retries",
+            }
+            print(f"\n  dominant: {top} ({100 * field[top] / core:.0f}%) — n=1, "
+                  f"relancer avant d'en faire une majorité stable")
+            decision = levers[top]
 
     print(f"\nDécision: {decision}")
 

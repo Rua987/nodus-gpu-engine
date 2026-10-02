@@ -18,7 +18,11 @@ BACKEND_NAME = "nebius"
 
 DEFAULT_MAX_TOKENS = 2048
 SLOT_MAX_TOKENS = 256
-PATCH_MAX_TOKENS = 2048  # default; override with NGE_PATCH_MAX_TOKENS
+# Patches reason first (see THINKING_DEFAULTS), and the reasoning counts
+# against this ceiling: at 2048, 9/9 live patch calls were cut before a
+# single diff line (bench/thinking_ab.py, 2026-10-01). Override with
+# NGE_PATCH_MAX_TOKENS.
+PATCH_MAX_TOKENS = 8192
 
 
 class ModelUnavailableError(RuntimeError):
@@ -81,8 +85,51 @@ def resolve_patch_max_tokens() -> int:
     return PATCH_MAX_TOKENS
 
 
+_ON = ("1", "on", "true", "yes")
+_OFF = ("0", "off", "false", "no")
+
+# Per call class, whether Nemotron 3 may reason before answering. ``None``
+# sends nothing and leaves the model's own default (Super reasons by default).
+# "short" = replies capped at SLOT_MAX_TOKENS (slot-fill, mission, plan
+# fallback); "patch" = unified diffs. Measured live, 3 runs per arm on real
+# Token Factory sandboxes (bench/thinking_ab.py, docs/FIX_LOOP.md):
+#   short, reasoning on:  0/6 slot-fills usable (256/256 reasoning, empty)
+#   short, reasoning off: 12/12 usable
+#   patch, off:           9/9 parsed, but 4/9 cited code that is not there
+#   patch, on @8192:      7/9 parsed, 0 invented context, the only verified fix
+THINKING_DEFAULTS = {"short": False, "patch": True}
+
+
+def resolve_thinking(call_class: str) -> Optional[bool]:
+    """Reasoning on/off for a call class; ``NGE_THINKING_<CLASS>`` overrides
+    (``on`` / ``off``, or ``model`` to send nothing and keep the model's own).
+
+    Reasoning tokens count against ``max_tokens`` and come back outside
+    ``content``. Live, slot-fill at 256 returned 256 reasoning tokens and an
+    empty reply on every call - the budget was spent before the answer began.
+    """
+    raw = (os.environ.get(f"NGE_THINKING_{call_class.upper()}") or "").strip().lower()
+    if raw in _ON:
+        return True
+    if raw in _OFF:
+        return False
+    if raw == "model":
+        return None
+    return THINKING_DEFAULTS.get(call_class)
+
+
+def _reasoning_tokens(usage: dict) -> Optional[int]:
+    details = usage.get("completion_tokens_details") or {}
+    val = details.get("reasoning_tokens")
+    try:
+        return None if val is None else int(val)
+    except (TypeError, ValueError):
+        return None
+
+
 def _chat_nebius_http(messages: list, model_id: str, tools: Optional[list],
-                      url: str, api_key: str, max_tokens: int) -> dict:
+                      url: str, api_key: str, max_tokens: int,
+                      thinking: Optional[bool] = None) -> dict:
     """POST chat/completions with max_tokens; record usage; return message."""
     import nodus_backends as nb  # vendored normaliser only
 
@@ -94,6 +141,10 @@ def _chat_nebius_http(messages: list, model_id: str, tools: Optional[list],
     }
     if tools:
         payload["tools"] = tools
+    if thinking is not None:
+        # A system "/no_think" is ignored by Token Factory's Nemotron 3; the
+        # chat template switch is what actually stops the reasoning.
+        payload["chat_template_kwargs"] = {"enable_thinking": bool(thinking)}
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -127,18 +178,23 @@ def _chat_nebius_http(messages: list, model_id: str, tools: Optional[list],
             pout = int(pout)
         except (TypeError, ValueError):
             pout = None
-    _usage.record(model_id, pin, pout, max_tokens)
+    reasoning = _reasoning_tokens(usage)
+    _usage.record(model_id, pin, pout, max_tokens, reasoning_tokens=reasoning,
+                  thinking=thinking)
     msg = nb._normalize_openai_message(data)
     choices = data.get("choices") or []
     if choices:
         fr = choices[0].get("finish_reason")
         if fr:
             msg["finish_reason"] = fr
+    if reasoning is not None:
+        msg["reasoning_tokens"] = reasoning
     return msg
 
 
 def chat_nebius(messages: list, model: str, tools: Optional[list] = None,
-                max_tokens: Optional[int] = None) -> dict:
+                max_tokens: Optional[int] = None,
+                thinking: Optional[bool] = None) -> dict:
     """One chat turn against Nebius Token Factory. Returns an Ollama-style message."""
     assert_nebius_track(model)
     cfg = _cfg.load()
@@ -151,7 +207,7 @@ def chat_nebius(messages: list, model: str, tools: Optional[list] = None,
     cap = resolve_max_tokens(max_tokens)
     return _chat_nebius_http(
         messages, nebius_model_id(model), tools,
-        cfg.nebius_chat_url, api_key, cap,
+        cfg.nebius_chat_url, api_key, cap, thinking=thinking,
     )
 
 
@@ -172,7 +228,8 @@ def nemotron_plan_fallback(task: str, allowed_tools: List[str]) -> Optional[List
     try:
         msg = chat_nebius([{"role": "user", "content": prompt}],
                           _cfg.load().nemotron_model, None,
-                          max_tokens=SLOT_MAX_TOKENS)
+                          max_tokens=SLOT_MAX_TOKENS,
+                          thinking=resolve_thinking("short"))
     except Exception:
         return None
 

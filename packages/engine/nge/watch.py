@@ -145,9 +145,16 @@ class ConsoleWatch:
                     f"plan gate  autofix OFF  plan={f.get('plan')}  "
                     f"(need edit_file|write_file)", _YELLOW))
         elif kind == "patch_truncated":
+            rsn = f.get("reasoning_tokens")
             self._log.append(self._c(
                 f"patch truncated  {f.get('test')}  "
-                f"(max_tokens={f.get('max_tokens')})", _YELLOW))
+                f"(max_tokens={f.get('max_tokens')}"
+                + (f", reasoning={rsn}" if rsn else "") + ")", _YELLOW))
+        elif kind == "slotfill_truncated":
+            rsn = f.get("reasoning_tokens")
+            self._log.append(self._c(
+                f"slot-fill shard {f.get('shard')} cut at {f.get('max_tokens')} tokens"
+                + (f" (reasoning={rsn})" if rsn else "") + " -> template", _YELLOW))
         elif kind == "model_unavailable":
             self._log.append(self._c(
                 f"model unavailable  {f.get('model')}  "

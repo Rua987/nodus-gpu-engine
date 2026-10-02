@@ -2,7 +2,8 @@
 
 Mesure la distribution, pas un score de run. Coûte des appels réels — exige
 ``--i-know-cost``. Plafond max_tokens = patch via chat_nebius
-(``NGE_PATCH_MAX_TOKENS`` or 2048).
+(``NGE_PATCH_MAX_TOKENS``, défaut ``PATCH_MAX_TOKENS``) et raisonnement
+du chemin patch (``NGE_THINKING_PATCH``), comme l'orchestrateur.
 
     python -m bench.retry_distribution --i-know-cost
 """
@@ -15,7 +16,8 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from nge import config as _cfg, llm_text
 from nge.orchestrator import NgeOrchestrator
 from nge.backends import usage as _usage
-from nge.backends.nebius import chat_nebius, resolve_patch_max_tokens
+from nge.backends.nebius import (chat_nebius, resolve_patch_max_tokens,
+                                 resolve_thinking)
 
 MAX_ATTEMPTS, TRIALS, BACKOFF = 4, 5, 2.0
 
@@ -65,7 +67,8 @@ def main() -> int:
             try:
                 msg = chat_nebius([{"role": "user", "content": prompt}],
                                   cfg.nemotron_model, None,
-                                  max_tokens=patch_cap)
+                                  max_tokens=patch_cap,
+                                  thinking=resolve_thinking("patch"))
             except Exception:
                 continue
             if llm_text.unified_diff(msg):

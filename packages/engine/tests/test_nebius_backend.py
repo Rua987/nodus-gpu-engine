@@ -139,7 +139,9 @@ def test_chat_nebius_503_is_model_unavailable(monkeypatch):
 def test_resolve_patch_max_tokens_env(monkeypatch):
     from nge.backends import nebius
     monkeypatch.delenv("NGE_PATCH_MAX_TOKENS", raising=False)
-    assert nebius.resolve_patch_max_tokens() == 2048
+    # 8192, not 2048: patches reason first, and at 2048 every live patch call
+    # was cut before a diff line (bench/thinking_ab.py, 2026-10-01)
+    assert nebius.resolve_patch_max_tokens() == 8192
     monkeypatch.setenv("NGE_PATCH_MAX_TOKENS", "4096")
     assert nebius.resolve_patch_max_tokens() == 4096
 
