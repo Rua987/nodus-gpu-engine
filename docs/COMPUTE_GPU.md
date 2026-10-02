@@ -1,7 +1,7 @@
 # Nebius Compute GPU — PLAN (avant tout spawn)
 
 > **Statut : PLAN ONLY.** Aucune VM GPU tant qu’il n’y a pas un **Go budget** séparé.  
-> Dernière écriture : **2026-09-10**.  
+> Dernière écriture : **2026-10-01** (Phase 0 : outillage fait, credentials à fournir).  
 > Lié : `ENGINE_BACKLOG.md` (M1/M2/M13) · `RISKS_TO_STRENGTHS.md` · `AUTORESEARCH_VISION.md` (perso).
 
 Objectif : `probe_kind=nvidia-smi` sur un **device NVIDIA réel**, pour que heal + placement deviennent une **preuve**, pas seulement un mock.
@@ -28,7 +28,7 @@ Analogie : Contree = **atelier** où on répare le code ; Compute = **thermomèt
 - [x] Heal gated si pas `has_real_gpu_metrics`
 - [x] Mock filmable + live Contree (cpu-fallback)
 
-Dernier check creds (typique chez toi) : tout `false` → `ready_for_wire=false`.
+Dernier check creds (2026-10-01) : SDK OK, auth / projet / subnet absents → `ready_for_wire=false`.
 
 ---
 
@@ -37,12 +37,33 @@ Dernier check creds (typique chez toi) : tout `false` → `ready_for_wire=false`
 ### Phase 0 — Prérequis (€0 machine, temps humain)
 **But :** pouvoir dire « auth Compute OK » sans créer de VM.
 
-1. `pip install nebius` (SDK)
-2. Service account + fichier clé **ou** `NEBIUS_IAM_TOKEN`
-3. Renseigner : `NEBIUS_PROJECT_ID` (ou folder), `NEBIUS_SUBNET_ID`
-4. Relancer : `python -c "from nge.fleet.compute import check_credentials; print(...)"`  
-   → viser `ready_for_wire=true`, `spawn_allowed` reste **false**
-5. Noter région / quotas GPU console
+1. ~~`pip install nebius` (SDK)~~ — **fait** 2026-10-01 (`nebius` 0.6.17 sur la machine
+   de dev ; ajout pur, aucun paquet existant mis à jour). Dépendance optionnelle,
+   pas dans `requirements.txt`.
+2. **Auth** — une des trois, dans l'ordre où le SDK les lit (vérifié dans son code) :
+   - fichier de credentials de service account :
+     `packages/engine/.nebius_sa_credentials.json` ou `NEBIUS_SA_CREDENTIALS_FILE`.
+     Format attendu par le SDK : `{"subject-credentials": {"alg": "RS256",
+     "private-key": "<PEM>", "kid": "<id de la clé publique>", "iss": "<id du SA>",
+     "sub": "<id du SA>"}}` (`iss` = `sub`). Le preflight le **valide hors ligne**
+     (JSON, RS256, iss = sub, clé PEM lisible) et dit pourquoi s'il est refusé.
+   - profil du CLI `nebius` (`~/.nebius/config.yaml`) ;
+   - `NEBIUS_IAM_TOKEN` — la seule variable d'environnement que le SDK lit.
+     (`NEBIUS_SA_KEY_FILE`, `YC_SERVICE_ACCOUNT_KEY_FILE`, `NEBIUS_FOLDER_ID` de
+     l'ancien plan ne sont lus par rien : retirés.)
+3. **Projet AI Cloud** : `NEBIUS_COMPUTE_PROJECT_ID` ou
+   `packages/engine/.nebius_compute_project_id`. **Pas** `NEBIUS_PROJECT_ID` :
+   celui-ci est le projet **Token Factory** (`aiproject-…`) qu'utilisent déjà les
+   sandboxes du chemin `--live` ; l'ancien plan disait d'y mettre l'id Compute,
+   ce qui aurait cassé `--live`. Un id `aiproject-…` est refusé avec la raison.
+4. Subnet (`NEBIUS_SUBNET_ID` ou `.nebius_compute_subnet_id`) — signalé, mais
+   requis seulement en Phase 2.
+5. Vérifier : `python -m nge.fleet.compute` (sortie 0 = prêt) →
+   `ready_for_wire=True`, `spawn_allowed` reste **False**. Aucun appel API.
+6. Noter région / quotas GPU console.
+
+Tous ces fichiers `.nebius_*` sont dans `.gitignore` (racine et `packages/engine/`).
+Tests : `tests/test_compute_phase0.py` (clé RSA jetable, aucun réseau).
 
 **Go pour Phase 0 :** oui quand tu as 30–60 min + accès console Nebius.  
 **Pas de spawn.**

@@ -1,6 +1,7 @@
 # secrets / local config
 .env
 .env.*
+!.env.example
 .nebius_api_key
 .token_factory_api_key
 
@@ -9,3 +10,6 @@ out/
 *.egg-info/
 .pytest_cache/
 __pycache__/
+
+# Compute: credentials file, project and subnet ids (never commit)
+.nebius_*

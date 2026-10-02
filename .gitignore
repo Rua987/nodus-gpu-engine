@@ -17,6 +17,7 @@ env/
 # --- secrets / local config ---
 .env
 .env.*
+!.env.example
 *.nebius_api_key
 .nebius_api_key
 .token_factory_api_key
@@ -47,3 +48,6 @@ Thumbs.db
 .nodus_plan_ckpt
 .nebius_api_key
 .token_factory_api_key
+
+# any local Nebius config/credentials file
+.nebius_*
