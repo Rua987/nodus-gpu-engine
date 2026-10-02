@@ -71,6 +71,8 @@ _NARROWING_FLAGS = frozenset("""
 --pdb --trace
 """.split())
 
+_TB_STYLES = frozenset({"auto", "long", "short", "line", "native", "no"})
+
 _FIX_HINTS = [
     ("not unique", "Make `old_string` unique or pass replace_all=True."),
     ("out of order", "Sort plan names to match executor step order before asserting."),
@@ -237,7 +239,8 @@ class NgeOrchestrator:
             + (f"This shard runs EXACTLY these files, all of them and nothing "
                f"else: {' '.join(own)}\n" if own else "")
             + "The sandbox has plain pytest and no plugins: use only core "
-              "output options (-q -v --tb= --junitxml=). Every test in those "
+              "output options (-q, -v, --tb=short, --junitxml=report.xml). "
+              "Every test in those "
               "files must run: no -x, --maxfail, -k, -m or deselection. No "
               "--html, no invented flags, no $(...) or backticks.\n"
               "Reply with ONLY the command."
@@ -597,21 +600,23 @@ class NgeOrchestrator:
         return f"{install} && {body}"
 
     @staticmethod
-    def _pytest_option_names(cmd: str) -> set:
-        """Option names given to pytest - only those *after* the pytest word,
-        so the ``-m`` of ``python -m pytest`` is not read as pytest's ``-m``."""
+    def _pytest_args(cmd: str) -> List[str]:
+        """Arguments given to pytest - only those *after* the pytest word, so
+        the ``-m`` of ``python -m pytest`` is not read as pytest's ``-m``."""
         from nge import policy
-        out = set()
+        out: List[str] = []
         for seg in policy.split_segments(cmd):
             toks = shlex.split(seg)
             at = next((i for i, t in enumerate(toks)
                        if t == "pytest" or t.endswith("/pytest")), None)
-            if at is None:
-                continue
-            for tok in toks[at + 1:]:
-                if tok.startswith("-") and tok != "-":
-                    out.add(tok.split("=", 1)[0])
+            if at is not None:
+                out += toks[at + 1:]
         return out
+
+    @classmethod
+    def _pytest_option_names(cls, cmd: str) -> set:
+        return {t.split("=", 1)[0] for t in cls._pytest_args(cmd)
+                if t.startswith("-") and t != "-"}
 
     @classmethod
     def _narrowing_pytest_flags(cls, cmd: str) -> set:
@@ -627,8 +632,24 @@ class NgeOrchestrator:
         (pytest-html, not installed) and earlier for `--gpu`. Either one makes
         pytest exit 4 without running a single test, so the shard is lost.
         """
-        return {n for n in NgeOrchestrator._pytest_option_names(cmd)
-                if n not in _PYTEST_FLAGS}
+        bad = {n for n in NgeOrchestrator._pytest_option_names(cmd)
+               if n not in _PYTEST_FLAGS}
+        # A known option with an unusable value is just as fatal. Live, the
+        # model copied the prompt's own placeholder `--tb=` verbatim: pytest
+        # exited 4 on that shard, ran nothing, and two seeded bugs went unseen.
+        args = NgeOrchestrator._pytest_args(cmd)
+        for i, tok in enumerate(args):
+            if not tok.startswith("-"):
+                continue
+            name, eq, val = tok.partition("=")
+            if eq and not val:
+                bad.add(tok)
+            if name == "--tb":
+                if not eq:
+                    val = args[i + 1] if i + 1 < len(args) else ""
+                if val not in _TB_STYLES:
+                    bad.add(f"--tb={val}")
+        return bad
 
     # -- feedback loop : agents self-manage their GPU compute ----------
     def _react_to_pressure(self, sr: "ShardResult", tele: Optional[dict],

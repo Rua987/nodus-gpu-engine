@@ -283,3 +283,37 @@ def test_measured_defaults():
 def test_model_keyword_sends_nothing_even_over_a_default(monkeypatch):
     monkeypatch.setenv("NGE_THINKING_PATCH", "model")
     assert nebius.resolve_thinking("patch") is None
+
+
+# -- a known option with an unusable value is refused too ------------------------
+
+@pytest.mark.parametrize("opt", ["--tb=", "--junitxml=", "--tb=verbose", "--tb"])
+def test_option_without_a_usable_value_falls_back(tmp_path, opt):
+    """Live: the model copied the prompt's placeholder `--tb=`; pytest exited 4
+    on that shard and ran nothing."""
+    own = ["packages/nodus/tests/test_a.py"]
+    cmd = f"pytest {own[0]} -q -v {opt}"
+    o = _orch(tmp_path, lambda m, model=None, tools=None, max_tokens=None:
+              {"content": cmd})
+    assert o._shard_command("t", ["bash"], "packages/nodus/tests", 0, 1, own=own) != cmd
+    assert [e for e in o.events if e["kind"] == "slotfill_bad_flags"]
+
+
+@pytest.mark.parametrize("opt", ["--tb=short", "--tb short", "--tb=no",
+                                 "--junitxml=report.xml"])
+def test_option_with_a_usable_value_is_kept(tmp_path, opt):
+    own = ["packages/nodus/tests/test_a.py"]
+    cmd = f"pytest -q {opt} {own[0]}"
+    o = _orch(tmp_path, lambda m, model=None, tools=None, max_tokens=None:
+              {"content": cmd})
+    assert o._shard_command("t", ["bash"], "packages/nodus/tests", 0, 1, own=own) == cmd
+
+
+def test_prompt_shows_values_not_placeholders(tmp_path):
+    seen = []
+
+    def chat_fn(messages, model=None, tools=None, max_tokens=None):
+        seen.append(messages[-1]["content"])
+        return {"content": ""}
+    _orch(tmp_path, chat_fn)._shard_command("t", ["bash"], "x", 0, 1)
+    assert "--tb=short" in seen[0] and "--tb= " not in seen[0]
