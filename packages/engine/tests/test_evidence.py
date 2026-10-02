@@ -64,7 +64,8 @@ def test_every_cited_dated_csv_is_versioned():
                 assert (EVIDENCE / name).is_file(), f"{doc.name}: {name}"
 
 
-@pytest.mark.parametrize("name", ["thinking_ab_20261001.csv", "thinking_ab_20261001_r2.csv"])
+@pytest.mark.parametrize("name", ["thinking_ab_20261001.csv", "thinking_ab_20261001_r2.csv",
+                                  "thinking_ab_bugbench_20261001.csv"])
 def test_bench_rows_point_at_kept_run_logs(name):
     rows = list(csv.DictReader((EVIDENCE / name).open(encoding="utf-8")))
     assert rows
@@ -139,3 +140,21 @@ def test_the_one_verified_bench_patch_is_kept():
     v = _kinds(ev, "fix_verified")
     assert len(v) == 1 and v[0]["test"].endswith("test_drive_underscore_prefix")
     assert v[0]["regressions"] == 0
+
+
+def test_bugbench_series_every_verified_fix_is_real():
+    """The claim in docs/FIX_LOOP.md: on seeded bugs, every patch the loop
+    verified also passed the held-out cases, and none broke anything."""
+    rows = list(csv.DictReader((EVIDENCE / "thinking_ab_bugbench_20261001.csv")
+                               .open(encoding="utf-8")))
+    assert len(rows) == 12
+    for r in rows:
+        assert r["target"] == "bugbench" and r["sandbox"] == "token_factory"
+        assert r["holdout_ok"] == r["verified"], r["out"]
+        assert r["regression"] == "0", r["out"]
+    by = {}
+    for r in rows:
+        by.setdefault(r["arm"], 0)
+        by[r["arm"]] += int(r["verified"])
+    assert by == {"baseline": 12, "short_off": 15, "short_off_patch_off": 16,
+                  "short_off_patch_8k": 16}

@@ -1,0 +1,13 @@
+arm,sandbox,error,wall_s,unique_failures,slot_calls,slot_ok,slot_truncated,slot_empty,slot_off_target,slot_bad,fix_tried,patch_produced,patch_truncated,patch_unparsed,patch_empty,context_invented,verified,verified_tests_only,rejected,regression,calls,prompt_tokens,completion_tokens,reasoning_tokens,usd_est,target,holdout_ok,out,round,run_dir
+baseline,token_factory,,102.4,6,2,0,1,0,1,0,6,5,1,0,0,0,5,0,0,0,8,4440,7343,6654,0.00794,bugbench,5,ab/bb_baseline_1.md,1,baseline_1790924042
+short_off,token_factory,,79.3,6,2,2,0,0,0,0,6,6,0,0,0,1,5,0,0,0,8,4486,5125,4198,0.00596,bugbench,5,ab/bb_short_off_1.md,1,short_off_1790924147
+short_off_patch_off,token_factory,,60.4,6,2,2,0,0,0,0,6,6,0,0,0,0,5,0,1,0,8,4486,780,0,0.00205,bugbench,5,ab/bb_short_off_patch_off_1.md,1,short_off_patch_off_1790924229
+short_off_patch_8k,token_factory,,79.1,6,2,2,0,0,0,0,6,6,0,0,0,1,5,0,0,0,8,4487,6713,5764,0.00739,bugbench,5,ab/bb_short_off_patch_8k_1.md,1,short_off_patch_8k_1790924292
+baseline,token_factory,,59.0,4,2,1,0,0,1,0,4,3,1,0,0,0,2,0,1,0,6,2973,5026,4634,0.00542,bugbench,2,ab/bb_baseline_2.md,2,baseline_1790924374
+short_off,token_factory,,75.0,6,2,2,0,0,0,0,6,5,1,0,0,0,5,0,0,0,8,4486,5384,4608,0.00619,bugbench,5,ab/bb_short_off_2.md,2,short_off_1790924435
+short_off_patch_off,token_factory,,59.0,6,2,2,0,0,0,0,6,6,0,0,0,0,6,0,0,0,8,4486,821,0,0.00208,bugbench,6,ab/bb_short_off_patch_off_2.md,2,short_off_patch_off_1790924512
+short_off_patch_8k,token_factory,,86.8,6,2,2,0,0,0,0,6,6,0,0,0,0,6,0,0,0,8,4487,7011,5938,0.00766,bugbench,6,ab/bb_short_off_patch_8k_2.md,2,short_off_patch_8k_1790924575
+baseline,token_factory,,79.2,6,2,0,1,0,1,0,6,5,1,0,0,0,5,0,0,0,8,4440,5759,5163,0.00652,bugbench,5,ab/bb_baseline_3.md,3,baseline_1790924665
+short_off,token_factory,,74.0,6,2,2,0,0,0,0,6,5,1,0,0,0,5,0,0,0,8,4487,5695,5069,0.00647,bugbench,5,ab/bb_short_off_3.md,3,short_off_1790924747
+short_off_patch_off,token_factory,,71.9,6,2,2,0,0,0,0,6,6,0,0,0,0,5,0,1,0,8,4486,780,0,0.00205,bugbench,5,ab/bb_short_off_patch_off_3.md,3,short_off_patch_off_1790924824
+short_off_patch_8k,token_factory,,71.2,6,2,2,0,0,0,0,6,6,0,0,0,1,5,0,0,0,8,4486,5190,4275,0.00602,bugbench,5,ab/bb_short_off_patch_8k_3.md,3,short_off_patch_8k_1790924899

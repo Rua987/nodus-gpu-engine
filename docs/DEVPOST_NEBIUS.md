@@ -129,7 +129,7 @@ We built the missing loop on **Nebius Token Factory + NVIDIA Nemotron**, with a 
 - **Contree ≠ GPU device.** Efficiency=0 on CPU used to trigger phantom migrations. Heal now requires real GPU metrics.  
 - **Patches that fix one test and break others.** Keep only suite-green diffs.  
 - **Flaky / truncated model replies.** Caps, `patch_truncated`, bounded retries — not an infinite Super bill.
-- **The model spent its budget thinking.** Live patches came back empty at 2048 tokens: Nemotron 3 reasons inside the same `max_tokens`, and 99% of output was reasoning. We measured reasoning on/off per call class on real sandboxes (`bench/thinking_ab.py`): short replies went from 0/6 to 12/12 usable with reasoning off; patches keep reasoning (off, 4/9 diffs cited code that does not exist) with an 8192 ceiling. Measuring it also exposed the model adding `-x` to shard commands, which hid failures and got good patches rejected — now refused.
+- **The model spent its budget thinking.** Live patches came back empty at 2048 tokens: Nemotron 3 reasons inside the same `max_tokens`, and 99% of output was reasoning. We measured reasoning on/off per call class on real sandboxes (`bench/thinking_ab.py`): short replies went from 0/6 to 12/12 usable with reasoning off; patches keep reasoning with an 8192 ceiling. On six seeded, OS-independent bugs re-checked against held-out cases the model never saw (`bench/bugbench`), every patch the loop verified was a real fix and none broke a test: 16/18 with reasoning on or off, 12/16 with the old setting. Measuring it also exposed the model adding `-x` to shard commands (hid failures, got good patches rejected) and copying the prompt's `--tb=` placeholder (a shard that ran nothing) — both now refused.
 
 ---
 

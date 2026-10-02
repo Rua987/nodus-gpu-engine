@@ -209,7 +209,7 @@ Short replies (slot-fill), all runs of both series:
 | on (model default) | **0/6** — 256/256 tokens of reasoning, empty reply |
 | off | **12/12** |
 
-Patches (second series, after the two fixes below):
+Patches on the vendored suite (second series, after the two fixes below):
 
 | reasoning · ceiling | diffs produced | cut | invented context | verified | output tokens | $ est. |
 |---|---|---|---|---|---|---|
@@ -217,17 +217,61 @@ Patches (second series, after the two fixes below):
 | off · 2048 | 9/9 | 0 | **4** | 0 | 2 912 | 0.010 |
 | on · 8192 | 7/9 | 2 | 0 | **1** | 61 845 | 0.063 |
 
-Defaults chosen from this: **short replies without reasoning, patches with
-reasoning and an 8192 ceiling** (`THINKING_DEFAULTS`, `PATCH_MAX_TOKENS` in
-`nge/backends/nebius.py`). Without reasoning, 4 of 9 diffs cited code that is
-not in the file and were refused before a sandbox was spent; with it, none did,
-and the one verified fix of the whole bench came from that arm — it made
+On that set, without reasoning 4 of 9 diffs cited code that is not in the file;
+with it none did, and the one verified fix came from that arm — it made
 `repair_llm_file_path` split Windows paths with `ntpath` on Linux too, target
-fixed, zero regressions on the whole suite. `NGE_THINKING_PATCH=off` stays the
-cheap option: every reply parsed, about a sixth of the cost (a twentieth of
-the output tokens), two to three times faster per run.
+fixed, zero regressions. But those five failures are Windows-only tests (see
+the caveats below), so "verified" could not separate the arms there.
 
-Measuring this surfaced two bugs that starved slot-fill had been hiding:
+### Re-measured on bugs with a known fix (`--target bugbench`)
+
+`bench/bugbench/` holds three small stdlib modules with six seeded bugs — a
+percentage divided by 10, the last cart item skipped, a slug that keeps runs of
+dashes, an ellipsis added when nothing was cut, the 400-year leap rule, a
+signed day difference — plus tests that already pass, to catch over-broad
+fixes. Nothing in it depends on the OS. `bench/bugbench_holdout/` is never
+shipped to a sandbox nor shown to the model: 20 more cases and a reference fix.
+A verified patch is re-applied (with `patch-ng`, as in the sandbox) and run
+against the held-out cases of its bug, so a patch that hard-codes the visible
+example counts as verified but not as correct. `tests/test_bugbench.py` keeps
+the bench honest: exactly the six seeded tests fail, the reference passes
+everything, a hard-coded answer is rejected.
+
+Real Token Factory sandboxes, all six bugs attempted each run, 3 interleaved
+runs per arm (18 attempts):
+
+| arm | slot-fill | diffs | cut | invented context | verified | held-out correct | regressions | output tokens | $ est. |
+|---|---|---|---|---|---|---|---|---|---|
+| before (model default, 2048) | 1/6 | 13/16 | 3 | 0 | 12 | 12 | 0 | 18 128 | 0.020 |
+| short off · patch on 2048 | 6/6 | 16/18 | 2 | 1 | 15 | 15 | 0 | 16 204 | 0.019 |
+| short off · patch off | 6/6 | 18/18 | 0 | 0 | **16** | **16** | 0 | **2 381** | **0.006** |
+| short off · patch on 8192 | 6/6 | 18/18 | 0 | 2 | **16** | **16** | 0 | 18 914 | 0.021 |
+
+Every verified patch, in every arm, was a real fix by the held-out cases, and
+none broke a test — on failures with a correct answer, the verifier's "verified"
+means what it says. Five of the six bugs were fixed in every run that saw
+them, with one exception (a wrong `truncate` fix in the old setting). The sixth, `slugify`, is the only one whose fix
+spans several lines, and it decides the table: cut by the ceiling 5 times at
+2048; fixed 1 run in 3 both with reasoning off (otherwise a wrong fix, target
+still red) and on at 8192 (otherwise invented context).
+
+**Defaults: short replies without reasoning; patches with reasoning and an
+8192 ceiling** (`THINKING_DEFAULTS`, `PATCH_MAX_TOKENS` in
+`nge/backends/nebius.py`). What the two benches support, and what they do not:
+
+- Short replies: settled — 0/6 to 12/12 usable, every time.
+- The old patch setting (reasoning, 2048) is the worst arm on both benches.
+- Reasoning off vs on @8192 for patches: **no measured difference in fixes**
+  (16 = 16 on seeded bugs). Off costs under a third (29%; an eighth of the
+  output tokens) and runs ~20% faster. "Invented context" points in opposite
+  directions on the two benches (4/9 vs 0/7 there, 0/18 vs 2/18 here), so it
+  is not evidence either way.
+- On stays the default because nothing measured says to switch and the only
+  fix on the hard set came from it; the difference is about half a cent a
+  run.
+  `NGE_THINKING_PATCH=off` is the measured cheap option.
+
+Measuring this surfaced three bugs that starved slot-fill had been hiding:
 
 - **`-x` on every shard** — see *The baseline must be complete* above. In the
   first series, two 8k-arm patches fixed their target and "broke" exactly two
@@ -238,15 +282,24 @@ Measuring this surfaced two bugs that starved slot-fill had been hiding:
 - **Diff headers without `--- `/`+++ `** — every reasoning-off diff came back as
   `a/x.py` / `b/x.py`. Restored now (table above); before that the off arm read
   0/6 parsed, after it 9/9.
+- **The prompt's own placeholder, copied** — the slot-fill prompt listed
+  `--tb=` as an allowed option, and a model answered with exactly `--tb=`.
+  pytest exits 4 on an empty value, the shard ran nothing, and two seeded bugs
+  went unseen (the bugbench run with 4 failures instead of 6). The guard only
+  checked option *names*; a known option with an empty or invalid value
+  (`--tb=`, `--tb=verbose`) is now refused too, and the prompt shows values
+  (`--tb=short`), not placeholders.
 
 Caveats, so the table is not over-read:
 
-- n = 3 runs per arm. 1 verified against 0 is one patch, not a rate.
-- The five live failures are tests written for Windows (backslash paths in
-  `test_nodus_tools.py`, an environment-dependent pair in
-  `test_nodus_grafana.py`); all five pass on Windows. "Verified" therefore
-  cannot discriminate between arms on this failure set — what the bench does
-  measure is whether a usable, honest diff comes back, and at what cost.
+- n = 3 runs per arm on each bench. 16 against 16 is a tie, not a ranking.
+- The vendored suite's five live failures are tests written for Windows
+  (backslash paths in `test_nodus_tools.py`, an environment-dependent pair in
+  `test_nodus_grafana.py`); all five pass on Windows. That is why bugbench
+  exists.
+- Bugbench bugs are small and were written by us. They measure whether the loop
+  turns a clear failure into a correct, non-damaging fix; they say little about
+  bugs that need context from several files.
 - The verified patch strips a leading `_` from *any* basename. The suite stays
   green, but that is broader than the test asked for.
 
@@ -262,6 +315,6 @@ Caveats, so the table is not over-read:
 - Hunks with no file header are not recovered. Guessing the target file would
   apply the diff to the wrong one. (A header that is present but lost its
   `--- `/`+++ ` prefixes is a different case, and is restored.)
-- The reasoning defaults were measured on one failure set (Windows-only tests,
-  see above). Re-run `bench/thinking_ab.py` on a different target before
-  treating them as settled.
+- The patch-reasoning default is a tie broken by weak evidence (one fix on the
+  hard set), not a measured win. Re-run `bench/thinking_ab.py --target bugbench`
+  with more runs, or on harder bugs, before arguing it either way.

@@ -31,7 +31,7 @@ applicative DSL down to GPU resource management.
 ```bash
 cd packages/engine
 pip install -r requirements.txt          # requests + pytest only
-python -m pytest -q                       # 409 tests, no network
+python -m pytest -q                       # 427 tests, no network
 python -m nge.demo_nebius --mock          # deterministic end-to-end
 python -m nge.demo_nebius --mock --watch  # same run, live fleet view
 # Judge film with verified patches (keyword plan unlocks edit_file):
@@ -115,7 +115,9 @@ mock for a partial-real run.
 - **Nemotron 3 reasons before answering, inside the same `max_tokens`.**
   Measured live: short replies (slot-fill, mission) were 100% reasoning and
   empty at 256, so they run with `enable_thinking: false`; patches keep
-  reasoning (it stopped invented context) with room for it. Per class:
+  reasoning with room for it (on seeded bugs it fixes exactly as many as
+  reasoning off, at ~3x the cost; `NGE_THINKING_PATCH=off` is the cheap
+  option). Per class:
   `NGE_THINKING_SHORT` / `NGE_THINKING_PATCH` = `on` / `off` / `model`.
   `reasoning_tokens` is in the usage line and on the truncation events.
   Evidence: [`docs/FIX_LOOP.md`](../../../docs/FIX_LOOP.md),
@@ -147,7 +149,7 @@ mock for a partial-real run.
 
 ## What runs for real
 
-Sandboxes beta access landed, so `--live` is no longer a skeleton. 409 tests,
+Sandboxes beta access landed, so `--live` is no longer a skeleton. 427 tests,
 plus an MCP integration job and `live-smoke` — the full pipeline against real
 sandboxes on Ubuntu, on demand and on a weekday cron.
 

@@ -26,6 +26,7 @@ python -m bench.failure_taxonomy --model --csv out/taxonomy_p0a.csv
 python -m bench.failure_taxonomy_0b --csv out/taxonomy_p0b.csv
 python -m bench.failure_taxonomy_0b --live --i-know-cost --csv out/taxonomy_p0b_live.csv
 python -m bench.thinking_ab --i-know-cost --runs 3 --csv out/thinking_ab.csv
+python -m bench.thinking_ab --i-know-cost --runs 3 --target bugbench   # known answers
 ```
 
 `--live` costs Nemotron calls; fleet/sandbox stay mock unless you change env.
@@ -113,9 +114,13 @@ token ceiling*. CSVs and every run's event log: `packages/engine/evidence/thinki
 `packages/engine/evidence/ab/`; the 0b live run:
 `packages/engine/evidence/taxonomy_p0b_live_20261001.csv`.
 
-Same rule as the retry count: the fix that looked obvious (« turn reasoning
-off ») was half right — it rescued slot-fill and degraded patches (4/9
-invented context) — and only the per-class measurement showed which half.
+Same rule as the retry count, twice over. The obvious fix (« turn reasoning
+off ») was right for slot-fill and *undecided* for patches — and the first
+patch result (off: 4/9 invented context) looked decisive until a second
+failure set with known answers (`--target bugbench`, held-out checks) showed a
+tie, 16/18 either way, with « invented context » now pointing the other way.
+One bench on the wrong failure set would have shipped a conclusion the next
+one reverses. Bugbench CSV: `packages/engine/evidence/thinking_ab_bugbench_20261001.csv`.
 
 ## How the engine should use this
 

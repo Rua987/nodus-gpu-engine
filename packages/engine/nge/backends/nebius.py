@@ -95,8 +95,12 @@ _OFF = ("0", "off", "false", "no")
 # Token Factory sandboxes (bench/thinking_ab.py, docs/FIX_LOOP.md):
 #   short, reasoning on:  0/6 slot-fills usable (256/256 reasoning, empty)
 #   short, reasoning off: 12/12 usable
-#   patch, off:           9/9 parsed, but 4/9 cited code that is not there
-#   patch, on @8192:      7/9 parsed, 0 invented context, the only verified fix
+#   patch, vendored suite (Windows-only failures):
+#     off: 9/9 parsed, 4/9 invented context · on @8192: 0 invented, 1 real fix
+#   patch, bench/bugbench (6 seeded bugs, held-out checks), 18 attempts each:
+#     off: 16 correct, $0.006 · on @8192: 16 correct, $0.021 · on @2048: 15
+# Patches keep reasoning: a tie on seeded bugs, the only hard-set fix came
+# from it, and off is the measured cheap option (NGE_THINKING_PATCH=off).
 THINKING_DEFAULTS = {"short": False, "patch": True}
 
 
