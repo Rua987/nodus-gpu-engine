@@ -31,7 +31,7 @@ applicative DSL down to GPU resource management.
 ```bash
 cd packages/engine
 pip install -r requirements.txt          # requests + pytest only
-python -m pytest -q                       # 310 tests, no network
+python -m pytest -q                       # 398 tests, no network
 python -m nge.demo_nebius --mock          # deterministic end-to-end
 python -m nge.demo_nebius --mock --watch  # same run, live fleet view
 # Judge film with verified patches (keyword plan unlocks edit_file):
@@ -94,7 +94,7 @@ python -m nge.demo_nebius --live
   probe run inside each node.
 - The image is bare: no pytest, no dependencies, **no git and no patch**. The
   orchestrator ships the source tree, installs the requirements and applies
-  patches with `patch-ng` — see [`../../docs/FIX_LOOP.md`](../../docs/FIX_LOOP.md).
+  patches with `patch-ng` — see [`docs/FIX_LOOP.md`](../../../docs/FIX_LOOP.md).
 
 `--live` sets `NGE_TRACK=nebius` (guard: refuses any non-`nebius:` LLM), routes
 slot-fill / patch through `nge.backends.nebius.chat_nebius` (capped
@@ -109,8 +109,17 @@ mock for a partial-real run.
 - **model** = Token Factory id actually billed (ledger / report).
 - **No** silent failover Super→Nano if Super returns 429/5xx: event
   `model_unavailable`, decision fails honestly.
-- Patch cut by `max_tokens` → `patch_truncated` (not retried as empty).
-  Override ceiling with `NGE_PATCH_MAX_TOKENS`.
+- Patch cut by `max_tokens` → `patch_truncated` (not retried as empty);
+  slot-fill cut → `slotfill_truncated`. Override the patch ceiling (8192)
+  with `NGE_PATCH_MAX_TOKENS`.
+- **Nemotron 3 reasons before answering, inside the same `max_tokens`.**
+  Measured live: short replies (slot-fill, mission) were 100% reasoning and
+  empty at 256, so they run with `enable_thinking: false`; patches keep
+  reasoning (it stopped invented context) with room for it. Per class:
+  `NGE_THINKING_SHORT` / `NGE_THINKING_PATCH` = `on` / `off` / `model`.
+  `reasoning_tokens` is in the usage line and on the truncation events.
+  Evidence: [`docs/FIX_LOOP.md`](../../../docs/FIX_LOOP.md),
+  *Reasoning eats the token ceiling*.
 - **DeepSeek / non-Nebius models**: blocked when `NGE_TRACK=nebius`. Personal
   multi-provider experiments stay off the submission path:
   `python -m nge.demo_nebius --local` (Ollama) or `--deepseek` (API). Both
@@ -138,7 +147,7 @@ mock for a partial-real run.
 
 ## What runs for real
 
-Sandboxes beta access landed, so `--live` is no longer a skeleton. 310 tests,
+Sandboxes beta access landed, so `--live` is no longer a skeleton. 398 tests,
 plus an MCP integration job and `live-smoke` — the full pipeline against real
 sandboxes on Ubuntu, on demand and on a weekday cron.
 
@@ -154,9 +163,9 @@ sandboxes on Ubuntu, on demand and on a weekday cron.
 | Capability jail enforced in `run_in_sandbox` | — |
 
 Each verification rule carries the live failure that produced it in
-[`../../docs/FIX_LOOP.md`](../../docs/FIX_LOOP.md); where this has been run and
+[`docs/FIX_LOOP.md`](../../../docs/FIX_LOOP.md); where this has been run and
 what each environment caught is in
-[`../../docs/ENVIRONMENTS.md`](../../docs/ENVIRONMENTS.md).
+[`docs/ENVIRONMENTS.md`](../../../docs/ENVIRONMENTS.md).
 | `NebiusFleet` + `TokenFactorySandbox` vs real ConTree SDK — auth verified, fake-SDK tested | — |
 | Real MCP server (`mcp` SDK) ↔ Nodus `McpBridge` — `test_mcp_bridge_integration` | — |
 | `demo_nebius --local`: real Nodus ReAct loop drives `nge-gpu.*` via a local model | — |

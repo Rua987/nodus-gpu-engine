@@ -116,7 +116,7 @@ We built the missing loop on **Nebius Token Factory + NVIDIA Nemotron**, with a 
 ## “How we built it” (paste block)
 
 - Vendored Nodus runtime (unmodified) + engine package `nge`.  
-- Reversible `nebius:` chat backend: `max_tokens`, usage, `ModelUnavailableError`.  
+- Reversible `nebius:` chat backend: `max_tokens`, usage (incl. `reasoning_tokens`), reasoning on/off per call class, `ModelUnavailableError`.  
 - Fleet: `mock` (synthetic H100 telemetry for the film) · `nebius` (Contree) · `compute` (skeleton only — **no VM spawn in this demo**).  
 - Mock autofix uses canned patches so the verify loop is deterministic for judges; live slot-fill/triage hits Super.
 
@@ -128,6 +128,7 @@ We built the missing loop on **Nebius Token Factory + NVIDIA Nemotron**, with a 
 - **Contree ≠ GPU device.** Efficiency=0 on CPU used to trigger phantom migrations. Heal now requires real GPU metrics.  
 - **Patches that fix one test and break others.** Keep only suite-green diffs.  
 - **Flaky / truncated model replies.** Caps, `patch_truncated`, bounded retries — not an infinite Super bill.
+- **The model spent its budget thinking.** Live patches came back empty at 2048 tokens: Nemotron 3 reasons inside the same `max_tokens`, and 99% of output was reasoning. We measured reasoning on/off per call class on real sandboxes (`bench/thinking_ab.py`): short replies went from 0/6 to 12/12 usable with reasoning off; patches keep reasoning (off, 4/9 diffs cited code that does not exist) with an 8192 ceiling. Measuring it also exposed the model adding `-x` to shard commands, which hid failures and got good patches rejected — now refused.
 
 ---
 

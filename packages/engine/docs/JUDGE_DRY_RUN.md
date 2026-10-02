@@ -33,6 +33,7 @@ Expect: `plan(heuristic): [bash, edit_file, write_file]` → `autofix ON` →
 |-------|------|----------------|
 | **A2 film** (loop) | `out/report_20260913T041721Z.html` | Mock 2/3 + migrate 02→03 + verify 04/05 |
 | **B Nebius** (live) | `out/report_20260913T053458Z_honest.html` | Contree cpu-fallback, Super **0/3** truncated, Ultra route-only |
+| B, after 2026-10-01 | `out/report_20261002T055558Z.html` | Same loop with the reasoning fix: 5 real failures, 3 diffs produced, 0 cut, 3 honestly rejected |
 
 Alternate (gate OFF):
 
@@ -95,6 +96,7 @@ Open HTML: KPI `2/3`, migration row, diffs under Auto-fixes.
 | Why heuristic? | « To open the autofix gate for the film. 324M path is real too — often triage-only on this task. » |
 | Why not 3/3? | « One failure has no canned patch — we report it, we don't invent success. » |
 | Model down? | « Nano/Ultra 404/5xx → one hop to Super, logged. Never silent Super→Nano. » |
+| Why was live 0/3? | « Nemotron reasons inside the same token budget: 99% of output was reasoning, every reply cut. Measured per call class — short replies now run without reasoning, patches keep it with room. » |
 | DeepSeek? | « Off the Nebius submission path. » |
 
 ---

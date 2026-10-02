@@ -91,6 +91,20 @@ baseline for its files, so a pre-existing failure there would look like damage.
 anything outside it is reported as `fix_unjudged` rather than blamed on the
 patch. Missing information must not become a verdict.
 
+### The baseline must be complete
+
+`before` is only as good as the shard runs that produced it. Once slot-fill
+stopped being starved by reasoning (2026-10-01), Nemotron put `-x` on every
+shard — the prompt itself listed it as allowed. Each shard stopped at its first
+failure: the run saw 2 failures where the suite has 5, and the whole-suite
+re-run during verification then reported the 3 hidden ones as damage done by
+the patch (`test_connect_mcp_forwards_org_id_env`, already failing before any
+patch, was listed under `broke`). Options that change *what runs* — `-x`,
+`--maxfail`, `-k`, `-m`, `--deselect`, `--ignore`, `--lf`, `--co`, and `--pdb`,
+which would park the sandbox on a prompt — are now refused (`slotfill_narrowed`)
+and the shard keeps the template command. Only options after the `pytest` word
+count: the `-m` of `python -m pytest` is Python's, not pytest's marker filter.
+
 ### An empty sandbox is not a pass
 
 With no stdout, "the target test is not in the failure list" is vacuous. That
@@ -116,6 +130,7 @@ Each of these silently lost a correct patch in a live run:
 | no trailing newline | added (`patch stream is incomplete!`) |
 | `diff --git` envelope | dropped — patch-ng strips `a/` itself, so a fixed `--strip 1` removed one component too many |
 | whole block indented | dedented, preserving the ` `/`-`/`+` column |
+| file header without `--- `/`+++ ` (`a/x.py` then `b/x.py`, or both on one line) | prefixes restored, only when a hunk follows — with reasoning off, 6/6 live diffs had this shape |
 | context that exists nowhere in the file | refused before a node is provisioned |
 
 ## The same lesson applies to every model reply
@@ -137,6 +152,7 @@ Three causes that used to share one name:
 | `patch_empty` | model returned nothing | yes — 4 attempts, 2s linear backoff |
 | `patch_unparsed` | hunks with no file header | no |
 | `patch_unparsed` | no diff in the reply | no |
+| `patch_truncated` | finish_reason=length · *reasoning used the whole budget* when nothing reached `content` | no — a cut reply is cut again |
 
 Only an empty answer is flakiness worth another call: measured, the same prompt
 returned nothing four times in one run and answered twice a few minutes later,
@@ -164,6 +180,74 @@ service was in a good phase (70% first try) while an earlier run had 16 empty
 replies out of 26 — this measures a good window, not a bad one. Re-run the
 bench rather than trusting the table if the retry behaviour matters to you.
 
+## Reasoning eats the token ceiling
+
+Nemotron 3 Super reasons before it answers, the reasoning comes back outside
+`content` (the vendored normaliser drops it), and **it counts against
+`max_tokens`**. The 2026-09-13 live report said "Super truncated (2048 tokens,
+0-char reply)" on every patch; that was not a long diff, it was 2048 tokens of
+reasoning and no diff at all. Slot-fill at 256 was the same: 256/256 reasoning,
+an empty reply, every call — logged as `slotfill_empty`, so the taxonomy filed a
+budget problem as an argument problem.
+
+The switch is `chat_template_kwargs: {"enable_thinking": false}` (a system
+`/no_think` is ignored). Super, Nano and Ultra all accept it. It is set per call
+class — `NGE_THINKING_SHORT` (slot-fill, mission, plan fallback) and
+`NGE_THINKING_PATCH`, `on` / `off` / `model` — and `reasoning_tokens` is now in
+the usage ledger and on the `*_truncated` events.
+
+**Measured** with `bench/thinking_ab.py`: real Token Factory sandboxes, the real
+suite (5 real failures per run), simulated fleet, heuristic plan so autofix
+opens; arms interleaved run by run, 3 runs each.
+
+Short replies (slot-fill), all runs of both series:
+
+| reasoning | usable slot-fills |
+|---|---|
+| on (model default) | **0/6** — 256/256 tokens of reasoning, empty reply |
+| off | **12/12** |
+
+Patches (second series, after the two fixes below):
+
+| reasoning · ceiling | diffs produced | cut | invented context | verified | output tokens | $ est. |
+|---|---|---|---|---|---|---|
+| on · 2048 (before) | 0/9 | 9 | — | 0 | 18 945 | 0.024 |
+| off · 2048 | 9/9 | 0 | **4** | 0 | 2 912 | 0.010 |
+| on · 8192 | 7/9 | 2 | 0 | **1** | 61 845 | 0.063 |
+
+Defaults chosen from this: **short replies without reasoning, patches with
+reasoning and an 8192 ceiling** (`THINKING_DEFAULTS`, `PATCH_MAX_TOKENS` in
+`nge/backends/nebius.py`). Without reasoning, 4 of 9 diffs cited code that is
+not in the file and were refused before a sandbox was spent; with it, none did,
+and the one verified fix of the whole bench came from that arm — it made
+`repair_llm_file_path` split Windows paths with `ntpath` on Linux too, target
+fixed, zero regressions on the whole suite. `NGE_THINKING_PATCH=off` stays the
+cheap option: every reply parsed, about a sixth of the cost (a twentieth of
+the output tokens), two to three times faster per run.
+
+Measuring this surfaced two bugs that starved slot-fill had been hiding:
+
+- **`-x` on every shard** — see *The baseline must be complete* above. In the
+  first series, two 8k-arm patches fixed their target and "broke" exactly two
+  tests each — both of them failures `-x` had hidden. With a complete baseline
+  they would have been verified; `-x` got two good patches rejected. One
+  short_off patch "broke" 32 tests: 2 hidden by `-x`, 30 real damage, rightly
+  rejected.
+- **Diff headers without `--- `/`+++ `** — every reasoning-off diff came back as
+  `a/x.py` / `b/x.py`. Restored now (table above); before that the off arm read
+  0/6 parsed, after it 9/9.
+
+Caveats, so the table is not over-read:
+
+- n = 3 runs per arm. 1 verified against 0 is one patch, not a rate.
+- The five live failures are tests written for Windows (backslash paths in
+  `test_nodus_tools.py`, an environment-dependent pair in
+  `test_nodus_grafana.py`); all five pass on Windows. "Verified" therefore
+  cannot discriminate between arms on this failure set — what the bench does
+  measure is whether a usable, honest diff comes back, and at what cost.
+- The verified patch strips a leading `_` from *any* basename. The suite stays
+  green, but that is broader than the test asked for.
+
 ## What this does not do
 
 - The verified suite is `packages/nodus`. A patch touching `packages/engine`
@@ -174,4 +258,8 @@ bench rather than trusting the table if the retry behaviour matters to you.
   every one of the five measured since turned out to be a regression. Treat any
   figure from before that change as an upper bound, not a result.
 - Hunks with no file header are not recovered. Guessing the target file would
-  apply the diff to the wrong one.
+  apply the diff to the wrong one. (A header that is present but lost its
+  `--- `/`+++ ` prefixes is a different case, and is restored.)
+- The reasoning defaults were measured on one failure set (Windows-only tests,
+  see above). Re-run `bench/thinking_ab.py` on a different target before
+  treating them as settled.

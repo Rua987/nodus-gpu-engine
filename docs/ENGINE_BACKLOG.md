@@ -1,7 +1,7 @@
 # Engine — suivi capacités / manquants
 
 Liste vivante. Mettre à jour après chaque live, smoke TF, ou chantier fermé.
-Dernière revue : **2026-09-05** (usage/failover + Compute creds check).
+Dernière revue : **2026-10-01** (raisonnement Nemotron vs `max_tokens`, garde `-x`, en-têtes de diff).
 
 Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **MANQUE** = pas fait · **BLOQUÉ** = dépend d’un produit externe
 
@@ -27,6 +27,10 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | C14 | Retry Contree upload (`NGE_CONTREE_RETRIES`) | **OK** | test + live e2e après timeouts |
 | C15 | Ledger usage (calls/tokens/tier + routes gap) | **OK** | `format_summary` + tests |
 | C17 | Placement receveur (temp/mem/util) avant migrate | **OK** | events `gpu_placement` / `gpu_placement_refused` |
+| C18 | Raisonnement par classe d'appel (`NGE_THINKING_SHORT` / `_PATCH`) + `reasoning_tokens` au ledger | **OK** | `bench/thinking_ab.py` live : slot-fill 0/6 → 12/12 ; patch 8192 = 0 contexte inventé |
+| C19 | Slot-fill ne peut plus réduire le run (`-x`, `-k`, `--maxfail`…) → `slotfill_narrowed` | **OK** | live : 5 pannes vues au lieu de 2 ; tests |
+| C20 | En-tête de diff sans `--- `/`+++ ` restauré | **OK** | live : 0/6 → 9/9 parsés (raisonnement off) |
+| C21 | Taxonomie 0b : bucket **T**, décision sur le live seul | **OK** | 11/11 sondes |
 
 ---
 
@@ -39,7 +43,9 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | M3 | ~~Probe TF run complet~~ | **OK** | fermé 2026-09-05 |
 | M4 | Image CUDA Contree (deps only) | **P2** | |
 | M5 | DCGM dans le nœud | **P2** | |
-| M6 | Patch multi-tour si truncated | **P2** | |
+| M6 | Patch multi-tour si truncated | **P2** | cause n°1 levée (budget mangé par le raisonnement) ; encore 2/9 coupés à 8192 |
+| M18 | Preuves juges dans `out/` gitignoré (`041721Z`, `053458Z_honest`) | **P1** | un clone ne les a pas ; les versionner ou changer le texte |
+| M19 | Pannes live = tests écrits pour Windows | **P2** | « vérifié » ne départage rien sur ce jeu ; une cible Linux-native rendrait la mesure patch plus parlante |
 | M7 | DeepSeek clé + smoke | **P2** | |
 | M8 | Clarifier warning `Token expires in 0 hours` | **P2** | non bloquant (run OK) |
 | M9 | Live filmable juges (narration + HTML) | **OK** | `JUDGE_DRY_RUN.md` · film reco A2 · `232100Z` |
@@ -68,6 +74,11 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | 2026-09-05 | **M9** JUDGE_DRY_RUN + mock film | HTML `report_20260905T223331Z` · plan gate OFF · migrate 02→03 |
 | 2026-09-05 | **Phase 1 M10** `--heuristic-plan` | HTML `232100Z` · autofix **2/3** · pytest suite green · docs maj |
 | 2026-09-10 | **Compute PLAN** archi **A** verrouillée | Phases 0→3 dans `COMPUTE_GPU.md` ; 0 spawn ; next = Phase 0 creds |
+| 2026-09-23 | Fixes `demo_personal` (ordre deepseek/Ollama) + self-heal qui volait le nœud d'un shard à venir | 359 tests |
+| 2026-10-01 | Cause du live 0/3 : 99 % des tokens de sortie = raisonnement | 14/15 appels coupés par le plafond |
+| 2026-10-01 | **thinking_ab** 2 séries × 3 runs réels | défauts : short **off**, patch **on @8192** ; 1 vrai fix vérifié (`ntpath`) |
+| 2026-10-01 | Bugs révélés : `-x` (2 bons patchs rejetés à tort) + en-têtes sans préfixe | corrigés ; 398 tests |
+| 2026-10-01 | `--live --shards 2 --heuristic-plan` défauts neufs | 5 pannes, 3 patchs produits, 0 coupé, 3 rejetés honnêtement · ~$0.016 |
 
 ---
 

@@ -1,9 +1,9 @@
 # Nodus-GPU Engine
 
 [![engine-tests](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml)
-[![python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)](pyproject.toml)
+[![python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)](packages/engine/pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-310%20passing-brightgreen)](packages/engine/tests)
+[![tests](https://img.shields.io/badge/tests-398%20passing-brightgreen)](packages/engine/tests)
 
 **Agentic engineering platform — Nebius "Coding & Agentic Engineering" track.**
 
@@ -62,7 +62,7 @@ tools, more retries, slot-fill, infra), re-run the failure taxonomy in
 ```bash
 cd packages/engine
 pip install -r requirements.txt
-python -m pytest -q                 # 310 tests
+python -m pytest -q                 # 398 tests
 python -m nge.demo_nebius --mock    # -> out/report_<ts>.md  +  .html (self-contained)
 ```
 
@@ -116,8 +116,12 @@ NGE_FLEET_MODE=mock python -m nge.demo_nebius --live   # no GPU allocated
 `NGE_FLEET_MODE=mock` keeps the fleet ledger simulated, so the cost is the
 Nemotron calls plus the sandboxes the shards run in. Needs `NEBIUS_API_KEY`
 and `NEBIUS_PROJECT_ID` (files under `packages/engine/` or environment).
-Every `nebius:` call is capped (`max_tokens`, default 2048) and usage is
-appended to `out/nemotron_usage.jsonl`. LLM benches require `--i-know-cost`.
+Every `nebius:` call is capped (`max_tokens`, default 2048; patches 8192) and
+usage — reasoning tokens included — is appended to `out/nemotron_usage.jsonl`.
+Nemotron 3 reasons inside that same budget, so short replies (slot-fill,
+mission) run with reasoning off and patches with it on: measured, not guessed —
+see *Reasoning eats the token ceiling* in [`docs/FIX_LOOP.md`](docs/FIX_LOOP.md).
+LLM benches require `--i-know-cost`.
 
 ## License
 
