@@ -44,8 +44,12 @@ recorded. The 2026-10-02 run used the code of `3e49336`.
 | `taxonomy_p0b_live_20261001.csv` | 0b live run that read `slotfill_empty` and « infra » (pre-T bucket) | MEASURE_BEFORE_LEVER, snapshot 2026-10-01 |
 | `thinking_ab_20261001.csv` | reasoning A/B, series 1 (before the `-x` guard and header repair), 4 arms × 3 | FIX_LOOP, MEASURE_BEFORE_LEVER |
 | `thinking_ab_20261001_r2.csv` | series 2 (after both fixes), 3 arms × 3 | same |
-| `thinking_ab/<arm>_<ts>/report_*.md` | event log of every bench run the CSVs point at (`out` column) | — |
-| `thinking_ab/short_off_patch_8k_1790919888/fixes/test_drive_underscore_prefix.patch` | the one verified patch (`ntpath` on Linux) | FIX_LOOP |
+| `ab/<series>_<arm>_<round>.md` | event log of every bench run, the file each CSV row points at (`out`); `run_dir` keeps the run's original id | — |
+| `ab/verified_fix_ntpath.patch` | the one verified patch (`ntpath` on Linux), from `r2_short_off_patch_8k_2` | FIX_LOOP |
+
+Paths here are kept short on purpose: Windows refuses to check out a path
+over 260 characters, and a first layout (`thinking_ab/<run>/fixes/<test>.patch`,
+132 characters inside the repo) broke a clone made into a deep directory.
 
 The bench runs used Token Factory sandboxes and a simulated fleet; their
 failures are the five Windows-only tests described in

@@ -69,9 +69,16 @@ def test_bench_rows_point_at_kept_run_logs(name):
     rows = list(csv.DictReader((EVIDENCE / name).open(encoding="utf-8")))
     assert rows
     for r in rows:
-        run = EVIDENCE / r["out"]
         assert not Path(r["out"]).is_absolute() and ":" not in r["out"]
-        assert list(run.glob("report_*.md")), f"no event log for {r['out']}"
+        assert (EVIDENCE / r["out"]).is_file(), f"no event log for {r['out']}"
+
+
+def test_evidence_paths_stay_short():
+    """Windows refuses to check out a path over 260 characters; a first layout
+    reached 132 inside the repo and broke a clone made into a deep folder."""
+    longest = max(len(str(p.relative_to(REPO)).replace("\\", "/"))
+                  for p in EVIDENCE.rglob("*") if p.is_file())
+    assert longest <= 70, longest
 
 
 def test_no_local_paths_or_secrets_in_evidence():
@@ -126,11 +133,9 @@ def test_live_after_reasoning_fix_produces_and_rejects_honestly():
 
 
 def test_the_one_verified_bench_patch_is_kept():
-    p = (EVIDENCE / "thinking_ab" / "short_off_patch_8k_1790919888" / "fixes"
-         / "test_drive_underscore_prefix.patch")
+    p = EVIDENCE / "ab" / "verified_fix_ntpath.patch"
     assert "ntpath" in p.read_text(encoding="utf-8")
-    ev = _events(f"thinking_ab/short_off_patch_8k_1790919888/"
-                 + next(p.parents[1].glob("report_*.md")).stem)
+    ev = _events("ab/r2_short_off_patch_8k_2")
     v = _kinds(ev, "fix_verified")
     assert len(v) == 1 and v[0]["test"].endswith("test_drive_underscore_prefix")
     assert v[0]["regressions"] == 0

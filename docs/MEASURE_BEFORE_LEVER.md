@@ -110,7 +110,7 @@ by the ceiling — 0/6 slot-fills usable, 1/9 patches produced. **T**, not A. Th
 budget, not retries: reasoning off for short replies, on with an 8192 ceiling
 for patches. Numbers and caveats: `docs/FIX_LOOP.md`, *Reasoning eats the
 token ceiling*. CSVs and every run's event log: `packages/engine/evidence/thinking_ab_20261001*.csv`,
-`packages/engine/evidence/thinking_ab/`; the 0b live run:
+`packages/engine/evidence/ab/`; the 0b live run:
 `packages/engine/evidence/taxonomy_p0b_live_20261001.csv`.
 
 Same rule as the retry count: the fix that looked obvious (« turn reasoning
