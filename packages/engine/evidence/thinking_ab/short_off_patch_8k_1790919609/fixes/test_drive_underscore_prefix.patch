@@ -1,0 +1,12 @@
+--- a/packages/nodus/nodus_tools.py
++++ b/packages/nodus/nodus_tools.py
+@@ -1233,5 +1233,8 @@
+     s = path_str.strip().strip('"').strip("'")
+     if not s:
+         return s
+-    
++    # Handle `_C:\foo` style garble when regex fails due to escaping
++    if len(s) >= 3 and s[0] == '_' and s[1].isalpha() and s[2] == ':':
++        s = s[1:]
++
+     m = _DRIVE_PREFIX_GARBLE.match(s)

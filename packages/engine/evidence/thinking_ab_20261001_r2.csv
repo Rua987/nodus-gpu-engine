@@ -1,0 +1,10 @@
+arm,sandbox,error,wall_s,unique_failures,slot_calls,slot_ok,slot_truncated,slot_empty,slot_off_target,slot_bad,fix_tried,patch_produced,patch_truncated,patch_unparsed,patch_empty,context_invented,verified,verified_tests_only,rejected,regression,calls,prompt_tokens,completion_tokens,reasoning_tokens,usd_est,out,round
+short_off,token_factory,,60.3,5,2,2,0,0,0,0,3,0,3,0,0,0,0,0,0,0,5,7768,6315,6144,0.00801,thinking_ab/short_off_1790919478,1
+short_off_patch_off,token_factory,,69.8,5,2,2,0,0,0,0,3,3,0,0,0,1,0,0,2,0,5,7769,668,0,0.00293,thinking_ab/short_off_patch_off_1790919539,1
+short_off_patch_8k,token_factory,,159.8,5,2,2,0,0,0,0,3,3,0,0,0,0,0,0,3,0,5,7768,23265,21904,0.02327,thinking_ab/short_off_patch_8k_1790919609,1
+short_off,token_factory,,54.8,5,2,2,0,0,0,0,3,0,3,0,0,0,0,0,0,0,5,7770,6315,6144,0.00801,thinking_ab/short_off_1790919768,2
+short_off_patch_off,token_factory,,64.5,5,2,2,0,0,0,0,3,3,0,0,0,1,0,0,2,0,5,7770,1434,0,0.00362,thinking_ab/short_off_patch_off_1790919823,2
+short_off_patch_8k,token_factory,,131.9,5,2,2,0,0,0,0,3,2,1,0,0,0,1,0,1,0,5,7770,16944,16174,0.01758,thinking_ab/short_off_patch_8k_1790919888,2
+short_off,token_factory,,58.0,5,2,2,0,0,0,0,3,0,3,0,0,0,0,0,0,0,5,7769,6315,6144,0.00801,thinking_ab/short_off_1790920020,3
+short_off_patch_off,token_factory,,50.6,5,2,2,0,0,0,0,3,3,0,0,0,2,0,0,1,0,5,7769,810,0,0.00306,thinking_ab/short_off_patch_off_1790920078,3
+short_off_patch_8k,token_factory,,144.7,5,2,2,0,0,0,0,3,2,1,0,0,0,0,0,2,0,5,7769,21636,20313,0.0218,thinking_ab/short_off_patch_8k_1790920128,3

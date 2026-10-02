@@ -1,0 +1,25 @@
+id,label,detail,source,got,gold,task
+find_read,OK,OK,heuristic,glob read_file,glob read_file,Find the config file and read it
+grep_edit,P,P,heuristic,edit_file,grep read_file edit_file,Search for TODO in the repo then fix the first one
+pytest_fix,P,P,heuristic,bash edit_file,bash read_file edit_file,Run pytest and patch the failing test
+write_report,P,P,heuristic,bash write_file,write_file,Write a short summary report of the triage
+fetch_docs,P,P,heuristic,web_fetch,web_fetch write_file,Fetch https://example.com/api docs and save notes
+web_then_code,P,P,heuristic,edit_file,brave_search read_file edit_file,Brave-search how requests timeouts work then edit client.py
+read_edit_port,OK,OK,heuristic,read_file edit_file,read_file edit_file,Read server.py then change the port to 8080
+list_then_open,OK,OK,heuristic,glob read_file,glob read_file,List python files under src/ then open the main one
+bash_only,OK,OK,heuristic,bash,bash,Run the unit tests with pytest -q
+inspect_fail,P,P,heuristic,bash read_file edit_file,read_file edit_file,Inspect the failing traceback and update the assertion
+fr_lis_edite,P,P,heuristic,edit_file,read_file edit_file,lis config.yaml puis change le timeout
+fr_trouve_lit,P,P,heuristic,bash write_file,glob read_file,trouve le fichier settings et lis-le
+fr_cherche_todo,P,P,heuristic,edit_file,grep read_file edit_file,cherche FIXME dans le code puis corrige
+fr_lance_tests,OK,OK,heuristic,bash,bash,lance la suite de tests
+fr_resume,P,P,heuristic,bash write_file,write_file,ecris un rapport de triage dans out/report.md
+telegraphic,OK,OK,heuristic,read_file edit_file,read_file edit_file,config. conf read. fix port.
+locate_yaml,OK,OK,heuristic,glob read_file,glob read_file,which file is the docker compose? open it
+download_schema,P,P,heuristic,read_file web_fetch,web_fetch write_file,download the openapi json from that url and store it
+v_gcs,V,V,heuristic,bash write_file,gcs_upload,Upload the gallery mp4 to the GCS bucket for the demo
+v_gpu_alloc,V,V,heuristic,bash write_file,gpu_provision,Provision three H100 nodes and pin the shard to node 0
+v_browser,V,V,heuristic,bash read_file,browser,Open the local dashboard and click the Run button
+v_email,V,V,heuristic,bash write_file,send_email,Email the triage report to the on-call alias
+v_mcp_custom,V,V,heuristic,bash write_file,mcp_tool,Call the internal MCP tool fleet.migrate_shard with shard-2
+v_screenshot,V,V,heuristic,bash write_file,screenshot,Take a screenshot of the watch UI and attach it to the PR

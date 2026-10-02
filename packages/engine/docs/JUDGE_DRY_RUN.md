@@ -31,9 +31,9 @@ Expect: `plan(heuristic): [bash, edit_file, write_file]` → `autofix ON` →
 
 | Proof | File | What it shows |
 |-------|------|----------------|
-| **A2 film** (loop) | `out/report_20260913T041721Z.html` | Mock 2/3 + migrate 02→03 + verify 04/05 |
-| **B Nebius** (live) | `out/report_20260913T053458Z_honest.html` | Contree cpu-fallback, Super **0/3** truncated, Ultra route-only |
-| B, after 2026-10-01 | `out/report_20261002T055558Z.html` | Same loop with the reasoning fix: 5 real failures, 3 diffs produced, 0 cut, 3 honestly rejected |
+| **A2 film** (loop) | `evidence/report_20260913T041721Z.html` | Mock 2/3 + migrate 02→03 + verify 04/05 |
+| **B Nebius** (live) | `evidence/report_20260913T053458Z_honest.html` (re-render, see `evidence/README.md`) | Contree cpu-fallback, Super **0/3** truncated, Ultra route-only |
+| B, after 2026-10-01 | `evidence/report_20261002T055558Z.html` | Reasoning fix, real sandboxes, **simulated fleet** (`NGE_FLEET_MODE=mock`): 5 real failures, 3 diffs produced, 0 cut, 3 honestly rejected |
 
 Alternate (gate OFF):
 

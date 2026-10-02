@@ -51,8 +51,9 @@ python -m nge.demo_nebius --live --shards 1
 ```
 
 Oral script: `packages/engine/docs/JUDGE_DRY_RUN.md`  
-Mock film (2/3 + migrate): `packages/engine/out/report_20260913T041721Z.html`  
-Live Nebius proof (Contree + Super 0/3): `packages/engine/out/report_20260913T053458Z_honest.html`
+Mock film (2/3 + migrate): `packages/engine/evidence/report_20260913T041721Z.html`  
+Live Nebius proof (Contree + Super 0/3): `packages/engine/evidence/report_20260913T053458Z_honest.html` (a re-render of that run — provenance in `packages/engine/evidence/README.md`)  
+Live after the reasoning fix (real sandboxes, simulated fleet): `packages/engine/evidence/report_20261002T055558Z.html`
 
 ---
 

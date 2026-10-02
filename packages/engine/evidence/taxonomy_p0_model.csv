@@ -1,0 +1,25 @@
+id,label,detail,source,got,gold,task
+find_read,P,P,nodus-324m,bash,glob read_file,Find the config file and read it
+grep_edit,P,P,nodus-324m,grep edit_file,grep read_file edit_file,Search for TODO in the repo then fix the first one
+pytest_fix,P,P,nodus-324m,bash,bash read_file edit_file,Run pytest and patch the failing test
+write_report,OK,OK,nodus-324m,write_file,write_file,Write a short summary report of the triage
+fetch_docs,P,P,nodus-324m,web_fetch,web_fetch write_file,Fetch https://example.com/api docs and save notes
+web_then_code,P,P,nodus-324m,edit_file,brave_search read_file edit_file,Brave-search how requests timeouts work then edit client.py
+read_edit_port,OK,OK,nodus-324m,read_file edit_file,read_file edit_file,Read server.py then change the port to 8080
+list_then_open,OK,OK,nodus-324m,glob read_file,glob read_file,List python files under src/ then open the main one
+bash_only,OK,OK,nodus-324m,bash,bash,Run the unit tests with pytest -q
+inspect_fail,P,P,nodus-324m,read_file,read_file edit_file,Inspect the failing traceback and update the assertion
+fr_lis_edite,P,P,nodus-324m,edit_file,read_file edit_file,lis config.yaml puis change le timeout
+fr_trouve_lit,P,P,nodus-324m,edit_file,glob read_file,trouve le fichier settings et lis-le
+fr_cherche_todo,P,P,nodus-324m,edit_file,grep read_file edit_file,cherche FIXME dans le code puis corrige
+fr_lance_tests,OK,OK,nodus-324m,bash,bash,lance la suite de tests
+fr_resume,P,P,nodus-324m,edit_file,write_file,ecris un rapport de triage dans out/report.md
+telegraphic,P,P,nodus-324m,read_file,read_file edit_file,config. conf read. fix port.
+locate_yaml,P,P,nodus-324m,glob,glob read_file,which file is the docker compose? open it
+download_schema,P,P,nodus-324m,web_fetch,web_fetch write_file,download the openapi json from that url and store it
+v_gcs,V,V,nodus-324m,edit_file,gcs_upload,Upload the gallery mp4 to the GCS bucket for the demo
+v_gpu_alloc,V,V,nodus-324m,edit_file,gpu_provision,Provision three H100 nodes and pin the shard to node 0
+v_browser,V,V,nodus-324m,brave_search,browser,Open the local dashboard and click the Run button
+v_email,V,V,nodus-324m,brave_search,send_email,Email the triage report to the on-call alias
+v_mcp_custom,V,V,nodus-324m,bash,mcp_tool,Call the internal MCP tool fleet.migrate_shard with shard-2
+v_screenshot,V,V,nodus-324m,edit_file,screenshot,Take a screenshot of the watch UI and attach it to the PR

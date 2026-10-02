@@ -3,7 +3,7 @@
 [![engine-tests](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml)
 [![python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)](packages/engine/pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-398%20passing-brightgreen)](packages/engine/tests)
+[![tests](https://img.shields.io/badge/tests-408%20passing-brightgreen)](packages/engine/tests)
 
 **Agentic engineering platform — Nebius "Coding & Agentic Engineering" track.**
 
@@ -57,12 +57,16 @@ tools, more retries, slot-fill, infra), re-run the failure taxonomy in
 [`docs/MEASURE_BEFORE_LEVER.md`](docs/MEASURE_BEFORE_LEVER.md)
 (`bench/failure_taxonomy*.py`).
 
+Every run and bench the docs cite — the judge film, the live reports, the
+CSVs — is kept in [`packages/engine/evidence/`](packages/engine/evidence/README.md)
+with its provenance; `tests/test_evidence.py` keeps the citations honest.
+
 ## Quick start (mock — no credentials, no network)
 
 ```bash
 cd packages/engine
 pip install -r requirements.txt
-python -m pytest -q                 # 398 tests
+python -m pytest -q                 # 408 tests
 python -m nge.demo_nebius --mock    # -> out/report_<ts>.md  +  .html (self-contained)
 ```
 

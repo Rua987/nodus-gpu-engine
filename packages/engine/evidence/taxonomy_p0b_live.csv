@@ -1,0 +1,11 @@
+probe,expect,hit,A,X,I,F,Q,kinds
+baseline_mock,I,True,0,0,4,0,0,sandbox_env gpu_pressure gpu_provision_replacement gpu_remediation
+slotfill_off_target,A,True,3,3,4,0,0,sandbox_env slotfill_off_target slotfill_off_target slotfill_off_target gpu_pressure gpu_provision_replacement gpu_remediation patch_unparsed patch_unparsed patch_unparsed
+slotfill_bad_flags,A,True,2,0,1,0,0,sandbox_env slotfill_bad_flags slotfill_bad_flags
+slotfill_rejected,A,True,2,0,1,0,0,sandbox_env slotfill_rejected slotfill_rejected
+slotfill_empty,A,True,2,0,1,0,0,sandbox_env slotfill_empty slotfill_empty
+patch_empty,F,True,0,0,0,4,0,patch_empty patch_empty patch_empty patch_empty
+patch_retry,F,True,0,0,0,2,0,patch_empty patch_retry_succeeded
+patch_prose,X,True,0,1,0,0,0,patch_unparsed
+patch_headerless,X,True,0,1,0,0,0,patch_unparsed
+live_nemotron,-,True,0,0,1,0,1,sandbox_env fix_rejected

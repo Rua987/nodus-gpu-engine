@@ -1,0 +1,370 @@
+<!doctype html><meta charset="utf-8">
+<title>Fleet run - 2026-09-05 21:14 UTC</title><style>
+:root{color-scheme:light dark}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;
+ background:#0d1117;color:#c9d1d9;padding:32px;max-width:1000px;margin:0 auto}
+h1{font-size:20px;margin:0 0 4px} h2{font-size:15px;margin:28px 0 10px;
+ border-bottom:1px solid #30363d;padding-bottom:6px}
+.sub{color:#8b949e;font-size:12px;margin-bottom:20px}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:6px 0}
+th,td{border:1px solid #30363d;padding:6px 9px;text-align:left;vertical-align:top}
+th{background:#161b22;font-weight:600}
+code{background:#161b22;padding:1px 5px;border-radius:4px;font-size:12px}
+.badge{display:inline-block;padding:2px 9px;border-radius:12px;font-size:12px;
+ font-weight:600;margin:2px 4px 2px 0}
+.ultra{background:#5a2a8a;color:#e9d5ff} .super{background:#1f5a8a;color:#d5eaff}
+.nano{background:#2a6a3a;color:#d5f5df}
+.ok{color:#3fb950} .warm{color:#d29922} .throttle{color:#f85149} .unknown{color:#8b949e}
+.pill{border-left:3px solid #30363d;padding:4px 10px;margin:3px 0;font-size:12.5px}
+.pill.pressure{border-color:#f85149;color:#f8a49e}
+.pill.remediation{border-color:#58a6ff;color:#a5d0ff;font-weight:600}
+.pill.fix{border-color:#3fb950}
+pre.diff{background:#161b22;border:1px solid #30363d;border-radius:6px;
+ padding:10px;overflow-x:auto;font-size:12px;margin:4px 0}
+pre.diff .add{color:#3fb950} pre.diff .del{color:#f85149} pre.diff .hh{color:#8b949e}
+details{margin-top:8px} summary{cursor:pointer;color:#8b949e;font-size:12px}
+.kpi{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0}
+.kpi div{background:#161b22;border:1px solid #30363d;border-radius:8px;
+ padding:10px 16px;min-width:120px}
+.kpi b{display:block;font-size:22px} .kpi span{color:#8b949e;font-size:11px}
+</style>
+<h1>Nodus-GPU Engine &mdash; fleet run</h1>
+<div class="sub">2026-09-05 21:14 UTC &middot; fleet <code>?</code>
+ / sandbox <code>?</code>
+ &middot; plan <code>nodus-324m</code>: ['bash', 'brave_search']</div>
+
+<div class="kpi">
+ <div><b>3</b><span>SHARDS</span></div>
+ <div><b>5</b><span>UNIQUE FAILURES</span></div>
+ <div><b>0/0</b><span>AUTO-FIXED &amp; VERIFIED</span></div>
+ <div><b>0</b><span>GPU REMEDIATIONS</span></div>
+</div>
+
+<h2>Model routing (Nemotron tiers)</h2><span class="badge ultra">ultra &rarr; plan</span><span class="badge super">super &rarr; slotfill</span>
+
+<h2>Shards</h2>
+<table><tr><th>#</th><th>node</th><th>exit</th><th>dur (s)</th><th>failures</th></tr><tr><td>0</td><td><code>nb-h100-00</code></td><td>1</td><td>5.351</td><td>3</td></tr><tr><td>1</td><td><code>nb-h100-01</code></td><td>1</td><td>5.664</td><td>2</td></tr><tr><td>2</td><td><code>nb-h100-02</code></td><td>0</td><td>5.804</td><td>0</td></tr></table>
+
+<h2>Self-managed compute</h2><div class="pill">no remediation - every node stayed within budget</div>
+
+<h2>Auto-fixes (code agent)</h2>
+<table><tr><th>test</th><th>outcome</th></tr><tr><td colspan=2>none</td></tr></table>
+
+<h2>Consolidated failures</h2>
+<table><tr><th>test</th><th>error</th><th>heuristic hint</th></tr><tr><td><code>packages/nodus/tests/test_nodus_tools.py::TestRepairLlmFilePath::test_drive_underscore_prefix</code></td><td><code>(no message; see shard output)</code></td><td>Reproduce locally, bisect the last change touching this module.</td></tr><tr><td><code>packages/nodus/tests/test_nodus_tools.py::TestRepairLlmFilePath::test_missing_colon_cusers</code></td><td><code>(no message; see shard output)</code></td><td>Reproduce locally, bisect the last change touching this module.</td></tr><tr><td><code>packages/nodus/tests/test_nodus_tools.py::TestRepairLlmFilePath::test_coerce_basename_to_expected</code></td><td><code>(no message; see shard output)</code></td><td>Reproduce locally, bisect the last change touching this module.</td></tr><tr><td><code>packages/nodus/tests/test_nodus_grafana.py::test_connect_mcp_falls_back_to_mock_without_launcher</code></td><td><code>(no message; see shard output)</code></td><td>Reproduce locally, bisect the last change touching this module.</td></tr><tr><td><code>packages/nodus/tests/test_nodus_grafana.py::test_connect_mcp_forwards_org_id_env</code></td><td><code>(no message; see shard output)</code></td><td>Reproduce locally, bisect the last change touching this module.</td></tr></table>
+
+<h2>Event timeline</h2><div class="pill">route <code>plan</code> &rarr; <b>ultra</b></div>
+<div class="pill">provision &times;3: <code>nb-h100-00, nb-h100-01, nb-h100-02</code></div>
+<div class="pill">route <code>slotfill</code> &rarr; <b>super</b></div>
+<div class="pill">shard #0 &rarr; <code>nb-h100-00</code></div>
+<div class="pill">telemetry <code>nb-h100-00</code> util 0.0% &middot; 0.0&deg;C &middot; 0.0 W &middot; <span class="ok">OK</span></div>
+<div class="pill">route <code>slotfill</code> &rarr; <b>super</b></div>
+<div class="pill">shard #1 &rarr; <code>nb-h100-01</code></div>
+<div class="pill">telemetry <code>nb-h100-01</code> util 0.0% &middot; 0.0&deg;C &middot; 0.0 W &middot; <span class="ok">OK</span></div>
+<div class="pill">route <code>slotfill</code> &rarr; <b>super</b></div>
+<div class="pill">shard #2 &rarr; <code>nb-h100-02</code></div>
+<div class="pill">telemetry <code>nb-h100-02</code> util 0.0% &middot; 0.0&deg;C &middot; 0.0 W &middot; <span class="ok">OK</span></div>
+<div class="pill">triage: 5 unique failure(s)</div>
+<div class="pill">release: <code>nb-h100-00, nb-h100-01, nb-h100-02</code></div>
+
+<details><summary>raw event log (JSON)</summary>
+<pre class="diff">[
+  {
+    "t": 1788642740.893,
+    "kind": "capabilities",
+    "host_tools": [
+      "nvidia-smi"
+    ],
+    "host_summary": "nvidia-smi",
+    "expect_probe": "cpu-fallback",
+    "expect_real_gpu": false,
+    "fleet_image": "python:3.12-slim",
+    "reason": "Token Factory microVM (image=python:3.12-slim); expect cpu-fallback after probe",
+    "heal_enabled": false
+  },
+  {
+    "t": 1788642741.143,
+    "kind": "run_start",
+    "task": "Run the failing pytest suite across the GPU fleet, triage the failures, propose fixes, and deliver a consolidated Markdown report.",
+    "shards": 3,
+    "gpu_type": "H100",
+    "fleet_mode": "nebius",
+    "sandbox_mode": "token_factory",
+    "jail": true
+  },
+  {
+    "t": 1788642741.396,
+    "kind": "model_route",
+    "decision": "plan",
+    "tier": "ultra",
+    "model": "nebius:nvidia/nemotron-3-ultra-550b"
+  },
+  {
+    "t": 1788642751.915,
+    "kind": "plan",
+    "names": [
+      "bash",
+      "brave_search"
+    ],
+    "source": "nodus-324m",
+    "note": "planned by 324M (checkpoint_sft_plan_v5.pt)",
+    "degraded": false
+  },
+  {
+    "t": 1788642755.585,
+    "kind": "gpu_provision",
+    "provisioned": 3,
+    "nodes": [
+      {
+        "id": "nb-h100-00",
+        "gpu_type": "H100",
+        "region": "eu-north1",
+        "state": "ready",
+        "job": null
+      },
+      {
+        "id": "nb-h100-01",
+        "gpu_type": "H100",
+        "region": "eu-north1",
+        "state": "ready",
+        "job": null
+      },
+      {
+        "id": "nb-h100-02",
+        "gpu_type": "H100",
+        "region": "eu-north1",
+        "state": "ready",
+        "job": null
+      }
+    ]
+  },
+  {
+    "t": 1788642755.839,
+    "kind": "shard_split",
+    "strategy": "round-robin-files",
+    "files": 13,
+    "shards": 3
+  },
+  {
+    "t": 1788642756.122,
+    "kind": "sandbox_env",
+    "source_root": "packages/nodus",
+    "requirements": "packages/nodus/requirements-ci.txt",
+    "payload_files": 53
+  },
+  {
+    "t": 1788642756.373,
+    "kind": "payload",
+    "files": 53,
+    "bytes": 921525
+  },
+  {
+    "t": 1788642756.623,
+    "kind": "model_route",
+    "decision": "slotfill",
+    "tier": "super",
+    "model": "nebius:nvidia/nemotron-3-super-120b-a12b"
+  },
+  {
+    "t": 1788642758.699,
+    "kind": "slotfill_empty",
+    "shard": 0
+  },
+  {
+    "t": 1788642758.949,
+    "kind": "shard_start",
+    "index": 0,
+    "node_id": "nb-h100-00",
+    "command": "pip install -q -r packages/nodus/requirements-ci.txt &amp;&amp; PYTHONPATH=packages/nodus python -m pytest packages/nodus/tests/test_demo_agentic_cinema.py packages/nodus/tests/test_nodus_gcloud.py packages/nodus/tests/test_nodus_plan_slotfill.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_ssrf_redirect.py -q --tb=short -p no:cacheprovider"
+  },
+  {
+    "t": 1788642780.495,
+    "kind": "gpu_status",
+    "node_id": "nb-h100-00",
+    "telemetry": {
+      "id": "nb-h100-00",
+      "state": "allocated",
+      "util_pct": 0.0,
+      "mem_used_gb": 0.0,
+      "mem_total_gb": 1.0,
+      "temp_c": 0.0,
+      "power_w": 0.0,
+      "health": "ok",
+      "efficiency": 0.0,
+      "probe_kind": "cpu-fallback",
+      "gpu_class": "none",
+      "gpu_name": ""
+    }
+  },
+  {
+    "t": 1788642780.745,
+    "kind": "gpu_telemetry_non_gpu",
+    "shard": 0,
+    "node_id": "nb-h100-00",
+    "probe_kind": "cpu-fallback",
+    "gpu_class": "none",
+    "why": "no nvidia-smi metrics \u2014 skip efficiency heal"
+  },
+  {
+    "t": 1788642780.995,
+    "kind": "shard_done",
+    "index": 0,
+    "node_id": "nb-h100-00",
+    "migrated_from": null,
+    "exit_code": 1,
+    "failures": 3
+  },
+  {
+    "t": 1788642781.246,
+    "kind": "model_route",
+    "decision": "slotfill",
+    "tier": "super",
+    "model": "nebius:nvidia/nemotron-3-super-120b-a12b"
+  },
+  {
+    "t": 1788642785.591,
+    "kind": "slotfill_empty",
+    "shard": 1
+  },
+  {
+    "t": 1788642785.842,
+    "kind": "shard_start",
+    "index": 1,
+    "node_id": "nb-h100-01",
+    "command": "pip install -q -r packages/nodus/requirements-ci.txt &amp;&amp; PYTHONPATH=packages/nodus python -m pytest packages/nodus/tests/test_endurance.py packages/nodus/tests/test_nodus_grafana.py packages/nodus/tests/test_nodus_planner.py packages/nodus/tests/test_nodus_verify.py -q --tb=short -p no:cacheprovider"
+  },
+  {
+    "t": 1788642808.421,
+    "kind": "gpu_status",
+    "node_id": "nb-h100-01",
+    "telemetry": {
+      "id": "nb-h100-01",
+      "state": "allocated",
+      "util_pct": 0.0,
+      "mem_used_gb": 0.0,
+      "mem_total_gb": 1.0,
+      "temp_c": 0.0,
+      "power_w": 0.0,
+      "health": "ok",
+      "efficiency": 0.0,
+      "probe_kind": "cpu-fallback",
+      "gpu_class": "none",
+      "gpu_name": ""
+    }
+  },
+  {
+    "t": 1788642808.672,
+    "kind": "gpu_telemetry_non_gpu",
+    "shard": 1,
+    "node_id": "nb-h100-01",
+    "probe_kind": "cpu-fallback",
+    "gpu_class": "none",
+    "why": "no nvidia-smi metrics \u2014 skip efficiency heal"
+  },
+  {
+    "t": 1788642808.922,
+    "kind": "shard_done",
+    "index": 1,
+    "node_id": "nb-h100-01",
+    "migrated_from": null,
+    "exit_code": 1,
+    "failures": 2
+  },
+  {
+    "t": 1788642809.173,
+    "kind": "model_route",
+    "decision": "slotfill",
+    "tier": "super",
+    "model": "nebius:nvidia/nemotron-3-super-120b-a12b"
+  },
+  {
+    "t": 1788642812.941,
+    "kind": "slotfill_empty",
+    "shard": 2
+  },
+  {
+    "t": 1788642813.191,
+    "kind": "shard_start",
+    "index": 2,
+    "node_id": "nb-h100-02",
+    "command": "pip install -q -r packages/nodus/requirements-ci.txt &amp;&amp; PYTHONPATH=packages/nodus python -m pytest packages/nodus/tests/test_nodus_agent.py packages/nodus/tests/test_nodus_memory.py packages/nodus/tests/test_nodus_policy.py packages/nodus/tests/test_secret_redaction.py -q --tb=short -p no:cacheprovider"
+  },
+  {
+    "t": 1788642839.344,
+    "kind": "gpu_status",
+    "node_id": "nb-h100-02",
+    "telemetry": {
+      "id": "nb-h100-02",
+      "state": "allocated",
+      "util_pct": 0.0,
+      "mem_used_gb": 0.0,
+      "mem_total_gb": 1.0,
+      "temp_c": 0.0,
+      "power_w": 0.0,
+      "health": "ok",
+      "efficiency": 0.0,
+      "probe_kind": "cpu-fallback",
+      "gpu_class": "none",
+      "gpu_name": ""
+    }
+  },
+  {
+    "t": 1788642839.595,
+    "kind": "gpu_telemetry_non_gpu",
+    "shard": 2,
+    "node_id": "nb-h100-02",
+    "probe_kind": "cpu-fallback",
+    "gpu_class": "none",
+    "why": "no nvidia-smi metrics \u2014 skip efficiency heal"
+  },
+  {
+    "t": 1788642839.846,
+    "kind": "shard_done",
+    "index": 2,
+    "node_id": "nb-h100-02",
+    "migrated_from": null,
+    "exit_code": 0,
+    "failures": 0
+  },
+  {
+    "t": 1788642840.098,
+    "kind": "triage",
+    "unique_failures": 5
+  },
+  {
+    "t": 1788642840.348,
+    "kind": "plan_gated_autofix",
+    "allowed": false,
+    "plan": [
+      "bash",
+      "brave_search"
+    ],
+    "source": "nodus-324m",
+    "need": [
+      "edit_file",
+      "write_file"
+    ]
+  },
+  {
+    "t": 1788642840.601,
+    "kind": "autofix_skipped",
+    "reason": "plan_has_no_edit_tools",
+    "plan": [
+      "bash",
+      "brave_search"
+    ],
+    "source": "nodus-324m",
+    "would_have_tried": 3
+  },
+  {
+    "t": 1788642840.852,
+    "kind": "gpu_release",
+    "released": [
+      "nb-h100-00",
+      "nb-h100-01",
+      "nb-h100-02"
+    ],
+    "count": 3
+  }
+]</pre></details>

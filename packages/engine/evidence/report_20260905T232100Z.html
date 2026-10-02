@@ -1,0 +1,465 @@
+<!doctype html><meta charset="utf-8">
+<title>Fleet run - 2026-09-05 23:21 UTC</title><style>
+:root{color-scheme:light dark}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;
+ background:#0d1117;color:#c9d1d9;padding:32px;max-width:1000px;margin:0 auto}
+h1{font-size:20px;margin:0 0 4px} h2{font-size:15px;margin:28px 0 10px;
+ border-bottom:1px solid #30363d;padding-bottom:6px}
+.sub{color:#8b949e;font-size:12px;margin-bottom:20px}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:6px 0}
+th,td{border:1px solid #30363d;padding:6px 9px;text-align:left;vertical-align:top}
+th{background:#161b22;font-weight:600}
+code{background:#161b22;padding:1px 5px;border-radius:4px;font-size:12px}
+.badge{display:inline-block;padding:2px 9px;border-radius:12px;font-size:12px;
+ font-weight:600;margin:2px 4px 2px 0}
+.ultra{background:#5a2a8a;color:#e9d5ff} .super{background:#1f5a8a;color:#d5eaff}
+.nano{background:#2a6a3a;color:#d5f5df}
+.ok{color:#3fb950} .warm{color:#d29922} .throttle{color:#f85149} .unknown{color:#8b949e}
+.pill{border-left:3px solid #30363d;padding:4px 10px;margin:3px 0;font-size:12.5px}
+.pill.pressure{border-color:#f85149;color:#f8a49e}
+.pill.remediation{border-color:#58a6ff;color:#a5d0ff;font-weight:600}
+.pill.fix{border-color:#3fb950}
+pre.diff{background:#161b22;border:1px solid #30363d;border-radius:6px;
+ padding:10px;overflow-x:auto;font-size:12px;margin:4px 0}
+pre.diff .add{color:#3fb950} pre.diff .del{color:#f85149} pre.diff .hh{color:#8b949e}
+details{margin-top:8px} summary{cursor:pointer;color:#8b949e;font-size:12px}
+.kpi{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0}
+.kpi div{background:#161b22;border:1px solid #30363d;border-radius:8px;
+ padding:10px 16px;min-width:120px}
+.kpi b{display:block;font-size:22px} .kpi span{color:#8b949e;font-size:11px}
+</style>
+<h1>Nodus-GPU Engine &mdash; fleet run</h1>
+<div class="sub">2026-09-05 23:21 UTC &middot; fleet <code>?</code>
+ / sandbox <code>?</code>
+ &middot; plan <code>heuristic</code>: ['bash', 'edit_file', 'write_file']</div>
+
+<div class="kpi">
+ <div><b>3</b><span>SHARDS</span></div>
+ <div><b>3</b><span>UNIQUE FAILURES</span></div>
+ <div><b>2/3</b><span>AUTO-FIXED &amp; VERIFIED</span></div>
+ <div><b>1</b><span>GPU REMEDIATIONS</span></div>
+</div>
+
+<h2>Model routing (Nemotron tiers)</h2><span class="badge ultra">ultra &rarr; plan</span><span class="badge super">super &rarr; slotfill, triage</span><span class="badge nano">nano &rarr; healthcheck</span>
+
+<h2>Shards</h2>
+<table><tr><th>#</th><th>node</th><th>exit</th><th>dur (s)</th><th>failures</th></tr><tr><td>0</td><td><code>nb-h100-00</code></td><td>1</td><td>0.5</td><td>1</td></tr><tr><td>1</td><td><code>nb-h100-01</code></td><td>1</td><td>3.4</td><td>2</td></tr><tr><td>2</td><td><code>nb-h100-03</code> <span class="throttle">&larr; migrated from nb-h100-02</span></td><td>1</td><td>1.1</td><td>1</td></tr></table>
+
+<h2>Self-managed compute</h2><div class="pill remediation">shard 2: <code>nb-h100-02</code> throttle (90.4&deg;C, 730.0 W) &rarr; <code>nb-h100-03</code></div>
+
+<h2>Auto-fixes (code agent)</h2>
+<table><tr><th>test</th><th>outcome</th></tr><tr><td><code>tests/test_nodus_planner.py::test_plan_order</code><details><summary>patch</summary><pre class="diff"><span class="hh">--- a/nodus_planner.py</span>
+<span class="hh">+++ b/nodus_planner.py</span>
+<span class="hh">@@ def parse_plan(text):</span>
+<span class="del">-    return names</span>
+<span class="add">+    return sorted(names, key=STEP_ORDER.index)</span></pre></details></td><td><span class="ok">&#10003; verified</span></td></tr><tr><td><code>tests/test_nodus_memory.py::test_roundtrip</code></td><td><span class="unknown">no patch</span></td></tr><tr><td><code>tests/test_nodus_tools.py::test_edit_file_unique</code><details><summary>patch</summary><pre class="diff"><span class="hh">--- a/nodus_tools.py</span>
+<span class="hh">+++ b/nodus_tools.py</span>
+<span class="hh">@@ def edit_file(path, old, new, replace_all=False):</span>
+<span class="del">-    if src.count(old) != 1:</span>
+<span class="del">-        raise ValueError('old_string not unique')</span>
+<span class="add">+    if src.count(old) != 1 and not replace_all:</span>
+<span class="add">+        raise ValueError('old_string not unique; pass replace_all=True')</span></pre></details></td><td><span class="ok">&#10003; verified</span></td></tr></table>
+
+<h2>Consolidated failures</h2>
+<table><tr><th>test</th><th>error</th><th>heuristic hint</th></tr><tr><td><code>tests/test_nodus_planner.py::test_plan_order</code></td><td><code>AssertionError: plan names out of order</code></td><td>Sort plan names to match executor step order before asserting.</td></tr><tr><td><code>tests/test_nodus_memory.py::test_roundtrip</code></td><td><code>AssertionError: memory entry missing</code></td><td>Flush the memory append before asserting the round-trip.</td></tr><tr><td><code>tests/test_nodus_tools.py::test_edit_file_unique</code></td><td><code>ValueError: old_string not unique</code></td><td>Make `old_string` unique or pass replace_all=True.</td></tr></table>
+
+<h2>Event timeline</h2><div class="pill">route <code>plan</code> &rarr; <b>ultra</b></div>
+<div class="pill">provision &times;3: <code>nb-h100-00, nb-h100-01, nb-h100-02</code></div>
+<div class="pill">route <code>slotfill</code> &rarr; <b>super</b></div>
+<div class="pill">shard #0 &rarr; <code>nb-h100-00</code></div>
+<div class="pill">telemetry <code>nb-h100-00</code> util 97.5% &middot; 73.7&deg;C &middot; 529.5 W &middot; <span class="ok">OK</span></div>
+<div class="pill">route <code>slotfill</code> &rarr; <b>super</b></div>
+<div class="pill">shard #1 &rarr; <code>nb-h100-01</code></div>
+<div class="pill">telemetry <code>nb-h100-01</code> util 57.0% &middot; 78.3&deg;C &middot; 540.8 W &middot; <span class="warm">WARM</span></div>
+<div class="pill">route <code>slotfill</code> &rarr; <b>super</b></div>
+<div class="pill">shard #2 &rarr; <code>nb-h100-02</code></div>
+<div class="pill">telemetry <code>nb-h100-02</code> util 73.2% &middot; 90.4&deg;C &middot; 730.0 W &middot; <span class="throttle">THROTTLE</span></div>
+<div class="pill">route <code>healthcheck</code> &rarr; <b>nano</b></div>
+<div class="pill pressure">! pressure shard 2 on <code>nb-h100-02</code>: throttle 90.4&deg;C / 730.0 W</div>
+<div class="pill remediation">+ replacement <code>nb-h100-03</code> for shard 2</div>
+<div class="pill remediation">&#8635; migrate shard 2: <code>nb-h100-02</code> &rarr; <code>nb-h100-03</code></div>
+<div class="pill">telemetry <code>nb-h100-03</code> util 58.2% &middot; 73.6&deg;C &middot; 675.7 W &middot; <span class="ok">OK</span></div>
+<div class="pill">triage: 3 unique failure(s)</div>
+<div class="pill">route <code>triage</code> &rarr; <b>super</b></div>
+<div class="pill fix">fix OK <code>tests/test_nodus_planner.py::test_plan_order</code> (re-tested green on nb-h100-04)</div>
+<div class="pill">route <code>triage</code> &rarr; <b>super</b></div>
+<div class="pill">route <code>triage</code> &rarr; <b>super</b></div>
+<div class="pill fix">fix OK <code>tests/test_nodus_tools.py::test_edit_file_unique</code> (re-tested green on nb-h100-05)</div>
+<div class="pill">release: <code>nb-h100-00, nb-h100-01, nb-h100-03</code></div>
+
+<details><summary>raw event log (JSON)</summary>
+<pre class="diff">[
+  {
+    "t": 1788650460.22,
+    "kind": "capabilities",
+    "host_tools": [
+      "nvidia-smi"
+    ],
+    "host_summary": "nvidia-smi",
+    "expect_probe": "synthetic",
+    "expect_real_gpu": true,
+    "fleet_image": "(mock)",
+    "reason": "MockFleet emits synthetic H100-class telemetry",
+    "heal_enabled": true
+  },
+  {
+    "t": 1788650460.22,
+    "kind": "run_start",
+    "task": "Run the failing pytest suite across the GPU fleet, triage the failures, propose fixes, and deliver a consolidated Markdown report.",
+    "shards": 3,
+    "gpu_type": "H100",
+    "fleet_mode": "mock",
+    "sandbox_mode": "mock",
+    "jail": true
+  },
+  {
+    "t": 1788650460.708,
+    "kind": "model_route",
+    "decision": "plan",
+    "tier": "ultra",
+    "model": "nebius:nvidia/Nemotron-3-Ultra-550b-a55b"
+  },
+  {
+    "t": 1788650460.708,
+    "kind": "plan",
+    "names": [
+      "bash",
+      "edit_file",
+      "write_file"
+    ],
+    "source": "heuristic",
+    "note": "324M planner checkpoint NOT FOUND at __nge_force_heuristic__\\missing.pt - planning falls back to the hand-written keyword heuristic. Point at the weights with NODUS_PLAN_CKPT=/path/to/checkpoint_sft_plan_v5.pt, or write that path into packages/engine/.nodus_plan_ckpt",
+    "degraded": true
+  },
+  {
+    "t": 1788650460.708,
+    "kind": "plan_degraded",
+    "source": "heuristic",
+    "reason": "324M planner checkpoint NOT FOUND at __nge_force_heuristic__\\missing.pt - planning falls back to the hand-written keyword heuristic. Point at the weights with NODUS_PLAN_CKPT=/path/to/checkpoint_sft_plan_v5.pt, or write that path into packages/engine/.nodus_plan_ckpt"
+  },
+  {
+    "t": 1788650460.709,
+    "kind": "gpu_provision",
+    "provisioned": 3,
+    "nodes": [
+      {
+        "id": "nb-h100-00",
+        "gpu_type": "H100",
+        "region": "eu-north1",
+        "state": "ready",
+        "job": null
+      },
+      {
+        "id": "nb-h100-01",
+        "gpu_type": "H100",
+        "region": "eu-north1",
+        "state": "ready",
+        "job": null
+      },
+      {
+        "id": "nb-h100-02",
+        "gpu_type": "H100",
+        "region": "eu-north1",
+        "state": "ready",
+        "job": null
+      }
+    ]
+  },
+  {
+    "t": 1788650460.716,
+    "kind": "shard_split",
+    "strategy": "round-robin-files",
+    "files": 13,
+    "shards": 3
+  },
+  {
+    "t": 1788650460.805,
+    "kind": "sandbox_env",
+    "source_root": "packages/nodus",
+    "requirements": "packages/nodus/requirements-ci.txt",
+    "payload_files": 53
+  },
+  {
+    "t": 1788650460.805,
+    "kind": "payload",
+    "files": 53,
+    "bytes": 921525
+  },
+  {
+    "t": 1788650460.806,
+    "kind": "model_route",
+    "decision": "slotfill",
+    "tier": "super",
+    "model": "nebius:nvidia/nemotron-3-super-120b-a12b"
+  },
+  {
+    "t": 1788650460.806,
+    "kind": "shard_start",
+    "index": 0,
+    "node_id": "nb-h100-00",
+    "command": "pip install -q -r packages/nodus/requirements-ci.txt &amp;&amp; PYTHONPATH=packages/nodus python -m pytest packages/nodus/tests/test_demo_agentic_cinema.py packages/nodus/tests/test_nodus_gcloud.py packages/nodus/tests/test_nodus_plan_slotfill.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_ssrf_redirect.py -q --tb=short -p no:cacheprovider"
+  },
+  {
+    "t": 1788650460.818,
+    "kind": "gpu_status",
+    "node_id": "nb-h100-00",
+    "telemetry": {
+      "id": "nb-h100-00",
+      "state": "allocated",
+      "util_pct": 97.5,
+      "mem_used_gb": 31.4,
+      "mem_total_gb": 80.0,
+      "temp_c": 73.7,
+      "power_w": 529.5,
+      "health": "ok",
+      "efficiency": 1.0,
+      "probe_kind": "synthetic",
+      "gpu_class": "synthetic",
+      "gpu_name": "mock-H100"
+    }
+  },
+  {
+    "t": 1788650460.818,
+    "kind": "shard_done",
+    "index": 0,
+    "node_id": "nb-h100-00",
+    "migrated_from": null,
+    "exit_code": 1,
+    "failures": 1
+  },
+  {
+    "t": 1788650460.818,
+    "kind": "model_route",
+    "decision": "slotfill",
+    "tier": "super",
+    "model": "nebius:nvidia/nemotron-3-super-120b-a12b"
+  },
+  {
+    "t": 1788650460.818,
+    "kind": "shard_start",
+    "index": 1,
+    "node_id": "nb-h100-01",
+    "command": "pip install -q -r packages/nodus/requirements-ci.txt &amp;&amp; PYTHONPATH=packages/nodus python -m pytest packages/nodus/tests/test_endurance.py packages/nodus/tests/test_nodus_grafana.py packages/nodus/tests/test_nodus_planner.py packages/nodus/tests/test_nodus_verify.py -q --tb=short -p no:cacheprovider"
+  },
+  {
+    "t": 1788650460.819,
+    "kind": "gpu_status",
+    "node_id": "nb-h100-01",
+    "telemetry": {
+      "id": "nb-h100-01",
+      "state": "allocated",
+      "util_pct": 57.0,
+      "mem_used_gb": 22.2,
+      "mem_total_gb": 80.0,
+      "temp_c": 78.3,
+      "power_w": 540.8,
+      "health": "warm",
+      "efficiency": 0.738,
+      "probe_kind": "synthetic",
+      "gpu_class": "synthetic",
+      "gpu_name": "mock-H100"
+    }
+  },
+  {
+    "t": 1788650460.819,
+    "kind": "shard_done",
+    "index": 1,
+    "node_id": "nb-h100-01",
+    "migrated_from": null,
+    "exit_code": 1,
+    "failures": 2
+  },
+  {
+    "t": 1788650460.819,
+    "kind": "model_route",
+    "decision": "slotfill",
+    "tier": "super",
+    "model": "nebius:nvidia/nemotron-3-super-120b-a12b"
+  },
+  {
+    "t": 1788650460.819,
+    "kind": "shard_start",
+    "index": 2,
+    "node_id": "nb-h100-02",
+    "command": "pip install -q -r packages/nodus/requirements-ci.txt &amp;&amp; PYTHONPATH=packages/nodus python -m pytest packages/nodus/tests/test_nodus_agent.py packages/nodus/tests/test_nodus_memory.py packages/nodus/tests/test_nodus_policy.py packages/nodus/tests/test_secret_redaction.py -q --tb=short -p no:cacheprovider"
+  },
+  {
+    "t": 1788650460.82,
+    "kind": "gpu_status",
+    "node_id": "nb-h100-02",
+    "telemetry": {
+      "id": "nb-h100-02",
+      "state": "allocated",
+      "util_pct": 73.2,
+      "mem_used_gb": 54.5,
+      "mem_total_gb": 80.0,
+      "temp_c": 90.4,
+      "power_w": 730.0,
+      "health": "throttle",
+      "efficiency": 0.702,
+      "probe_kind": "synthetic",
+      "gpu_class": "synthetic",
+      "gpu_name": "mock-H100"
+    }
+  },
+  {
+    "t": 1788650460.82,
+    "kind": "model_route",
+    "decision": "healthcheck",
+    "tier": "nano",
+    "model": "nebius:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+  },
+  {
+    "t": 1788650460.82,
+    "kind": "gpu_pressure",
+    "shard": 2,
+    "node_id": "nb-h100-02",
+    "health": "throttle",
+    "efficiency": 0.702,
+    "temp_c": 90.4,
+    "power_w": 730.0
+  },
+  {
+    "t": 1788650460.82,
+    "kind": "gpu_provision_replacement",
+    "node_id": "nb-h100-03",
+    "for_shard": 2
+  },
+  {
+    "t": 1788650460.82,
+    "kind": "gpu_remediation",
+    "shard": 2,
+    "from": "nb-h100-02",
+    "to": "nb-h100-03",
+    "reason": "throttle",
+    "efficiency": 0.702,
+    "temp_c": 90.4,
+    "power_w": 730.0
+  },
+  {
+    "t": 1788650460.82,
+    "kind": "gpu_status",
+    "node_id": "nb-h100-03",
+    "telemetry": {
+      "id": "nb-h100-03",
+      "state": "allocated",
+      "util_pct": 58.2,
+      "mem_used_gb": 31.9,
+      "mem_total_gb": 80.0,
+      "temp_c": 73.6,
+      "power_w": 675.7,
+      "health": "ok",
+      "efficiency": 0.603,
+      "probe_kind": "synthetic",
+      "gpu_class": "synthetic",
+      "gpu_name": "mock-H100"
+    }
+  },
+  {
+    "t": 1788650460.82,
+    "kind": "shard_done",
+    "index": 2,
+    "node_id": "nb-h100-03",
+    "migrated_from": "nb-h100-02",
+    "exit_code": 1,
+    "failures": 1
+  },
+  {
+    "t": 1788650460.82,
+    "kind": "triage",
+    "unique_failures": 3
+  },
+  {
+    "t": 1788650460.82,
+    "kind": "plan_gated_autofix",
+    "allowed": true,
+    "plan": [
+      "bash",
+      "edit_file",
+      "write_file"
+    ],
+    "source": "heuristic",
+    "because": [
+      "edit_file",
+      "write_file"
+    ]
+  },
+  {
+    "t": 1788650460.821,
+    "kind": "model_route",
+    "decision": "triage",
+    "tier": "super",
+    "model": "nebius:nvidia/nemotron-3-super-120b-a12b"
+  },
+  {
+    "t": 1788650460.822,
+    "kind": "fix_attempt",
+    "test": "tests/test_nodus_planner.py::test_plan_order",
+    "has_patch": true
+  },
+  {
+    "t": 1788650460.828,
+    "kind": "fix_sources",
+    "test": "tests/test_nodus_planner.py::test_plan_order",
+    "files": []
+  },
+  {
+    "t": 1788650460.83,
+    "kind": "fix_verified",
+    "test": "tests/test_nodus_planner.py::test_plan_order",
+    "node": "nb-h100-04",
+    "target_fixed": true,
+    "regressions": 0
+  },
+  {
+    "t": 1788650460.83,
+    "kind": "model_route",
+    "decision": "triage",
+    "tier": "super",
+    "model": "nebius:nvidia/nemotron-3-super-120b-a12b"
+  },
+  {
+    "t": 1788650460.832,
+    "kind": "fix_attempt",
+    "test": "tests/test_nodus_memory.py::test_roundtrip",
+    "has_patch": false
+  },
+  {
+    "t": 1788650460.833,
+    "kind": "model_route",
+    "decision": "triage",
+    "tier": "super",
+    "model": "nebius:nvidia/nemotron-3-super-120b-a12b"
+  },
+  {
+    "t": 1788650460.835,
+    "kind": "fix_attempt",
+    "test": "tests/test_nodus_tools.py::test_edit_file_unique",
+    "has_patch": true
+  },
+  {
+    "t": 1788650460.84,
+    "kind": "fix_sources",
+    "test": "tests/test_nodus_tools.py::test_edit_file_unique",
+    "files": []
+  },
+  {
+    "t": 1788650460.841,
+    "kind": "fix_verified",
+    "test": "tests/test_nodus_tools.py::test_edit_file_unique",
+    "node": "nb-h100-05",
+    "target_fixed": true,
+    "regressions": 0
+  },
+  {
+    "t": 1788650460.843,
+    "kind": "gpu_release",
+    "released": [
+      "nb-h100-00",
+      "nb-h100-01",
+      "nb-h100-03"
+    ],
+    "count": 3
+  }
+]</pre></details>

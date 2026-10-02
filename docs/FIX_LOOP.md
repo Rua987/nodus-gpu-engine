@@ -196,7 +196,9 @@ class — `NGE_THINKING_SHORT` (slot-fill, mission, plan fallback) and
 `NGE_THINKING_PATCH`, `on` / `off` / `model` — and `reasoning_tokens` is now in
 the usage ledger and on the `*_truncated` events.
 
-**Measured** with `bench/thinking_ab.py`: real Token Factory sandboxes, the real
+**Measured** with `bench/thinking_ab.py` (CSVs, every run's event log and the
+verified patch in [`packages/engine/evidence/`](../packages/engine/evidence/README.md)):
+real Token Factory sandboxes, the real
 suite (5 real failures per run), simulated fleet, heuristic plan so autofix
 opens; arms interleaved run by run, 3 runs each.
 

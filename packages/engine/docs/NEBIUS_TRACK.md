@@ -31,7 +31,7 @@ applicative DSL down to GPU resource management.
 ```bash
 cd packages/engine
 pip install -r requirements.txt          # requests + pytest only
-python -m pytest -q                       # 398 tests, no network
+python -m pytest -q                       # 408 tests, no network
 python -m nge.demo_nebius --mock          # deterministic end-to-end
 python -m nge.demo_nebius --mock --watch  # same run, live fleet view
 # Judge film with verified patches (keyword plan unlocks edit_file):
@@ -39,7 +39,7 @@ python -m nge.demo_nebius --mock --watch --heuristic-plan
 ```
 
 Oral script: [`JUDGE_DRY_RUN.md`](JUDGE_DRY_RUN.md). Capture with autofix:
-`out/report_20260905T232100Z.html` (2/3 verified + GPU migrate).
+[`evidence/report_20260905T232100Z.html`](../evidence/report_20260905T232100Z.html) (2/3 verified + GPU migrate).
 
 ### Optional — real ReAct loop, no cloud
 
@@ -147,7 +147,7 @@ mock for a partial-real run.
 
 ## What runs for real
 
-Sandboxes beta access landed, so `--live` is no longer a skeleton. 398 tests,
+Sandboxes beta access landed, so `--live` is no longer a skeleton. 408 tests,
 plus an MCP integration job and `live-smoke` — the full pipeline against real
 sandboxes on Ubuntu, on demand and on a weekday cron.
 

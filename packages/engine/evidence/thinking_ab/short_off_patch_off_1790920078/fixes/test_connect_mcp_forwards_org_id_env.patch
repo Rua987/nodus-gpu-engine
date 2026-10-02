@@ -1,0 +1,32 @@
+--- a/packages/nodus/nodus_mcp_client.py
++++ b/packages/nodus/nodus_mcp_client.py
+@@ -19,11 +19,12 @@
+ 
+ logger = logging.getLogger(__name__)
+ 
++try:
+     from .mcp_server import McpServer
+-except ImportError:
++except ImportError:  # pragma: no cover
+     McpServer = None  # type: ignore
+ 
+ try:
+     import mcp.types as mcp_types
+ except ImportError:  # pragma: no cover
+     mcp_types = None  # type: ignore
+```
+
+```diff
+a/packages/nodus/nodus_mcp_client.py, b/packages/nodus/nodus_mcp_client.py
+--- a/packages/nodus/nodus_mcp_client.py
++++ b/packages/nodus/nodus_mcp_client.py
+@@ -31,7 +31,7 @@
+ 
+ class McpBridge:
+     """Lazy MCP client bridge."""
+-
++    def __init__(self) -> None:
+         self._server: Optional[McpServer] = None
+         self.registry: Optional[object] = None
+ 
+```

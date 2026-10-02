@@ -67,6 +67,8 @@ rates, use `--model` / `--live` rows alone, or a human-labelled ticket corpus.
 
 ## Snapshot that justified keeping this method (2026-09-04)
 
+Data: `packages/engine/evidence/taxonomy_p0_*.csv`, `taxonomy_p0b*.csv`.
+
 **0a** — 24 cases, exact match to gold plans:
 
 | Source | OK | P | V | Among non-OK |
@@ -107,7 +109,9 @@ tokens were reasoning (19 384 / 19 595), and 14 of the 15 model calls were cut
 by the ceiling — 0/6 slot-fills usable, 1/9 patches produced. **T**, not A. The table's lever for T is the token
 budget, not retries: reasoning off for short replies, on with an 8192 ceiling
 for patches. Numbers and caveats: `docs/FIX_LOOP.md`, *Reasoning eats the
-token ceiling*. CSVs: `out/thinking_ab_20261001.csv`, `out/thinking_ab_20261001_r2.csv`.
+token ceiling*. CSVs and every run's event log: `packages/engine/evidence/thinking_ab_20261001*.csv`,
+`packages/engine/evidence/thinking_ab/`; the 0b live run:
+`packages/engine/evidence/taxonomy_p0b_live_20261001.csv`.
 
 Same rule as the retry count: the fix that looked obvious (« turn reasoning
 off ») was half right — it rescued slot-fill and degraded patches (4/9

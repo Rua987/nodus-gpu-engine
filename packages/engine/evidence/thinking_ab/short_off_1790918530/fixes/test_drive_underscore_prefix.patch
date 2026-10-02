@@ -1,0 +1,10 @@
+--- a/packages/nodus/nodus_tools.py
++++ b/packages/nodus/nodus_tools.py
+@@ -1246,3 +1246,6 @@
+     s = _collapse_doubled_first_segment(s)
+-    s = _strip_spurious_basename_underscore(s)
++    # Normalize separators for basename underscore stripping (handles both \ and /)
++    s_slash = s.replace('\\', '/')
++    s_slash = _strip_spurious_basename_underscore(s_slash)
++    s = s_slash.replace('/', '\\')
+     return s

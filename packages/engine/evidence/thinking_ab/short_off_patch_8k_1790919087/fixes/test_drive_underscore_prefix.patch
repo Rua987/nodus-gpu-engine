@@ -1,0 +1,8 @@
+--- a/packages/nodus/nodus_tools.py
++++ b/packages/nodus/nodus_tools.py
+@@ -1246,3 +1246,4 @@
+     s = _collapse_doubled_first_segment(s)
+-    s = _strip_spurious_basename_underscore(s)
++    sep = '\\' if '\\' in s else '/'
++    s = _strip_spurious_basename_underscore(s.replace(sep, '/')).replace('/', sep)
+     return s

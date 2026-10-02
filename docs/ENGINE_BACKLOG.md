@@ -3,6 +3,8 @@
 Liste vivante. Mettre à jour après chaque live, smoke TF, ou chantier fermé.
 Dernière revue : **2026-10-01** (raisonnement Nemotron vs `max_tokens`, garde `-x`, en-têtes de diff).
 
+Rapports et CSV cités ici : `packages/engine/evidence/` (versionné, index de provenance dans son `README.md`).
+
 Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **MANQUE** = pas fait · **BLOQUÉ** = dépend d’un produit externe
 
 ---
@@ -44,7 +46,7 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | M4 | Image CUDA Contree (deps only) | **P2** | |
 | M5 | DCGM dans le nœud | **P2** | |
 | M6 | Patch multi-tour si truncated | **P2** | cause n°1 levée (budget mangé par le raisonnement) ; encore 2/9 coupés à 8192 |
-| M18 | Preuves juges dans `out/` gitignoré (`041721Z`, `053458Z_honest`) | **P1** | un clone ne les a pas ; les versionner ou changer le texte |
+| M18 | ~~Preuves juges dans `out/` gitignoré~~ | **OK** | fermé 2026-10-01 : `packages/engine/evidence/` + `tests/test_evidence.py` |
 | M19 | Pannes live = tests écrits pour Windows | **P2** | « vérifié » ne départage rien sur ce jeu ; une cible Linux-native rendrait la mesure patch plus parlante |
 | M7 | DeepSeek clé + smoke | **P2** | |
 | M8 | Clarifier warning `Token expires in 0 hours` | **P2** | non bloquant (run OK) |

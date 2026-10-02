@@ -1,0 +1,9 @@
+--- a/packages/nodus/tests/test_nodus_grafana.py
++++ b/packages/nodus/tests/test_nodus_grafana.py
+@@ -1,6 +1,6 @@
+ 158| def test_connect_mcp_falls_back_to_mock_without_launcher(monkeypatch):
+ 159|     monkeypatch.setattr(lg, "mcp_grafana_command", lambda *a, **k: None)
+ 160|     sink = GrafanaSink(mode="mcp", url="https://x.grafana.net", token="glsa_dummy")
+ 161|     assert sink.mode == "mock"
+ 162|     assert any("launcher not found" in e for e in sink.errors)
+ 163|     sink.close()

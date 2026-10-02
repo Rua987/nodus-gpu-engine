@@ -25,7 +25,7 @@ From a fresh clone and an empty venv, on Windows:
 
 ```bash
 pip install -r requirements.txt     # requests + pytest only — torch is optional
-python -m pytest -q                 # 394 pass, 4 clean skips (mcp, patch_ng x2, nodus_agent)
+python -m pytest -q                 # 404 pass, 4 clean skips (mcp, patch_ng x2, nodus_agent)
 python -m nge.demo_nebius --mock    # runs, produces its artefact
 python -m nge.fetch_ckpt            # 988 MB, SHA256-verified, writes .nodus_plan_ckpt
 ```
@@ -38,7 +38,7 @@ in a venv containing nothing else.
 
 | path | Windows (local) | Ubuntu (CI) |
 |---|---|---|
-| unit tests (398 on 2026-10-01) | yes | yes — Python 3.10 / 3.11 / 3.12 |
+| unit tests (408 on 2026-10-01) | yes | yes — Python 3.10 / 3.11 / 3.12 |
 | MCP client ↔ GPU MCP server | yes | yes |
 | `--mock` demo | yes | yes |
 | `--live` (real Nemotron + real sandboxes) | yes | yes — `live-smoke`, manual or weekday cron |
