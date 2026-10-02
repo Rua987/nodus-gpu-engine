@@ -139,6 +139,40 @@ def _dedent(block: str) -> str:
     return "\n".join(l[pad:] if l.strip() else l for l in lines)
 
 
+# `a/<path>` + `b/<path>` (on two lines, or one) with the `--- `/`+++ `
+# prefixes missing. With reasoning off, Nemotron 3 Super wrote every diff this
+# way (6/6 live, 2026-10-01): right files, right hunks, and every one lost as
+# "no diff in the reply".
+_BARE_PAIR_RE = re.compile(r"^a/(\S+)$")
+_BARE_B_RE = re.compile(r"^b/(\S+)$")
+_BARE_ONE_LINE_RE = re.compile(r"^a/(\S+)\s+b/(\S+)$")
+
+
+def _restore_bare_headers(block: str) -> str:
+    """Put back the `--- `/`+++ ` a model dropped from a file header.
+
+    Only when a hunk follows immediately: a line that merely starts with
+    ``a/`` anywhere else is left alone.
+    """
+    lines = block.splitlines()
+    out, i = [], 0
+    while i < len(lines):
+        one = _BARE_ONE_LINE_RE.match(lines[i])
+        if one and i + 1 < len(lines) and lines[i + 1].startswith("@@"):
+            out += [f"--- a/{one.group(1)}", f"+++ b/{one.group(2)}"]
+            i += 1
+            continue
+        a = _BARE_PAIR_RE.match(lines[i])
+        b = _BARE_B_RE.match(lines[i + 1]) if a and i + 1 < len(lines) else None
+        if b and i + 2 < len(lines) and lines[i + 2].startswith("@@"):
+            out += [f"--- a/{a.group(1)}", f"+++ b/{b.group(1)}"]
+            i += 2
+            continue
+        out.append(lines[i])
+        i += 1
+    return "\n".join(out)
+
+
 def has_hunks_without_header(text: str) -> bool:
     """A reply carrying `@@` hunks but naming no file.
 
@@ -170,11 +204,11 @@ def unified_diff(msg) -> Optional[str]:
     # whole thing with "patch stream is incomplete!" - a live Nemotron patch
     # was rejected for exactly that, before its content was even considered.
     for body in fenced_blocks(text):
-        stripped = _dedent(body.strip("\n"))
+        stripped = _restore_bare_headers(_dedent(body.strip("\n")))
         if stripped.startswith(_DIFF_START):
             return normalize_hunks(stripped)
 
-    lines = text.splitlines()
+    lines = _restore_bare_headers(text).splitlines()
     for i, line in enumerate(lines):
         if line.startswith(_DIFF_START):
             return normalize_hunks("\n".join(lines[i:]).strip("\n"))

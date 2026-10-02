@@ -213,3 +213,36 @@ def test_json_array_is_total():
 def test_json_array_respects_strings_and_nesting():
     assert lt.json_array({"content": '["a]b", "c"]'}) == ["a]b", "c"]
     assert lt.json_array({"content": '[["x"], ["y"]]'}) == [["x"], ["y"]]
+
+
+# -- headers with the `--- `/`+++ ` dropped (Nemotron, reasoning off) -------
+# Both shapes verbatim from live replies, 2026-10-01: 6/6 diffs in that arm
+# were lost as "no diff in the reply".
+
+_TWO_LINE = ("```diff\na/packages/nodus/nodus_tools.py\nb/packages/nodus/nodus_tools.py\n"
+             "@@\n     s = _collapse_doubled_first_segment(s)\n-    old()\n+    new()\n```")
+_ONE_LINE = ("```diff\na/packages/nodus/nodus_tools.py b/packages/nodus/nodus_tools.py\n"
+             "@@\n     s = _collapse_doubled_first_segment(s)\n-    old()\n+    new()\n```")
+
+
+@pytest.mark.parametrize("reply", [_TWO_LINE, _ONE_LINE])
+def test_bare_file_header_is_restored(reply):
+    d = lt.unified_diff({"content": reply})
+    assert d is not None
+    assert d.startswith("--- a/packages/nodus/nodus_tools.py\n"
+                        "+++ b/packages/nodus/nodus_tools.py\n@@ -1,2 +1,2 @@")
+    assert "+    new()" in d
+
+
+def test_bare_header_restored_for_every_file():
+    reply = ("```diff\na/x.py\nb/x.py\n@@\n-a\n+b\n"
+             "a/y.py\nb/y.py\n@@\n-c\n+d\n```")
+    d = lt.unified_diff({"content": reply})
+    assert d.count("--- a/") == 2 and "+++ b/y.py" in d
+
+
+def test_a_slash_line_without_a_hunk_is_not_a_header():
+    """Only rewrite when a hunk follows - prose mentioning a/b paths stays prose."""
+    reply = "Compare a/x.py\nwith b/x.py\nand tell me."
+    assert lt.unified_diff({"content": reply}) is None
+    assert lt._restore_bare_headers("a/x.py\nb/x.py\nno hunk") == "a/x.py\nb/x.py\nno hunk"
