@@ -253,7 +253,30 @@ def _main(argv: List[str]) -> int:
     cr = sub.add_parser("credentials", help="build the SDK credentials file")
     cr.add_argument("--service-account-id", required=True)
     cr.add_argument("--public-key-id", required=True)
+    sub.add_parser("inventory", help="Phase 1: read-only GPU platforms / subnets / "
+                                     "CUDA images in every region (nothing created)")
     args = ap.parse_args(argv)
+
+    if args.cmd == "inventory":
+        r = check_credentials()
+        if not r["ready_for_wire"]:
+            print(format_checklist(r))
+            return 1
+        from nge import config as _cfg
+        from nge.fleet import compute_inventory as ci
+        project = _cfg.load_value("nebius_compute_project_id", "NEBIUS_COMPUTE_PROJECT_ID")
+        sdk = ci.build_sdk(_engine_dir())
+        try:
+            inv = ci.inventory(ci.NebiusReadApi(sdk), project)
+        finally:
+            try:
+                sdk.sync_close()
+            except Exception:
+                pass
+        rec = ci.recommend(inv)
+        print(ci.format_inventory(inv, rec))
+        print(f"saved: {ci.save(inv, rec, _cfg.load().out_dir)}")
+        return 0
 
     if args.cmd == "keygen":
         pub = generate_keypair()

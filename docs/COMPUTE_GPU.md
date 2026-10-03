@@ -1,7 +1,7 @@
 # Nebius Compute GPU — PLAN (avant tout spawn)
 
 > **Statut : PLAN ONLY.** Aucune VM GPU tant qu’il n’y a pas un **Go budget** séparé.  
-> Dernière écriture : **2026-10-03** (**Phase 0 verte** : `ready_for_wire=True` ; prochain = Phase 1 lecture seule).  
+> Dernière écriture : **2026-10-03** (**Phases 0 et 1 vertes** ; prochain = Phase 2, sur Go explicite).  
 > Lié : `ENGINE_BACKLOG.md` (M1/M2/M13) · `RISKS_TO_STRENGTHS.md` · `AUTORESEARCH_VISION.md` (perso).
 
 Objectif : `probe_kind=nvidia-smi` sur un **device NVIDIA réel**, pour que heal + placement deviennent une **preuve**, pas seulement un mock.
@@ -97,11 +97,47 @@ hors ligne (format, RS256, iss = sub, PEM). Le premier appel de la Phase 1 le di
 ### Phase 1 — Wire lecture seule (encore €0 GPU)
 **But :** SDK parle au cloud **sans** créer d’instance.
 
-1. Client auth SA → list platforms / images (read-only)
-2. Doc des IDs réels : platform `gpu-h100-sxm` (ou H200), preset, image CUDA boot
-3. Tests mock du client (pas de réseau en CI)
+1. ~~Client auth SA → list platforms / images (read-only)~~ — **fait 2026-10-03**
+2. ~~Doc des IDs réels~~ — ci-dessous
+3. ~~Tests mock du client~~ — `tests/test_compute_inventory.py` (fausse API, aucun réseau)
 
-**Go Phase 1 :** après Phase 0 verte.
+`python -m nge.fleet.compute inventory` : premier vrai appel avec la clé (elle est
+acceptée — la Phase 0 est donc prouvée côté serveur), puis pour **chaque projet de
+l'organisation** : région, plateformes GPU et presets, subnets, images CUDA
+publiques. Écrit `out/compute_inventory_<ts>.json` (non versionné : il contient
+les ids du compte) et propose une cible Phase 2. Uniquement des `get` / `list` /
+`list_public` — un test analyse le code et échoue si un `create` / `update` /
+`delete` / `start` / `stop` y apparaît.
+
+**Ce que l'inventaire a appris (2026-10-03) :**
+
+- Le projet donné au départ est en **eu-west2**, qui ne propose qu'une **B300**.
+  L'organisation a un projet par défaut **par région** (9) ; le catalogue diffère
+  par région. D'où un inventaire de toutes les régions, pas du seul projet configuré.
+- Plateformes avec un preset à 1 GPU, par région :
+
+  | région | GPU |
+  |---|---|
+  | eu-north1 | **L40S** (`gpu-l40s-a` 1gpu-8vcpu-32gb, `gpu-l40s-d`), **H100** (`gpu-h100-sxm` 1gpu-16vcpu-200gb), H200 ; GB300 sans preset 1 GPU |
+  | eu-west1 | H200 |
+  | us-central1 | RTX 6000, B200, H200 |
+  | eu-west2, us-north1, uk-south1 | B300 |
+  | uk-south2, eu-south1 | RTX 6000 |
+  | me-west1 | B200 |
+
+- **Cible Phase 2 retenue :** `gpu-l40s-a` / `1gpu-8vcpu-32gb` en **eu-north1**, image
+  `ubuntu24.04-cuda13.0` (famille figée de la doc Nebius ; `-latest` bouge,
+  `-serverless` n'est pas une image de VM, l'ordre alphabétique choisissait
+  `ubuntu22.04-cuda12`), subnet par défaut du projet eu-north1.
+- Listé n'est pas réservé : la capacité ne se sait qu'à la création.
+
+**Pièges rencontrés :**
+
+- Sous Windows, le SDK exige `certifi-win32` pour lire les certificats système et
+  refuse de démarrer. On lui passe le bundle `certifi` (déjà là via `requests`)
+  en `tls_credentials` — aucun paquet de plus.
+- `nebius.iam.v1.ProjectService` est obsolète (supporté jusqu'au 2026-12-16) :
+  l'inventaire utilise `iam.v2`.
 
 ### Phase 2 — Probe sur **1** VM éphémère (Go € obligatoire)
 **But :** un `nvidia-smi` CSV → `probe_kind=nvidia-smi`, puis **destroy**.
@@ -165,7 +201,7 @@ Seulement si Contree devient limitant. = glissement vers archi B partielle. **Ho
 | Phase | Done quand |
 |-------|------------|
 | 0 | `check_credentials()["ready_for_wire"] is True` |
-| 1 | Script read-only liste platform/image OK |
+| 1 | Script read-only liste platform/image OK — **fait** (`inventory`) |
 | 2 | 1 run : provision → `nvidia-smi` → delete ; log `probe_kind=nvidia-smi` |
 | 3 | 1 live hybride : pressure réelle → placement → remediation loguée |
 
@@ -183,7 +219,7 @@ Seulement si Contree devient limitant. = glissement vers archi B partielle. **Ho
 ## 7. Prochain Go concret (à toi)
 
 1. ~~**Go Phase 0**~~ — **fait 2026-10-03** (`ready_for_wire=True`)  
-2. Ensuite seulement **Go Phase 1** (API read-only)  
+2. ~~**Go Phase 1**~~ — **fait 2026-10-03** (cible : L40S eu-north1)  
 3. Puis **Go Phase 2** = phrase du type : *« Go spawn 1 H100 max 30 min »*
 
 Sans Phase 0, tout le reste est du papier.
