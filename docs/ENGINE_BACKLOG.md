@@ -90,6 +90,8 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | 2026-10-03 | **Compute Phase 0 verte** | org AI Cloud + projet `project-…` ; solde 25 $ + budget 10 $ ; SA `nge-compute-readonly` (viewers) ; clé publique uploadée, privée locale ; `keygen` / `credentials` ajoutés ; validation hors ligne seulement |
 | 2026-10-03 | **Compute Phase 1 verte** | `inventory` : clé acceptée par Nebius ; projet initial eu-west2 = B300 seule ; 9 régions lues ; cible Phase 2 L40S `gpu-l40s-a` eu-north1, image `ubuntu24.04-cuda13.0` ; 0 ressource créée |
 | 2026-10-03 | Compute Phase 2 : code prêt, **pas lancé** | `compute_probe.py` (delete dans un `finally`, deadline 30 min, étiquette + `cleanup`), SA `phase2` séparé ; 0 VM créée |
+| 2026-10-03 | **Phase 2, 1er live** (Go) | VM L40S créée en 49 s ; `nvidia-smi` manuel = **L40S 23 °C** ; sonde muette 28 min (`\r\n` Windows) ; process tué par le superviseur → `finally` sauté ; `cleanup` à +36 min ; ~1 $ ; 0 ressource restante (vérifié) |
+| 2026-10-03 | Fixes Phase 2 | octets LF ; échecs SSH journalisés ; auto-extinction cloud-init à max+5 min ; refus si VM étiquetée existante |
 
 ---
 

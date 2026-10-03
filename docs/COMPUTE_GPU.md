@@ -177,6 +177,34 @@ Sans ça → **Non**.
 entrée** (lu en Phase 1). La VM est donc joignable d'internet pendant sa courte
 vie ; accès par clé uniquement. Pas de console série dans l'API Compute, d'où SSH.
 
+**Premier passage réel (2026-10-03, Go explicite « 1 L40S max 30 min ») — raté, instructif :**
+
+| heure UTC | événement |
+|---|---|
+| 22:13:03 | création envoyée (id connu tout de suite) |
+| 22:13:52 | VM `RUNNING`, IP publique |
+| 22:13 → 22:43 | la sonde réessaie SSH en boucle, sans rien journaliser |
+| 22:41:51 | SSH manuel, même clé : **`NVIDIA L40S, 23` °C** — le GPU est là |
+| ~22:43 | le superviseur (limite de 30 min des tâches de fond) **tue** le processus à la minute même de son délai : le `finally` ne tourne pas |
+| 22:49:25 | `cleanup` trouve la VM **encore `RUNNING`** et la supprime ; vérif indépendante : 0 instance, 0 disque, id `NOT_FOUND` |
+
+VM vivante ~36 min au lieu de 30 au plus (~1 $ au lieu de ~0,77 $). Deux défauts :
+
+1. **`\r\n` sous Windows.** Le script de sonde partait sur l'entrée standard en mode
+   texte ; Python y transforme chaque `\n` en `\r\n`, et le `sh` d'Ubuntu lit
+   `then\r` → erreur de syntaxe à chaque tentative (vérifié : `od -c` montre
+   `a \r \n`). Le `sh` de Git sous Windows tolère les `\r`, ce qui le masquait en
+   local. Corrigé : octets LF ; chaque échec SSH distinct est journalisé.
+2. **La suppression ne dépendait que du processus.** Un `finally` ne protège pas
+   d'un arrêt forcé. Ajouté : la VM **s'éteint d'elle-même** (`shutdown -h` via
+   cloud-init) à `max_minutes + 5` ; `probe` **refuse de démarrer** si une VM
+   étiquetée existe déjà. À l'usage : garder `--max-minutes` bien sous toute
+   limite d'un superviseur.
+
+Ce qui reste vrai : la chaîne compte de service → VM GPU → image CUDA →
+`nvidia-smi` fonctionne (lecture manuelle). Ce qui n'est **pas** encore prouvé :
+que `probe` lui-même ramène `probe_kind=nvidia-smi` et supprime la VM seul.
+
 Tests : `tests/test_compute_probe.py` — fausse API, fausse horloge : suppression
 après échec de création, SSH muet, VM jamais prête, Ctrl+C ; suppression
 réessayée ; non-confirmation signalée ; plafond de durée ; refus de la CLI sans

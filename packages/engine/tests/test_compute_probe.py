@@ -24,8 +24,9 @@ class Clock:
 
 class FakeApi:
     def __init__(self, clock, op_fails=False, states=("CREATING", "RUNNING"),
-                 delete_fails=0, interrupt_on_get=False):
+                 delete_fails=0, interrupt_on_get=False, leftovers=()):
         self.clock, self.op_fails = clock, op_fails
+        self.leftovers = list(leftovers)
         self.states = list(states)
         self.delete_fails = delete_fails
         self.interrupt_on_get = interrupt_on_get
@@ -52,7 +53,7 @@ class FakeApi:
         self.deleted.append(iid)
 
     def list_labeled(self, project_id):
-        return [{"id": "computeinstance-old", "name": "nge-probe-old", "state": "RUNNING"}]
+        return self.leftovers
 
 
 def _ssh(output, rc=0):
@@ -148,9 +149,12 @@ def test_cloud_init_adds_a_key_only_non_reserved_user():
     assert "root" not in ci and "admin" not in ci and "passwd" not in ci
 
 
+OLD = {"id": "computeinstance-old", "name": "nge-probe-old", "state": "RUNNING"}
+
+
 def test_cleanup_deletes_the_labelled_leftovers():
     clock = Clock()
-    api = FakeApi(clock)
+    api = FakeApi(clock, leftovers=[OLD])
     assert cp.cleanup(api, "project-e00x", log=lambda *_: None) == ["computeinstance-old"]
     assert api.deleted == ["computeinstance-old"]
 
@@ -194,3 +198,58 @@ def test_probe_needs_both_opt_ins_and_a_sane_duration(phase2_creds, monkeypatch,
     else:
         monkeypatch.setenv("NGE_COMPUTE_SPAWN", env)
     assert phase2_creds._main(argv) == 2
+
+
+# -- what the first live run (2026-10-03) taught ------------------------------------
+
+def test_a_leftover_vm_blocks_a_new_one():
+    """That run was hard-killed by its supervisor; its VM outlived it. Never pay
+    for a second VM while one this tool created may still be running."""
+    clock = Clock()
+    api = FakeApi(clock, leftovers=[OLD])
+    r = _run(api, clock, _ssh(NVIDIA))
+    assert "run cleanup first" in r["error"]
+    assert api.created == [] and api.deleted == []
+
+
+def test_the_vm_powers_itself_off_past_the_deadline():
+    """The safety net that does not depend on this process staying alive."""
+    clock = Clock()
+    api = FakeApi(clock)
+    _run(api, clock, _ssh(NVIDIA), max_minutes=15)
+    _, user_data = api.created[0]
+    assert "runcmd:" in user_data
+    assert f"[shutdown, -h, '+{15 + cp.POWEROFF_GRACE_MINUTES}']" in user_data
+
+
+def test_ssh_failures_are_logged_once_each_not_swallowed():
+    """The live run retried for 28 minutes and said nothing about why."""
+    clock = Clock()
+    answers = iter([(255, "", "Connection refused"), (255, "", "Connection refused"),
+                    (2, "", "sh: 3: Syntax error: end of file unexpected"),
+                    (0, NVIDIA, "")])
+
+    def ssh(ip, key, script, timeout):
+        return next(answers)
+    r = _run(FakeApi(clock), clock, ssh)
+    waits = [e for e in r["events"] if e["kind"] == "ssh_wait"]
+    assert [w["error"] for w in waits] == ["Connection refused",
+                                           "sh: 3: Syntax error: end of file unexpected"]
+    assert r["ok"] is True
+
+
+def test_run_ssh_sends_the_script_as_lf_bytes(monkeypatch, tmp_path):
+    """On Windows a text-mode pipe turned every newline into CRLF; the VM's sh
+    then failed on `then\r` at every attempt."""
+    seen = {}
+
+    def fake_run(cmd, input=None, capture_output=None, timeout=None, **kw):
+        seen.update(cmd=cmd, input=input, kw=kw)
+        return type("R", (), {"returncode": 0, "stdout": b"nvidia-smi,1,2,3,4,5,X\n",
+                              "stderr": b""})()
+    monkeypatch.setattr(cp.subprocess, "run", fake_run)
+    rc, out, err = cp.run_ssh("203.0.113.7", tmp_path / "k", "a\r\nb\nc\n", timeout=5)
+    assert isinstance(seen["input"], bytes) and b"\r" not in seen["input"]
+    assert seen["input"] == b"a\nb\nc\n"
+    assert "text" not in seen["kw"] and rc == 0 and out.startswith("nvidia-smi")
+    assert seen["cmd"][-1] == "sh -s" and "BatchMode=yes" in seen["cmd"]

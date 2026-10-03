@@ -31,6 +31,7 @@ MAX_MINUTES = 30
 SSH_USER = "nge"                 # Nebius reserves root and admin for itself
 BOOT_DISK_GIB = 50               # the CUDA images do not fit the 10 GiB examples
 SSH_KEY = ".nebius_vm_ssh_key"   # .nebius_* is gitignored
+POWEROFF_GRACE_MINUTES = 5       # the VM powers itself off at max_minutes + this
 
 
 # -- SSH key for the VM ------------------------------------------------------
@@ -63,13 +64,25 @@ def _restrict(path: Path) -> None:
         os.chmod(path, 0o600)
 
 
-def cloud_init(public_key: str, user: str = SSH_USER) -> str:
-    return ("#cloud-config\n"
+def cloud_init(public_key: str, user: str = SSH_USER,
+               poweroff_after_minutes: Optional[int] = None) -> str:
+    """User + key, and optionally a power-off scheduled by the VM itself.
+
+    The power-off is the safety net that does not depend on this process: the
+    first live run was hard-killed by its supervisor at the very minute its own
+    deadline fired, the ``finally`` never ran, and the VM kept running until a
+    manual ``cleanup`` six minutes later.
+    """
+    text = ("#cloud-config\n"
             "users:\n"
             f"  - name: {user}\n"
             "    shell: /bin/bash\n"
             "    ssh_authorized_keys:\n"
             f"      - {public_key}\n")
+    if poweroff_after_minutes:
+        text += ("runcmd:\n"
+                 f"  - [shutdown, -h, '+{int(poweroff_after_minutes)}']\n")
+    return text
 
 
 def run_ssh(ip: str, key: Path, script: str, timeout: float,
@@ -83,9 +96,14 @@ def run_ssh(ip: str, key: Path, script: str, timeout: float,
                "-o", f"UserKnownHostsFile={Path(td) / 'known_hosts'}",
                "-o", "ConnectTimeout=10", f"{user}@{ip}", "sh -s"]
         try:
-            r = subprocess.run(cmd, input=script, capture_output=True, text=True,
-                               timeout=timeout)
-            return r.returncode, r.stdout, r.stderr
+            # bytes, not text: on Windows a text-mode pipe turns every "\n"
+            # into "\r\n", and the VM's sh then reads `then\r` - a syntax
+            # error on every attempt. The first live probe retried that for
+            # 28 minutes while a manual ssh got "NVIDIA L40S, 23".
+            r = subprocess.run(cmd, input=script.replace("\r\n", "\n").encode("utf-8"),
+                               capture_output=True, timeout=timeout)
+            return (r.returncode, r.stdout.decode("utf-8", "replace"),
+                    r.stderr.decode("utf-8", "replace"))
         except subprocess.TimeoutExpired:
             return 124, "", "ssh timed out"
 
@@ -185,8 +203,19 @@ def probe(api, target: Dict[str, str], ssh_key: Path, public_key: str,
     name = f"{NAME_PREFIX}{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}"
     iid = None
     interrupted = None
+    leftovers = api.list_labeled(target["project_id"])
+    if leftovers:
+        # a previous run died without deleting: clean that up before paying
+        # for another VM
+        report["error"] = ("refusing: labelled probe VM(s) already exist "
+                           f"{[v['name'] for v in leftovers]} - run cleanup first")
+        ev("refused", leftovers=[v["id"] for v in leftovers])
+        report["wall_s"] = 0.0
+        return report
     try:
-        iid, op = api.create(target, name, cloud_init(public_key), left())
+        user_data = cloud_init(public_key,
+                               poweroff_after_minutes=int(max_minutes) + POWEROFF_GRACE_MINUTES)
+        iid, op = api.create(target, name, user_data, left())
         report["instance_id"] = iid
         ev("create_sent", instance_id=iid, name=name)
         api.wait_op(op, left())
@@ -203,10 +232,15 @@ def probe(api, target: Dict[str, str], ssh_key: Path, public_key: str,
                 raise TimeoutError(f"not running before the deadline (state {st['state']})")
             sleep(10)
         ev("running", public_ip=ip)
+        last_err = None
         while True:
             rc, out, err = ssh(ip, ssh_key, _PROBE, timeout=min(60.0, max(5.0, left())))
             if rc == 0 and out.strip():
                 break
+            msg = (err or "").strip()[-200:] or f"rc={rc}, empty output"
+            if msg != last_err:          # a failure that repeats is logged once
+                ev("ssh_wait", rc=rc, error=msg)
+                last_err = msg
             if left() <= 0:
                 raise TimeoutError(f"no SSH answer before the deadline: {err.strip()[:200]}")
             sleep(15)
