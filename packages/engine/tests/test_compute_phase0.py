@@ -136,3 +136,21 @@ def test_every_file_the_docs_say_to_copy_is_in_the_repo():
     for doc in docs:
         for src in re.findall(r"^\s*cp\s+(\S+)\s+\S+", doc.read_text(encoding="utf-8"), re.M):
             assert (engine / src).is_file(), f"{doc.name}: cp {src}"
+
+
+@pytest.mark.parametrize("wrong,kind", [("tenantuseraccount-e00abc", "tenantuseraccount"),
+                                        ("serviceaccount-e00abc", "serviceaccount"),
+                                        ("tenant-e00abc", "tenant"),
+                                        ("e00abc", "unknown")])
+def test_an_id_of_another_resource_type_is_refused(clean, monkeypatch, wrong, kind):
+    """The first id offered here was the signed-in user's account id."""
+    monkeypatch.setenv("NEBIUS_COMPUTE_PROJECT_ID", wrong)
+    r = compute.check_credentials()
+    assert r["project_id"] is False
+    assert f"a {kind} id, not a project" in r["project_id_error"]
+
+
+def test_a_project_id_is_accepted(clean, monkeypatch):
+    monkeypatch.setenv("NEBIUS_COMPUTE_PROJECT_ID", "project-e00abc")
+    r = compute.check_credentials()
+    assert r["project_id"] is True and r["project_id_error"] is None

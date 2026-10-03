@@ -56,6 +56,9 @@ Dernier check creds (2026-10-01) : SDK OK, auth / projet / subnet absents → `r
    celui-ci est le projet **Token Factory** (`aiproject-…`) qu'utilisent déjà les
    sandboxes du chemin `--live` ; l'ancien plan disait d'y mettre l'id Compute,
    ce qui aurait cassé `--live`. Un id `aiproject-…` est refusé avec la raison.
+   Un id AI Cloud commence par `project-` (chaque id Nebius porte son type en
+   préfixe) : un `tenantuseraccount-…` (ton compte utilisateur, proposé ici une
+   première fois par erreur), un `tenant-…` ou un `serviceaccount-…` est refusé.
 4. Subnet (`NEBIUS_SUBNET_ID` ou `.nebius_compute_subnet_id`) — signalé, mais
    requis seulement en Phase 2.
 5. Vérifier : `python -m nge.fleet.compute` (sortie 0 = prêt) →

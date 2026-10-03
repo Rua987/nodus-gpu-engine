@@ -122,6 +122,13 @@ def check_credentials() -> dict:
     if project.startswith(_TOKEN_FACTORY_PROJECT_PREFIX):
         project_error = ("a Token Factory project id (aiproject-...), not an AI "
                          "Cloud project - Compute VMs need the AI Cloud one")
+    elif project and not project.startswith("project-"):
+        # Nebius ids name their resource type first. The first id offered for
+        # this field was a tenantuseraccount-... (the signed-in user), which
+        # the aiproject- check alone would have accepted.
+        kind = project.split("-", 1)[0] if "-" in project else "unknown"
+        project_error = (f"a {kind} id, not a project - an AI Cloud project id "
+                         "starts with project-")
     subnet = _cfg.load_value("nebius_compute_subnet_id", "NEBIUS_SUBNET_ID")
 
     auth = ("credentials_file" if cred_ok else "cli_profile" if cli_profile
