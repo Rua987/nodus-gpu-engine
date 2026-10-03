@@ -185,7 +185,91 @@ def format_checklist(report: dict) -> str:
     return "\n".join(lines)
 
 
-if __name__ == "__main__":                       # pragma: no cover
+_PRIVATE_KEY_DEFAULT = ".nebius_sa_private_key.pem"
+_PUBLIC_KEY_DEFAULT = ".nebius_sa_public_key.pem"
+
+
+def generate_keypair(engine_dir: Optional[Path] = None) -> Path:
+    """Create the RSA pair for a service-account *authorized key*.
+
+    The console only takes an uploaded public key. The private key is written
+    next to it under ``packages/engine/`` (``.nebius_*`` is gitignored) and is
+    never printed. Refuses to overwrite: a second run would silently orphan
+    the key already uploaded. Returns the public key path, to upload.
+    """
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    d = engine_dir or _engine_dir()
+    priv, pub = d / _PRIVATE_KEY_DEFAULT, d / _PUBLIC_KEY_DEFAULT
+    if priv.exists():
+        raise FileExistsError(f"{priv.name} already exists - delete it first "
+                              "if you really mean to replace the key")
+    key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+    priv.write_bytes(key.private_bytes(serialization.Encoding.PEM,
+                                       serialization.PrivateFormat.PKCS8,
+                                       serialization.NoEncryption()))
+    pub.write_bytes(key.public_key().public_bytes(
+        serialization.Encoding.PEM,
+        serialization.PublicFormat.SubjectPublicKeyInfo))
+    return pub
+
+
+def write_credentials(service_account_id: str, public_key_id: str,
+                      engine_dir: Optional[Path] = None) -> Path:
+    """Assemble the credentials file the SDK reads, from the local private key
+    and the two ids the console shows. Validated before it is kept."""
+    import json
+
+    if not service_account_id.startswith("serviceaccount-"):
+        raise ValueError(f"not a service account id: {service_account_id!r}")
+    if not public_key_id.startswith("publickey-"):
+        raise ValueError(f"not an authorized key id: {public_key_id!r} "
+                         "(the console shows publickey-... after the upload)")
+    d = engine_dir or _engine_dir()
+    priv = d / _PRIVATE_KEY_DEFAULT
+    if not priv.is_file():
+        raise FileNotFoundError(f"{priv.name} missing - run keygen first")
+    out = d / _CREDENTIALS_DEFAULT
+    out.write_text(json.dumps({"subject-credentials": {
+        "type": "JWT", "alg": "RS256",
+        "private-key": priv.read_text(encoding="utf-8"),
+        "kid": public_key_id, "iss": service_account_id,
+        "sub": service_account_id}}, indent=2), encoding="utf-8")
+    why = _credentials_file_check(out)
+    if why:
+        out.unlink()
+        raise ValueError(f"assembled file rejected: {why}")
+    return out
+
+
+def _main(argv: List[str]) -> int:
+    import argparse
+    ap = argparse.ArgumentParser(prog="python -m nge.fleet.compute",
+                                 description="Compute Phase 0: no API call, no VM.")
+    sub = ap.add_subparsers(dest="cmd")
+    sub.add_parser("check", help="credentials checklist (default)")
+    sub.add_parser("keygen", help="RSA pair for an authorized key; prints the public key")
+    cr = sub.add_parser("credentials", help="build the SDK credentials file")
+    cr.add_argument("--service-account-id", required=True)
+    cr.add_argument("--public-key-id", required=True)
+    args = ap.parse_args(argv)
+
+    if args.cmd == "keygen":
+        pub = generate_keypair()
+        print(f"private key kept in packages/engine/{_PRIVATE_KEY_DEFAULT} "
+              "(gitignored, never printed)")
+        print(f"upload this public key (also in packages/engine/{pub.name}):\n")
+        print(pub.read_text(encoding="utf-8"))
+        return 0
+    if args.cmd == "credentials":
+        out = write_credentials(args.service_account_id, args.public_key_id)
+        print(f"wrote packages/engine/{out.name} - valid for the SDK")
     r = check_credentials()
     print(format_checklist(r))
-    raise SystemExit(0 if r["ready_for_wire"] else 1)
+    return 0 if r["ready_for_wire"] else 1
+
+
+if __name__ == "__main__":                       # pragma: no cover
+    import sys
+    raise SystemExit(_main(sys.argv[1:]))

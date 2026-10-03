@@ -1,7 +1,7 @@
 # Nebius Compute GPU — PLAN (avant tout spawn)
 
 > **Statut : PLAN ONLY.** Aucune VM GPU tant qu’il n’y a pas un **Go budget** séparé.  
-> Dernière écriture : **2026-10-01** (Phase 0 : outillage fait, credentials à fournir).  
+> Dernière écriture : **2026-10-03** (**Phase 0 verte** : `ready_for_wire=True` ; prochain = Phase 1 lecture seule).  
 > Lié : `ENGINE_BACKLOG.md` (M1/M2/M13) · `RISKS_TO_STRENGTHS.md` · `AUTORESEARCH_VISION.md` (perso).
 
 Objectif : `probe_kind=nvidia-smi` sur un **device NVIDIA réel**, pour que heal + placement deviennent une **preuve**, pas seulement un mock.
@@ -68,7 +68,30 @@ Dernier check creds (2026-10-01) : SDK OK, auth / projet / subnet absents → `r
 Tous ces fichiers `.nebius_*` sont dans `.gitignore` (racine et `packages/engine/`).
 Tests : `tests/test_compute_phase0.py` (clé RSA jetable, aucun réseau).
 
-**Go pour Phase 0 :** oui quand tu as 30–60 min + accès console Nebius.  
+**Comment c'est fait (2026-10-03), dans l'ordre :**
+
+1. Console AI Cloud (`console.nebius.com`, **pas** `tokenfactory.nebius.com` : là-bas
+   les ids sont `aitenant-` / `aiproject-` et ne portent pas de VM). Organisation
+   `tenant-…`, projet `project-…` → `.nebius_compute_project_id`.
+2. Billing : solde AI Cloud **séparé** du solde Token Factory (top-up carte 25 $),
+   budget mensuel 10 $ avec alertes 50/80/90/100 % par e-mail.
+3. IAM → service account `nge-compute-readonly`, groupe **viewers** (lecture seule ;
+   le droit de créer une VM sera donné à part, pour la Phase 2).
+4. Onglet *Authorized keys* : la console **n'accepte qu'un upload de clé publique**
+   (pas de JSON téléchargeable ; l'onglet *Access keys* donne une clé S3 id + secret,
+   inutile pour Compute). Donc :
+   - `python -m nge.fleet.compute keygen` — RSA 4096 ; la privée reste dans
+     `.nebius_sa_private_key.pem`, jamais affichée ; la publique est imprimée et
+     écrite dans `.nebius_sa_public_key.pem` pour l'upload ;
+   - upload dans la console → elle rend un id `publickey-…` ;
+   - `python -m nge.fleet.compute credentials --service-account-id serviceaccount-… --public-key-id publickey-…`
+     assemble `.nebius_sa_credentials.json` au format du SDK et le valide (refuse un
+     id `accesskey-…` ou un id de compte utilisateur).
+5. `python -m nge.fleet.compute` → `ready_for_wire=True`.
+
+**Ce que la Phase 0 ne prouve pas :** que Nebius accepte la clé. La validation est
+hors ligne (format, RS256, iss = sub, PEM). Le premier appel de la Phase 1 le dira.
+
 **Pas de spawn.**
 
 ### Phase 1 — Wire lecture seule (encore €0 GPU)
@@ -120,7 +143,19 @@ Seulement si Contree devient limitant. = glissement vers archi B partielle. **Ho
 
 - Facturation **à la minute** → timer + delete obligatoire.
 - `spawn_allowed=False` tant que `NGE_COMPUTE_SPAWN` unset.
-- Solde TF (~$2 vu plus tôt) **insuffisant** pour expérimenter longtemps → **top-up** avant Phase 2.
+- Solde AI Cloud : 25 $ (top-up 2026-10-03), budget 10 $/mois avec alertes. Le solde
+  Token Factory (Nemotron, sandboxes) est un compte à part.
+- Tarifs console (eu-north1, HT, relevés 2026-10-03) : H100 NVLink 4,50 $/h GPU,
+  H200 5,40 $/h, L40S 1,35 $/h + 0,012 $/vCPU·h + 0,0032 $/Go·h. Premier essai
+  Phase 2 recommandé sur **L40S** (~0,70 $ / 30 min) : la chaîne
+  provision → `nvidia-smi` → delete se prouve aussi bien, et la L40S est
+  datacenter-class (C9). H100 ensuite si on veut la photo.
+- Image de boot : famille `ubuntu24.04-cuda13.0` (pilote NVIDIA → `nvidia-smi`) ;
+  `ubuntu24.04-driverless` n'en a pas.
+- VM préemptibles : moins chères, interruptibles, passent à la tarification *spot*
+  le 2026-10-08 (bandeau console). Suffisant pour un probe de quelques minutes.
+- GPU parfois indisponibles (« Not enough resources ») : vérifier la disponibilité
+  (capacity advisor) avant la Phase 2.
 - Aucun train AutoResearch / LINUS sur cette VM sans **Go** séparé.
 
 ---
@@ -147,7 +182,7 @@ Seulement si Contree devient limitant. = glissement vers archi B partielle. **Ho
 
 ## 7. Prochain Go concret (à toi)
 
-1. **Go Phase 0** — installer SDK + SA + env (0 € GPU)  
+1. ~~**Go Phase 0**~~ — **fait 2026-10-03** (`ready_for_wire=True`)  
 2. Ensuite seulement **Go Phase 1** (API read-only)  
 3. Puis **Go Phase 2** = phrase du type : *« Go spawn 1 H100 max 30 min »*
 

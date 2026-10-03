@@ -43,7 +43,7 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | Id | Item | Priorité | Notes |
 |----|------|----------|-------|
 | M1 | **Vrai H100/H200** (Nebius Compute VM) | **P0** | plan phases 0→3 ; spawn = Go € séparé |
-| M2 | Brancher SDK Compute (SA, create/delete, probe SSH) | **P0** | Phase 0 : outillage **fait** (SDK, preflight fidèle au SDK, `python -m nge.fleet.compute`) — **attend les credentials** (humain) · Phase 1 read-only ensuite |
+| M2 | Brancher SDK Compute (SA, create/delete, probe SSH) | **P0** | Phase 0 **verte** 2026-10-03 (`ready_for_wire=True`, SA lecture seule, clé RSA générée en local) · **next : Phase 1 read-only** |
 | M3 | ~~Probe TF run complet~~ | **OK** | fermé 2026-09-05 |
 | M4 | Image CUDA Contree (deps only) | **P2** | |
 | M5 | DCGM dans le nœud | **P2** | |
@@ -87,12 +87,13 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | 2026-10-01 | **bugbench** 4 bras × 3 runs réels | patch off = on @8192 : 16/18 corrects (cachés) ; avant : 12/16 ; off ≈ 29 % du coût ; défaut inchangé |
 | 2026-10-01 | Bug révélé : le modèle recopie `--tb=` du prompt | shard exit 4, 2 bugs non vus ; corrigé (valeur vérifiée + prompt) |
 | 2026-10-01 | **Compute Phase 0** outillage | SDK `nebius` 0.6.17 ; preflight réécrit sur les vraies voies d'auth du SDK ; projet Compute séparé (`aiproject-` refusé) ; `.nebius_*` gitignorés ; `ready_for_wire=false` faute de credentials |
+| 2026-10-03 | **Compute Phase 0 verte** | org AI Cloud + projet `project-…` ; solde 25 $ + budget 10 $ ; SA `nge-compute-readonly` (viewers) ; clé publique uploadée, privée locale ; `keygen` / `credentials` ajoutés ; validation hors ligne seulement |
 
 ---
 
 ## Prochaines actions (ordre)
 
-1. **Compute Phase 0** — outillage fait ; reste : credentials SA + id projet AI Cloud, puis `python -m nge.fleet.compute` — **0 € GPU** (`docs/COMPUTE_GPU.md`)
+1. **Compute Phase 1** — SDK read-only : lister plateformes / presets / images, premier vrai appel avec la clé — **0 € GPU** (`docs/COMPUTE_GPU.md`)
 2. **Répéter oral** juges (mock A2 + `RISKS_TO_STRENGTHS.md`)
 3. **Compute Phase 1–2** seulement après Go budget explicite (1× H100 éphémère)
 4. Vision perso AutoResearch — inchangé, hors juges

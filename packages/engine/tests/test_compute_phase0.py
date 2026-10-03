@@ -154,3 +154,52 @@ def test_a_project_id_is_accepted(clean, monkeypatch):
     monkeypatch.setenv("NEBIUS_COMPUTE_PROJECT_ID", "project-e00abc")
     r = compute.check_credentials()
     assert r["project_id"] is True and r["project_id_error"] is None
+
+
+# -- authorized key: generated here, only the public half leaves the machine --
+
+def test_keygen_writes_both_halves_and_never_overwrites(tmp_path):
+    pytest.importorskip("cryptography")
+    pub = compute.generate_keypair(tmp_path)
+    assert "BEGIN PUBLIC KEY" in pub.read_text(encoding="utf-8")
+    assert "PRIVATE KEY" in (tmp_path / ".nebius_sa_private_key.pem").read_text(encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        compute.generate_keypair(tmp_path)
+
+
+def test_keygen_command_prints_the_public_key_only(clean, capsys):
+    pytest.importorskip("cryptography")
+    compute._main(["keygen"])
+    out = capsys.readouterr().out
+    assert "BEGIN PUBLIC KEY" in out and "PRIVATE KEY-----" not in out
+
+
+def test_credentials_assembled_from_the_local_key_pass_the_sdk_check(clean):
+    pytest.importorskip("nebius")
+    eng, _ = clean
+    compute.generate_keypair(eng)
+    out = compute.write_credentials("serviceaccount-e00test", "publickey-e00test", eng)
+    assert compute._credentials_file_check(out) is None
+    (eng / ".nebius_compute_project_id").write_text("project-e00test", encoding="utf-8")
+    r = compute.check_credentials()
+    assert r["auth"] == "credentials_file" and r["ready_for_wire"] is True
+
+
+@pytest.mark.parametrize("sa,kid,msg", [
+    ("serviceaccount-e00x", "accesskey-e00x", "authorized key id"),   # the S3 key
+    ("serviceaccount-e00x", "NAKI7NEDK36B7", "authorized key id"),
+    ("tenantuseraccount-e00x", "publickey-e00x", "service account id"),
+])
+def test_credentials_refuse_the_wrong_kind_of_id(clean, sa, kid, msg):
+    pytest.importorskip("cryptography")
+    eng, _ = clean
+    compute.generate_keypair(eng)
+    with pytest.raises(ValueError, match=msg):
+        compute.write_credentials(sa, kid, eng)
+    assert not (eng / ".nebius_sa_credentials.json").exists()
+
+
+def test_credentials_need_keygen_first(clean):
+    eng, _ = clean
+    with pytest.raises(FileNotFoundError, match="keygen"):
+        compute.write_credentials("serviceaccount-e00x", "publickey-e00x", eng)
