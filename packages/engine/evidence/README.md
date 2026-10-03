@@ -20,6 +20,7 @@ judge-facing claim stops matching its event log.
 | `report_20260905T232100Z` | `--mock --heuristic-plan` | mock / mock | First 2/3 capture with migrate (M10) | NEBIUS_TRACK, backlog |
 | `report_20260905T223331Z` | `--mock` (324M plan) | mock / mock | Plan gate OFF (`bash`, `brave_search`), migrate still happens (M9) | backlog |
 | `report_20260905T211401Z` | `--live` (324M plan) | Nebius / Token Factory | `cpu-fallback`, remediations none, autofix gated off (C2, C8) | backlog |
+| `compute_probe_20261003T231022Z.json` | `NGE_COMPUTE_SPAWN=1 python -m nge.fleet.compute probe --i-know-cost --max-minutes 15` | Nebius AI Cloud Compute VM | **Real GPU**: L40S in eu-north1, `probe_kind=nvidia-smi`, 27 °C, 67.8 W, `datacenter`; VM deleted at 192 s. Project, subnet, instance ids and the public ip redacted | COMPUTE_GPU, Devpost, JUDGE_DRY_RUN, backlog |
 
 **`report_20260913T053458Z_honest.html` is a re-render, not the run-time
 HTML.** `report_20260913T053458Z.html` is what the renderer of that day
@@ -33,7 +34,7 @@ it. Its content matches the run-time event log in the `.md` (three
 
 Code version: the September runs used engine code that was uncommitted at the
 time and later landed in `3497190` — the exact state at each run was not
-recorded. The 2026-10-02 run used the code of `3e49336`.
+recorded. The 2026-10-02 run used the code of `3e49336`; the 2026-10-03 Compute probe, `f92faf1`.
 
 ## Benches
 

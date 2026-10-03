@@ -1,0 +1,61 @@
+{
+  "target": {
+    "region": "eu-north1",
+    "project_id": "<redacted: account id>",
+    "platform": "gpu-l40s-a",
+    "preset": "1gpu-8vcpu-32gb",
+    "subnet_id": "<redacted: account id>",
+    "image_family": "ubuntu24.04-cuda13.0"
+  },
+  "max_minutes": 15.0,
+  "instance_id": "<redacted: account id>",
+  "metrics": {
+    "util_pct": 0.0,
+    "mem_used_gb": 0.0,
+    "mem_total_gb": 44.99,
+    "temp_c": 27.0,
+    "power_w": 67.8,
+    "probe_kind": "nvidia-smi",
+    "gpu_class": "datacenter",
+    "gpu_name": "NVIDIA L40S"
+  },
+  "ok": true,
+  "deleted": true,
+  "error": null,
+  "events": [
+    {
+      "t": 1.1,
+      "kind": "create_sent",
+      "instance_id": "<redacted: account id>",
+      "name": "nge-probe-20261003-230709"
+    },
+    {
+      "t": 38.6,
+      "kind": "created"
+    },
+    {
+      "t": 39.0,
+      "kind": "running",
+      "public_ip": "<redacted: ephemeral public ip>"
+    },
+    {
+      "t": 47.3,
+      "kind": "ssh_wait",
+      "rc": 255,
+      "error": "ssh: connect to host <ip> port 22: Connection timed out"
+    },
+    {
+      "t": 89.4,
+      "kind": "probed",
+      "probe_kind": "nvidia-smi",
+      "gpu_name": "NVIDIA L40S"
+    },
+    {
+      "t": 192.1,
+      "kind": "deleted",
+      "attempt": 1
+    }
+  ],
+  "wall_s": 192.1,
+  "redacted": "project, subnet and instance ids and the VM's public ip removed; everything else as written by the run"
+}

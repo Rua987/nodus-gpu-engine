@@ -118,7 +118,7 @@ We built the missing loop on **Nebius Token Factory + NVIDIA Nemotron**, with a 
 
 - Vendored Nodus runtime (unmodified) + engine package `nge`.  
 - Reversible `nebius:` chat backend: `max_tokens`, usage (incl. `reasoning_tokens`), reasoning on/off per call class, `ModelUnavailableError`.  
-- Fleet: `mock` (synthetic H100 telemetry for the film) · `nebius` (Contree) · `compute` (skeleton only — **no VM spawn in this demo**).  
+- Fleet: `mock` (synthetic H100 telemetry for the film) · `nebius` (Contree) · `compute`: the engine's own probe creates a Nebius AI Cloud GPU VM, reads `nvidia-smi` and deletes it — **one real reading, not the heal loop**.  
 - Mock autofix uses canned patches so the verify loop is deterministic for judges; live slot-fill/triage hits Super.
 
 ---
@@ -135,7 +135,9 @@ We built the missing loop on **Nebius Token Factory + NVIDIA Nemotron**, with a 
 
 ## “What’s next” (honest, short)
 
-Wire Nebius **AI Cloud Compute** for real `nvidia-smi` heal (architecture A: Compute for telemetry, Token Factory for exec). Not claimed as done.
+Done since the first draft: the engine's own probe created a Nebius AI Cloud **L40S** VM, read `nvidia-smi` (27 °C, 67.8 W, classified `datacenter`) and deleted it — 192 s end to end, evidence in `packages/engine/evidence/compute_probe_20261003T231022Z.json`. Its first live run failed (a Windows CRLF bug, and a VM that outlived a killed process); both causes are fixed and documented.
+
+Next: feed that real telemetry to the heal loop under load (architecture A: Compute for telemetry, Token Factory for exec). Not claimed as done.
 
 ---
 

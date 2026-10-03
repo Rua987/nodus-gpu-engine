@@ -93,6 +93,7 @@ Open HTML: KPI `2/3`, migration row, diffs under Auto-fixes.
 | Question | Answer |
 |----------|--------|
 | Real Nebius? | « Mock for the film. `--live` = Token Factory Contree + Nemotron. Contree is CPU today; heal gated until real GPU metrics. » |
+| Real GPU at all? | « Yes, once: the engine created a Nebius L40S VM, read nvidia-smi — 27 °C, datacenter class — and deleted it in 192 s. The heal loop on real load is next, not done. » |
 | Why heuristic? | « To open the autofix gate for the film. 324M path is real too — often triage-only on this task. » |
 | Why not 3/3? | « One failure has no canned patch — we report it, we don't invent success. » |
 | Model down? | « Nano/Ultra 404/5xx → one hop to Super, logged. Never silent Super→Nano. » |
@@ -107,7 +108,7 @@ Open HTML: KPI `2/3`, migration row, diffs under Auto-fixes.
 - [ ] Font large; browser: mock `041721Z` **or** live honest `053458Z_honest` — never both as one run
 - [ ] Do **not** open taxonomy benches as the pitch
 - [ ] One honest sentence: Contree ≠ H100
-- [ ] Archi if asked: TF for exec; Compute GPU later for real `nvidia-smi`
+- [ ] Archi if asked: TF for exec; Compute for real `nvidia-smi` (one probe done, heal loop not)
 
 ## French — aide-mémoire
 

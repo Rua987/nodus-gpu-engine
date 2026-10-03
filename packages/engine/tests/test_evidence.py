@@ -158,3 +158,19 @@ def test_bugbench_series_every_verified_fix_is_real():
         by[r["arm"]] += int(r["verified"])
     assert by == {"baseline": 12, "short_off": 15, "short_off_patch_off": 16,
                   "short_off_patch_8k": 16}
+
+
+def test_compute_probe_read_a_real_gpu_and_deleted_its_vm():
+    """docs/COMPUTE_GPU.md, Phase 2: the engine's own probe - not a manual ssh -
+    brought back nvidia-smi from a Nebius Compute VM and deleted it."""
+    import json
+    d = json.loads((EVIDENCE / "compute_probe_20261003T231022Z.json").read_text(encoding="utf-8"))
+    m = d["metrics"]
+    assert d["ok"] is True and d["deleted"] is True and d["error"] is None
+    assert m["probe_kind"] == "nvidia-smi" and m["gpu_name"] == "NVIDIA L40S"
+    assert m["gpu_class"] == "datacenter"
+    assert [e["kind"] for e in d["events"]][-1] == "deleted"
+    assert d["target"]["platform"] == "gpu-l40s-a" and d["target"]["region"] == "eu-north1"
+    text = json.dumps(d)
+    for account_id in ("project-e", "vpcsubnet-e", "computeinstance-e"):
+        assert account_id not in text

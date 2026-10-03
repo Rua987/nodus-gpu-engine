@@ -21,7 +21,7 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | C6 | Preflight `[capabilities]` | **OK** | banner heal gated |
 | C7 | `probe_kind` honnête | **OK** | live : 3× `cpu-fallback` |
 | C8 | Heal gate (0 migration sans vrai GPU) | **OK** | live 211401Z : remediations **None** |
-| C9 | Seuils DC vs consumer | **PARTIEL** | code ; besoin Compute pour preuve |
+| C9 | Seuils DC vs consumer | **PARTIEL** | classe prouvée sur vrai GPU (L40S → `datacenter`, `evidence/compute_probe_*`) ; seuils sous charge : Phase 3 |
 | C10 | `--local` Ollama | **OK** | exit 0 |
 | C11 | `--deepseek` perso | **PARTIEL** | pas de clé |
 | C12 | `NGE_FLEET_IMAGE` / `HAS_GPU` / `REQUIRE_REAL_GPU` | **OK** | config + tests |
@@ -42,7 +42,7 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 
 | Id | Item | Priorité | Notes |
 |----|------|----------|-------|
-| M1 | **Vrai H100/H200** (Nebius Compute VM) | **P0** | plan phases 0→3 ; spawn = Go € séparé |
+| M1 | **Vrai GPU** (Nebius Compute VM) | **PARTIEL** | Phase 2 verte : `probe` lit `nvidia-smi` sur une L40S et supprime la VM seul ; heal sous charge (Phase 3) à faire |
 | M2 | Brancher SDK Compute (SA, create/delete, probe SSH) | **P0** | Phases 0 et 1 **vertes** 2026-10-03 (clé acceptée ; inventaire 9 régions ; cible L40S eu-north1) · **next : Phase 2 sur Go** |
 | M3 | ~~Probe TF run complet~~ | **OK** | fermé 2026-09-05 |
 | M4 | Image CUDA Contree (deps only) | **P2** | |
@@ -92,12 +92,14 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | 2026-10-03 | Compute Phase 2 : code prêt, **pas lancé** | `compute_probe.py` (delete dans un `finally`, deadline 30 min, étiquette + `cleanup`), SA `phase2` séparé ; 0 VM créée |
 | 2026-10-03 | **Phase 2, 1er live** (Go) | VM L40S créée en 49 s ; `nvidia-smi` manuel = **L40S 23 °C** ; sonde muette 28 min (`\r\n` Windows) ; process tué par le superviseur → `finally` sauté ; `cleanup` à +36 min ; ~1 $ ; 0 ressource restante (vérifié) |
 | 2026-10-03 | Fixes Phase 2 | octets LF ; échecs SSH journalisés ; auto-extinction cloud-init à max+5 min ; refus si VM étiquetée existante |
+| 2026-10-03 | **Phase 2, 2e live** (Go 15 min) — **verte** | `probe_kind=nvidia-smi` NVIDIA L40S 27 °C 67,8 W `datacenter` à 89 s ; VM supprimée à 192 s ; 0 ressource restante (vérifié) ; ~0,08 $ |
 
 ---
 
 ## Prochaines actions (ordre)
 
-1. **Compute Phase 2** — 1 VM L40S eu-north1, 30 min max, `nvidia-smi`, delete dans un `finally` — **payant (~0,80 $), sur Go explicite** (`docs/COMPUTE_GPU.md`)
+1. **Soumission** — répéter le film juges, relire le Devpost (deadline 2026-10-31)
+2. Compute Phase 3 (heal sous charge réelle) — optionnel, Go € séparé (`docs/COMPUTE_GPU.md`)
 2. **Répéter oral** juges (mock A2 + `RISKS_TO_STRENGTHS.md`)
 3. **Compute Phase 1–2** seulement après Go budget explicite (1× H100 éphémère)
 4. Vision perso AutoResearch — inchangé, hors juges

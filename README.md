@@ -3,7 +3,7 @@
 [![engine-tests](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml)
 [![python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)](packages/engine/pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-484%20passing-brightgreen)](packages/engine/tests)
+[![tests](https://img.shields.io/badge/tests-485%20passing-brightgreen)](packages/engine/tests)
 
 **Agentic engineering platform — Nebius "Coding & Agentic Engineering" track.**
 
@@ -66,7 +66,7 @@ with its provenance; `tests/test_evidence.py` keeps the citations honest.
 ```bash
 cd packages/engine
 pip install -r requirements.txt
-python -m pytest -q                 # 484 tests
+python -m pytest -q                 # 485 tests
 python -m nge.demo_nebius --mock    # -> out/report_<ts>.md  +  .html (self-contained)
 ```
 

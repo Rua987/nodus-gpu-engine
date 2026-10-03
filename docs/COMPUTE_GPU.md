@@ -1,7 +1,7 @@
 # Nebius Compute GPU — PLAN (avant tout spawn)
 
 > **Statut : PLAN ONLY.** Aucune VM GPU tant qu’il n’y a pas un **Go budget** séparé.  
-> Dernière écriture : **2026-10-03** (**Phases 0 et 1 vertes** ; prochain = Phase 2, sur Go explicite).  
+> Dernière écriture : **2026-10-03** (**Phases 0, 1 et 2 vertes** : `nvidia-smi` réel sur une L40S Nebius ; Phase 3 non faite).  
 > Lié : `ENGINE_BACKLOG.md` (M1/M2/M13) · `RISKS_TO_STRENGTHS.md` · `AUTORESEARCH_VISION.md` (perso).
 
 Objectif : `probe_kind=nvidia-smi` sur un **device NVIDIA réel**, pour que heal + placement deviennent une **preuve**, pas seulement un mock.
@@ -210,6 +210,27 @@ après échec de création, SSH muet, VM jamais prête, Ctrl+C ; suppression
 réessayée ; non-confirmation signalée ; plafond de durée ; refus de la CLI sans
 les deux opt-in.
 
+**Deuxième passage réel (2026-10-03, Go « 1 L40S max 15 min ») — réussi :**
+
+| t | événement |
+|---|---|
+| 1,1 s | création envoyée |
+| 38,6 s | VM créée ; 39,0 s `RUNNING`, IP publique |
+| 47,3 s | `ssh_wait` journalisé : port 22 pas encore ouvert |
+| 89,4 s | **`probe_kind=nvidia-smi`, NVIDIA L40S, 27 °C, 67,8 W, 45 Go, `gpu_class=datacenter`** |
+| 192,1 s | **VM supprimée** (1re tentative) |
+
+Vérifié ensuite, à part : 0 instance, 0 disque, id `NOT_FOUND`. ~3 min de VM
+(~0,08 $ HT + disque et IP). Rapport, ids du compte retirés :
+[`packages/engine/evidence/compute_probe_20261003T231022Z.json`](../packages/engine/evidence/compute_probe_20261003T231022Z.json)
+(couvert par `tests/test_evidence.py`).
+
+Ce que ça prouve : le moteur lui-même — pas un SSH manuel — crée une VM GPU
+Nebius, en lit la télémétrie au format qu'il attend (`probe_kind=nvidia-smi`,
+classe `datacenter`, donc les seuils datacenter de `telemetry.py` s'appliquent),
+et la supprime seul. Ce que ça ne prouve pas : le heal sous vraie charge — une
+seule lecture, GPU au repos (0 % d'utilisation), aucune migration. C'est la Phase 3.
+
 ### Phase 3 — Brancher heal live (archi A)
 **But :** orchestrateur utilise Compute pour télémétrie/remediation ; shards restent Contree.
 
@@ -261,7 +282,7 @@ Seulement si Contree devient limitant. = glissement vers archi B partielle. **Ho
 |-------|------------|
 | 0 | `check_credentials()["ready_for_wire"] is True` |
 | 1 | Script read-only liste platform/image OK — **fait** (`inventory`) |
-| 2 | 1 run : provision → `nvidia-smi` → delete ; log `probe_kind=nvidia-smi` |
+| 2 | 1 run : provision → `nvidia-smi` → delete ; log `probe_kind=nvidia-smi` — **fait 2026-10-03** (L40S, 192 s) |
 | 3 | 1 live hybride : pressure réelle → placement → remediation loguée |
 
 ---
@@ -279,6 +300,7 @@ Seulement si Contree devient limitant. = glissement vers archi B partielle. **Ho
 
 1. ~~**Go Phase 0**~~ — **fait 2026-10-03** (`ready_for_wire=True`)  
 2. ~~**Go Phase 1**~~ — **fait 2026-10-03** (cible : L40S eu-north1)  
-3. Puis **Go Phase 2** = phrase du type : *« Go spawn 1 H100 max 30 min »*
+3. ~~**Go Phase 2**~~ — **fait 2026-10-03** (L40S ; 1er essai raté puis corrigé, 2e réussi)
+4. **Phase 3** (heal sous charge réelle) — non commencée ; un nouveau Go € sera nécessaire
 
 Sans Phase 0, tout le reste est du papier.
