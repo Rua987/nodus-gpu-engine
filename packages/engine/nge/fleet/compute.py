@@ -189,7 +189,19 @@ _PRIVATE_KEY_DEFAULT = ".nebius_sa_private_key.pem"
 _PUBLIC_KEY_DEFAULT = ".nebius_sa_public_key.pem"
 
 
-def generate_keypair(engine_dir: Optional[Path] = None) -> Path:
+def key_files(name: str = "") -> Dict[str, str]:
+    """File names of one service account's key set. ``name`` separates the
+    read-only account (default) from e.g. the Phase 2 one (``phase2``), so
+    adding a write-capable account never touches the read-only key."""
+    if name and not name.isalnum():
+        raise ValueError(f"key set name must be alphanumeric: {name!r}")
+    tag = f"_{name}" if name else ""
+    return {"private": f".nebius_sa{tag}_private_key.pem",
+            "public": f".nebius_sa{tag}_public_key.pem",
+            "credentials": f".nebius_sa{tag}_credentials.json"}
+
+
+def generate_keypair(engine_dir: Optional[Path] = None, name: str = "") -> Path:
     """Create the RSA pair for a service-account *authorized key*.
 
     The console only takes an uploaded public key. The private key is written
@@ -201,7 +213,8 @@ def generate_keypair(engine_dir: Optional[Path] = None) -> Path:
     from cryptography.hazmat.primitives.asymmetric import rsa
 
     d = engine_dir or _engine_dir()
-    priv, pub = d / _PRIVATE_KEY_DEFAULT, d / _PUBLIC_KEY_DEFAULT
+    files = key_files(name)
+    priv, pub = d / files["private"], d / files["public"]
     if priv.exists():
         raise FileExistsError(f"{priv.name} already exists - delete it first "
                               "if you really mean to replace the key")
@@ -216,7 +229,7 @@ def generate_keypair(engine_dir: Optional[Path] = None) -> Path:
 
 
 def write_credentials(service_account_id: str, public_key_id: str,
-                      engine_dir: Optional[Path] = None) -> Path:
+                      engine_dir: Optional[Path] = None, name: str = "") -> Path:
     """Assemble the credentials file the SDK reads, from the local private key
     and the two ids the console shows. Validated before it is kept."""
     import json
@@ -227,10 +240,11 @@ def write_credentials(service_account_id: str, public_key_id: str,
         raise ValueError(f"not an authorized key id: {public_key_id!r} "
                          "(the console shows publickey-... after the upload)")
     d = engine_dir or _engine_dir()
-    priv = d / _PRIVATE_KEY_DEFAULT
+    files = key_files(name)
+    priv = d / files["private"]
     if not priv.is_file():
         raise FileNotFoundError(f"{priv.name} missing - run keygen first")
-    out = d / _CREDENTIALS_DEFAULT
+    out = d / files["credentials"]
     out.write_text(json.dumps({"subject-credentials": {
         "type": "JWT", "alg": "RS256",
         "private-key": priv.read_text(encoding="utf-8"),
@@ -249,13 +263,24 @@ def _main(argv: List[str]) -> int:
                                  description="Compute Phase 0: no API call, no VM.")
     sub = ap.add_subparsers(dest="cmd")
     sub.add_parser("check", help="credentials checklist (default)")
-    sub.add_parser("keygen", help="RSA pair for an authorized key; prints the public key")
+    kg = sub.add_parser("keygen", help="RSA pair for an authorized key; prints the public key")
+    kg.add_argument("--name", default="", help="key set, e.g. phase2 (default: read-only)")
     cr = sub.add_parser("credentials", help="build the SDK credentials file")
     cr.add_argument("--service-account-id", required=True)
     cr.add_argument("--public-key-id", required=True)
+    cr.add_argument("--name", default="", help="key set, e.g. phase2 (default: read-only)")
     sub.add_parser("inventory", help="Phase 1: read-only GPU platforms / subnets / "
                                      "CUDA images in every region (nothing created)")
+    pr = sub.add_parser("probe", help="Phase 2: ONE paid GPU VM, nvidia-smi over SSH, "
+                                      "deleted in a finally")
+    pr.add_argument("--i-know-cost", action="store_true")
+    pr.add_argument("--max-minutes", type=float, default=30)
+    cl = sub.add_parser("cleanup", help="delete every VM this tool labelled")
+    cl.add_argument("--project-id", default=None)
     args = ap.parse_args(argv)
+
+    if args.cmd in ("probe", "cleanup"):
+        return _phase2(args)
 
     if args.cmd == "inventory":
         r = check_credentials()
@@ -279,18 +304,86 @@ def _main(argv: List[str]) -> int:
         return 0
 
     if args.cmd == "keygen":
-        pub = generate_keypair()
-        print(f"private key kept in packages/engine/{_PRIVATE_KEY_DEFAULT} "
+        pub = generate_keypair(name=args.name)
+        print(f"private key kept in packages/engine/{key_files(args.name)['private']} "
               "(gitignored, never printed)")
         print(f"upload this public key (also in packages/engine/{pub.name}):\n")
         print(pub.read_text(encoding="utf-8"))
         return 0
     if args.cmd == "credentials":
-        out = write_credentials(args.service_account_id, args.public_key_id)
+        out = write_credentials(args.service_account_id, args.public_key_id,
+                                name=args.name)
         print(f"wrote packages/engine/{out.name} - valid for the SDK")
     r = check_credentials()
     print(format_checklist(r))
     return 0 if r["ready_for_wire"] else 1
+
+
+def _phase2(args) -> int:
+    """probe / cleanup: the write-capable ``phase2`` service account, never the
+    read-only one, and for probe two explicit opt-ins before anything is paid."""
+    from nge import config as _cfg
+    from nge.fleet import compute_inventory as ci
+    from nge.fleet import compute_probe as cp
+
+    creds = _engine_dir() / key_files("phase2")["credentials"]
+    why = _credentials_file_check(creds) if creds.is_file() else "file not found"
+    if why:
+        print(f"Phase 2 needs the write-capable service account: {creds.name} - {why}.\n"
+              "  python -m nge.fleet.compute keygen --name phase2\n"
+              "  (upload the public key to that account, then)\n"
+              "  python -m nge.fleet.compute credentials --name phase2 "
+              "--service-account-id serviceaccount-... --public-key-id publickey-...")
+        return 1
+    if args.cmd == "probe":
+        if not args.i_know_cost or os.environ.get("NGE_COMPUTE_SPAWN") != "1":
+            print("refusing: a probe creates a paid GPU VM. Re-run with --i-know-cost "
+                  "and NGE_COMPUTE_SPAWN=1.")
+            return 2
+        if not 0 < args.max_minutes <= cp.MAX_MINUTES:
+            print(f"refusing: --max-minutes must be in (0, {cp.MAX_MINUTES}]")
+            return 2
+
+    out_dir = _cfg.load().out_dir
+    sdk = ci.build_sdk(_engine_dir(), key_files("phase2")["credentials"])
+    try:
+        project = _cfg.load_value("nebius_compute_project_id", "NEBIUS_COMPUTE_PROJECT_ID")
+        inv = ci.inventory(ci.NebiusReadApi(sdk), project)
+        target = ci.recommend(inv)
+        api = cp.ComputeApi(sdk)
+        if args.cmd == "cleanup":
+            pid = args.project_id or (target or {}).get("project_id")
+            if not pid:
+                print("no project to clean: pass --project-id")
+                return 1
+            cp.cleanup(api, pid)
+            return 0
+        if not target:
+            print("no bootable target in the inventory - nothing created")
+            return 1
+        cost = cp.estimate_usd(target, args.max_minutes)
+        print(f"[probe] target {target['platform']} / {target['preset']} in "
+              f"{target['region']}, image {target['image_family']}, "
+              f"max {args.max_minutes:g} min, compute "
+              + (f"~${cost} before tax (+ disk and public IP)" if cost is not None
+                 else "cost unknown (no list price)"))
+        key, pub = cp.ensure_ssh_key(_engine_dir())
+        report = cp.probe(api, target, key, pub, max_minutes=args.max_minutes)
+        print(f"[probe] saved {cp.save(report, out_dir)}")
+        if report["instance_id"] and not report["deleted"]:
+            print("[probe] WARNING: deletion NOT confirmed - run "
+                  "`python -m nge.fleet.compute cleanup` and check the console")
+            return 3
+        m = report["metrics"] or {}
+        print(f"[probe] ok={report['ok']} probe_kind={m.get('probe_kind')} "
+              f"gpu={m.get('gpu_name')!r} temp={m.get('temp_c')}C "
+              f"power={m.get('power_w')}W wall={report['wall_s']}s")
+        return 0 if report["ok"] else 1
+    finally:
+        try:
+            sdk.sync_close()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":                       # pragma: no cover

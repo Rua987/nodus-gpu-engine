@@ -34,7 +34,7 @@ def pick_image(cuda_images: List[str]) -> Optional[str]:
     return sorted(usable)[-1] if usable else None
 
 
-def build_sdk(engine_dir: Path):
+def build_sdk(engine_dir: Path, credentials: str = ".nebius_sa_credentials.json"):
     """An authenticated SDK channel, from the Phase 0 credentials file.
 
     TLS roots come from certifi: on Windows the SDK otherwise insists on the
@@ -45,7 +45,7 @@ def build_sdk(engine_dir: Path):
     from nebius.sdk import SDK
 
     roots = Path(certifi.where()).read_bytes()
-    return SDK(credentials_file_name=str(engine_dir / ".nebius_sa_credentials.json"),
+    return SDK(credentials_file_name=str(engine_dir / credentials),
                tls_credentials=grpc.ssl_channel_credentials(root_certificates=roots),
                user_agent_prefix="nodus-gpu-engine/compute-inventory")
 

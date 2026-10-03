@@ -151,6 +151,37 @@ les ids du compte) et propose une cible Phase 2. Uniquement des `get` / `list` /
 **Go Phase 2 :** top-up solde + phrase explicite « Go spawn 1× H100 test ».  
 Sans ça → **Non**.
 
+**Code prêt (2026-10-03), pas encore lancé** — `nge/fleet/compute_probe.py`,
+`python -m nge.fleet.compute probe --i-know-cost` avec `NGE_COMPUTE_SPAWN=1` :
+
+- cible = la recommandation de l'inventaire (L40S `gpu-l40s-a` eu-north1, image
+  `ubuntu24.04-cuda13.0`, disque de boot 50 Gio SSD, IP publique dynamique) ;
+- **compte de service séparé** `phase2` (groupe *editors*, il faut créer une VM) :
+  `keygen --name phase2` / `credentials --name phase2`. Le compte *viewers* de la
+  Phase 1 n'est jamais élargi ;
+- l'id de la VM est connu dès le retour de la requête de création, avant la fin
+  de l'opération : une création qui expire laisse quand même un id à supprimer ;
+- suppression dans un `finally` (erreur, délai, Ctrl+C), 3 tentatives, budget de
+  suppression séparé ; le rapport dit `deleted: true/false` et la CLI sort en
+  code 3, bruyamment, si la suppression n'est pas confirmée ;
+- un délai mural unique, plafonné à 30 min, borne chaque attente ;
+- étiquette `nge-phase2=probe` sur VM et disque ;
+  `python -m nge.fleet.compute cleanup` supprime tout ce qui la porte ;
+- lecture : SSH par clé (ed25519 locale, `.nebius_vm_ssh_key`, utilisateur `nge`,
+  `root`/`admin` étant réservés), `known_hosts` jetable, même sonde et même parseur
+  que la flotte Contree → `probe_kind=nvidia-smi` là où le moteur l'attend ;
+- estimation affichée avant : GPU + vCPU + RAM au tarif console (~0,77 $ HT pour
+  30 min de L40S) — **disque et IP publique en plus**.
+
+À savoir : le groupe de sécurité par défaut d'eu-north1 **autorise tout en
+entrée** (lu en Phase 1). La VM est donc joignable d'internet pendant sa courte
+vie ; accès par clé uniquement. Pas de console série dans l'API Compute, d'où SSH.
+
+Tests : `tests/test_compute_probe.py` — fausse API, fausse horloge : suppression
+après échec de création, SSH muet, VM jamais prête, Ctrl+C ; suppression
+réessayée ; non-confirmation signalée ; plafond de durée ; refus de la CLI sans
+les deux opt-in.
+
 ### Phase 3 — Brancher heal live (archi A)
 **But :** orchestrateur utilise Compute pour télémétrie/remediation ; shards restent Contree.
 
