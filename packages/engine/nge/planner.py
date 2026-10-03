@@ -86,9 +86,24 @@ def resolve_ckpt(config=None) -> Path:
     return Path(raw).expanduser() if raw else DEFAULT_CKPT
 
 
+# Checkpoint path that ``--heuristic-plan`` sets on purpose. Without its own
+# note, the judge film opened on "324M planner checkpoint NOT FOUND at
+# __nge_force_heuristic__/missing.pt" - in the terminal and in the HTML report -
+# while the weights were on disk and simply not consulted.
+FORCE_HEURISTIC = "__nge_force_heuristic__"
+FORCED_NOTE = ("keyword heuristic requested (--heuristic-plan); the 324M "
+               "checkpoint is not consulted")
+
+
+def heuristic_forced(config=None) -> bool:
+    return FORCE_HEURISTIC in resolve_ckpt(config).parts
+
+
 def ckpt_status(config=None) -> Tuple[Path, bool, str]:
     """``(path, exists, human note)`` - lets a caller warn before a run."""
     p = resolve_ckpt(config)
+    if FORCE_HEURISTIC in p.parts:
+        return p, False, FORCED_NOTE
     try:
         if p.is_file():
             return p, True, f"324M planner: {p.name} ({p.stat().st_size / 1e6:.0f} MB)"

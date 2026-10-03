@@ -100,8 +100,9 @@ def test_no_local_paths_or_secrets_in_evidence():
 
 # -- the judge-facing claims, checked against the run-time event log ----------
 
-def test_a2_film_is_two_of_three_with_a_migration():
-    ev = _events("report_20260913T041721Z")
+@pytest.mark.parametrize("stem", ["report_20260913T041721Z", "report_20261003T233405Z"])
+def test_a2_film_is_two_of_three_with_a_migration(stem):
+    ev = _events(stem)
     assert _kinds(ev, "plan")[0]["source"] == "heuristic"
     assert [(e["from"], e["to"]) for e in _kinds(ev, "gpu_remediation")] == \
         [("nb-h100-02", "nb-h100-03")]
@@ -174,3 +175,12 @@ def test_compute_probe_read_a_real_gpu_and_deleted_its_vm():
     text = json.dumps(d)
     for account_id in ("project-e", "vpcsubnet-e", "computeinstance-e"):
         assert account_id not in text
+
+
+def test_current_a2_capture_has_a_clean_header():
+    """The film's header claimed a missing checkpoint while the weights were on
+    disk; the capture shown to judges must not."""
+    for ext in (".html", ".md"):
+        text = (EVIDENCE / f"report_20261003T233405Z{ext}").read_text(encoding="utf-8")
+        assert "NOT FOUND" not in text
+        assert "heuristic requested" in text

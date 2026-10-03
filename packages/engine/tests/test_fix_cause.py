@@ -27,3 +27,14 @@ def test_regression_is_high():
     assert urgency_for(verified=False, has_patch=True,
                        reason="broke other.py::t",
                        regressions=["other.py::t"]) == "high"
+
+
+def test_hint_sentence_has_one_full_stop():
+    """The judge-film HTML read "Hint was: ... before asserting.." three times."""
+    from nge.fix_cause import annotate_fix
+    f = {"test": "t.py::test_a", "error": "AssertionError: x",
+         "proposed_fix": "Sort plan names before asserting."}
+    for verified, has_patch in ((True, True), (False, False), (False, True)):
+        row = annotate_fix(f, reason="r", verified=verified, has_patch=has_patch,
+                           all_failures=[f])
+        assert ".." not in " ".join(str(v) for v in row.values()), row

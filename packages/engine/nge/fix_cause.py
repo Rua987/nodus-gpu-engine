@@ -54,7 +54,8 @@ def annotate_fix(
     """Fields to merge into a fix record for reports."""
     all_failures = all_failures or []
     symptom = (failure.get("error") or "").strip()
-    hint = (failure.get("proposed_fix") or "").strip()
+    # the sentences below add their own full stop; hints usually end in one
+    hint = (failure.get("proposed_fix") or "").strip().rstrip(".")
     n = cluster_size(failure.get("test", ""), all_failures)
     urg = urgency_for(
         verified=verified, has_patch=has_patch, reason=reason or "",

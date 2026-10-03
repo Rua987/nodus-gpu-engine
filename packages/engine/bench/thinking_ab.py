@@ -135,7 +135,8 @@ def run_once(arm: str, sandbox: str, out_root: Path, target: str = "nodus") -> d
     _set_arm(ARMS[arm])
     out = out_root / f"{arm}_{int(time.time())}"
     cfg = _cfg.load(fleet_mode="mock", sandbox_mode=sandbox, out_dir=out)
-    cfg = replace(cfg, nodus_plan_ckpt=str(Path("__nge_force_heuristic__") / "missing.pt"))
+    from nge import planner as _pl
+    cfg = replace(cfg, nodus_plan_ckpt=str(Path(_pl.FORCE_HEURISTIC) / "missing.pt"))
     register.apply()
     _usage.reset_usage()
     _usage.set_jsonl_path(out / "nemotron_usage.jsonl")

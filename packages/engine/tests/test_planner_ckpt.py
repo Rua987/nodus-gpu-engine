@@ -181,3 +181,26 @@ def test_orchestrator_emits_plan_degraded(tmp_path):
     # would still pass if the orchestrator ignored the config and fell through
     # to the vendored default, which is also absent.
     assert str(tmp_path / "absent.pt") in plan_evt["note"]
+
+
+def test_forced_heuristic_says_so_instead_of_checkpoint_not_found():
+    """The judge film opened on "324M planner checkpoint NOT FOUND at
+    __nge_force_heuristic__/missing.pt" - weights on disk, deliberately skipped."""
+    from pathlib import Path
+    from types import SimpleNamespace
+    from nge import planner
+    cfg = SimpleNamespace(nodus_plan_ckpt=str(Path(planner.FORCE_HEURISTIC) / "missing.pt"))
+    assert planner.heuristic_forced(cfg)
+    _, exists, note = planner.ckpt_status(cfg)
+    assert exists is False and note == planner.FORCED_NOTE
+    assert "NOT FOUND" not in note
+    r = planner.plan("Run the failing pytest suite, triage, fix, report.", config=cfg)
+    assert r.source == "heuristic" and r.degraded is True and r.note == planner.FORCED_NOTE
+
+
+def test_a_really_missing_checkpoint_still_warns(tmp_path):
+    from types import SimpleNamespace
+    from nge import planner
+    cfg = SimpleNamespace(nodus_plan_ckpt=str(tmp_path / "absent.pt"))
+    assert not planner.heuristic_forced(cfg)
+    assert "NOT FOUND" in planner.ckpt_status(cfg)[2]

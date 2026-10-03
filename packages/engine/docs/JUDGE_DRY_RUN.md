@@ -1,7 +1,7 @@
 # Judge dry-run — filmable (~90 s)
 
 Source of truth for the **Coding & Agentic Engineering** pitch.
-Last rehearsal notes: **2026-09-05** (M10 autofix capture).
+Last rehearsal: **2026-10-03** — A2 replayed end to end; see *Rehearsal notes* below.
 
 ## Which demo when
 
@@ -21,17 +21,19 @@ may omit `edit_file` and we triage only — same engine, different outcome.
 
 ```bash
 cd packages/engine
-python -m nge.demo_nebius --mock --watch --watch-delay 0.8 --heuristic-plan
+python -m nge.demo_nebius --mock --watch --watch-delay 2.0 --heuristic-plan
 ```
 
-Expect: `plan(heuristic): [bash, edit_file, write_file]` → `autofix ON` →
-`auto-fixed & verified: 2/3` → open printed `html:`.
+Expect: `plan [heuristic]: ['bash', 'edit_file', 'write_file']` → `autofix ON` →
+`auto-fixed & verified: 2/3` → open printed `html:`. Measured: **85 s** at
+`--watch-delay 2.0` (the pace of the spoken lines); 35 s at `0.8`.
 
 **Two screenshots — do not mix:**
 
 | Proof | File | What it shows |
 |-------|------|----------------|
-| **A2 film** (loop) | `evidence/report_20260913T041721Z.html` | Mock 2/3 + migrate 02→03 + verify 04/05 |
+| **A2 film** (loop) | `evidence/report_20261003T233405Z.html` | Mock 2/3 + migrate 02→03 + verify 04/05 (2026-10-03 capture, clean header) |
+| A2, earlier | `evidence/report_20260913T041721Z.html` | Same result; its header still says « checkpoint NOT FOUND » (fixed since) — don't show |
 | **B Nebius** (live) | `evidence/report_20260913T053458Z_honest.html` (re-render, see `evidence/README.md`) | Contree cpu-fallback, Super **0/3** truncated, Ultra route-only |
 | B, after 2026-10-01 | `evidence/report_20261002T055558Z.html` | Reasoning fix, real sandboxes, **simulated fleet** (`NGE_FLEET_MODE=mock`): 5 real failures, 3 diffs produced, 0 cut, 3 honestly rejected |
 
@@ -54,11 +56,11 @@ python -m bench.tier_smoke --i-know-cost --live-failover --skip-local-failover
 
 | On screen | Beat |
 |-----------|------|
-| `plan(heuristic): … edit_file …` | 1 Plan |
+| `plan [heuristic]: [… 'edit_file' …]` | 1 Plan |
 | `provision x3` + util/temp bars | 2 Fleet |
 | migrate `02 ──▶ 03` | 3 Heal |
 | `plan gate … autofix ON` | 4 Gate |
-| `fix OK` / `fix --` | 4b Verify (2/3 typical) |
+| `fix OK` / `fix? … no patch` (summary: `fix --`) | 4b Verify (2/3 typical) |
 | `run complete` + HTML | Close |
 
 ---
@@ -105,10 +107,25 @@ Open HTML: KPI `2/3`, migration row, diffs under Auto-fixes.
 ## Presenter checklist
 
 - [ ] Mode **A2** rehearsed; know 2/3 is expected
-- [ ] Font large; browser: mock `041721Z` **or** live honest `053458Z_honest` — never both as one run
+- [ ] Font large; browser: mock `233405Z` **or** live honest `053458Z_honest` — never both as one run
 - [ ] Do **not** open taxonomy benches as the pitch
 - [ ] One honest sentence: Contree ≠ H100
 - [ ] Archi if asked: TF for exec; Compute for real `nvidia-smi` (one probe done, heal loop not)
+
+## Rehearsal notes — 2026-10-03
+
+Replayed A2 with the exact capture command. Every cue in *Watch cues* appears,
+in order; result 2/3, migrate `nb-h100-02 → nb-h100-03`, verify on 04 / 05.
+Fixed on the way:
+
+- The film **opened on a warning**: « 324M planner checkpoint NOT FOUND at
+  `__nge_force_heuristic__/missing.pt` » — in the terminal and in the HTML
+  report — while the weights are on disk and `--heuristic-plan` simply skips
+  them. The planner now says « keyword heuristic requested (--heuristic-plan) »
+  and the terminal shows no warning.
+- The Auto-fixes table read « … before asserting.. » (double full stop) three
+  times.
+- The script said ~90 s; `--watch-delay 0.8` gives 35 s. `2.0` gives 85 s.
 
 ## French — aide-mémoire
 

@@ -87,11 +87,13 @@ def run_orchestrated(args, live: bool) -> int:
 
     if getattr(args, "heuristic_plan", False):
         from dataclasses import replace
-        # Missing ckpt → planner falls back to keyword heuristic (edit_file on
-        # the default triage task) so the autofix gate opens for judge films.
+        from nge import planner as _pl
+        # The planner then skips the 324M and uses the keyword heuristic
+        # (edit_file on the default triage task), so the autofix gate opens
+        # for judge films - and says so, instead of "checkpoint NOT FOUND".
         cfg = replace(
             cfg,
-            nodus_plan_ckpt=str(Path("__nge_force_heuristic__") / "missing.pt"),
+            nodus_plan_ckpt=str(Path(_pl.FORCE_HEURISTIC) / "missing.pt"),
         )
         print("[planner] --heuristic-plan: skip 324M -> keyword plan "
               "(expect edit_file -> autofix ON on default scenario)")
@@ -112,7 +114,8 @@ def run_orchestrated(args, live: bool) -> int:
 
     from nge import planner as _planner
     _ck, _ok, _note = _planner.ckpt_status(cfg)
-    print(f"[planner] {_note}" if _ok else f"[planner] WARNING - {_note}")
+    if not _planner.heuristic_forced(cfg):      # forced: already announced above
+        print(f"[planner] {_note}" if _ok else f"[planner] WARNING - {_note}")
 
     watch = None
     if args.watch:

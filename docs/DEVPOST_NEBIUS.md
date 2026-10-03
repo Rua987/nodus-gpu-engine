@@ -40,8 +40,8 @@ Live (`--live`): real **Nemotron @ Token Factory** + Contree sandboxes. Contree 
 cd packages/engine
 pip install -r requirements.txt
 python -m pytest -q
-python -m nge.demo_nebius --mock --watch --heuristic-plan
-# then open the printed html: path
+python -m nge.demo_nebius --mock --watch --watch-delay 2.0 --heuristic-plan
+# ~85 s; then open the printed html: path
 ```
 
 Live (needs Token Factory key):
@@ -51,7 +51,7 @@ python -m nge.demo_nebius --live --shards 1
 ```
 
 Oral script: `packages/engine/docs/JUDGE_DRY_RUN.md`  
-Mock film (2/3 + migrate): `packages/engine/evidence/report_20260913T041721Z.html`  
+Mock film (2/3 + migrate): `packages/engine/evidence/report_20261003T233405Z.html`  
 Live Nebius proof (Contree + Super 0/3): `packages/engine/evidence/report_20260913T053458Z_honest.html` (a re-render of that run — provenance in `packages/engine/evidence/README.md`)  
 Live after the reasoning fix (real sandboxes, simulated fleet): `packages/engine/evidence/report_20261002T055558Z.html`
 

@@ -14,7 +14,8 @@ judge-facing claim stops matching its event log.
 
 | file | command | fleet / sandbox | shows | cited by |
 |---|---|---|---|---|
-| `report_20260913T041721Z` | `--mock --heuristic-plan` | mock / mock | **A2 judge film**: autofix ON, migrate `nb-h100-02 → 03`, 2/3 verified on fresh nodes 04 / 05 | Devpost, JUDGE_DRY_RUN, backlog |
+| `report_20261003T233405Z` | `--mock --watch --watch-delay 2.0 --heuristic-plan` | mock / mock | **A2 judge film, current capture**: same result as below, header no longer claims a missing checkpoint, no double full stops | Devpost, JUDGE_DRY_RUN |
+| `report_20260913T041721Z` | `--mock --heuristic-plan` | mock / mock | **A2 judge film** (earlier capture; its header wrongly says « checkpoint NOT FOUND »): autofix ON, migrate `nb-h100-02 → 03`, 2/3 verified on fresh nodes 04 / 05 | Devpost, JUDGE_DRY_RUN, backlog |
 | `report_20260913T053458Z` | `--live --shards 1 --heuristic-plan` | Nebius / Token Factory | **Live B**: Contree `cpu-fallback`, heal gated, 5 failures, 3 patches cut at 2048 (0-char), 0/3 | Devpost, JUDGE_DRY_RUN |
 | `report_20261002T055558Z` | `NGE_FLEET_MODE=mock --live --shards 2 --heuristic-plan` | mock / Token Factory | Same loop after the reasoning defaults: 5 failures, 3 diffs produced, 0 cut, 3 rejected by verification | JUDGE_DRY_RUN, backlog |
 | `report_20260905T232100Z` | `--mock --heuristic-plan` | mock / mock | First 2/3 capture with migrate (M10) | NEBIUS_TRACK, backlog |
