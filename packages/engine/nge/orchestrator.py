@@ -655,7 +655,8 @@ class NgeOrchestrator:
     def _react_to_pressure(self, sr: "ShardResult", tele: Optional[dict],
                            target: str, collect: list,
                            gpu_type: str = "H100",
-                           reserved_ids: Optional[Sequence[str]] = None) -> None:
+                           reserved_ids: Optional[Sequence[str]] = None,
+                           gpu_workload: bool = False) -> None:
         """If the shard's node is throttling / inefficient, migrate the shard
         onto a freshly provisioned healthy node. Bounded to one remediation
         per shard.
@@ -686,8 +687,20 @@ class NgeOrchestrator:
                        gpu_class=tele.get("gpu_class"),
                        why="no nvidia-smi metrics — skip efficiency heal")
             return
-        pressured = (tele["health"] == "throttle"
-                     or tele["efficiency"] < self.MIN_EFFICIENCY)
+        hot = tele["health"] == "throttle"
+        inefficient = tele["efficiency"] < self.MIN_EFFICIENCY
+        if (inefficient and not hot and tele.get("probe_kind") == _tele.PROBE_NVIDIA
+                and not gpu_workload):
+            # Efficiency is useful work per watt. On a real GPU that carries no
+            # GPU work - the pytest shards run in Token Factory sandboxes - it
+            # is 0 by construction: the real idle L40S read 27 C, 0 %, 67.8 W,
+            # efficiency 0.0, and this rule would have migrated shards off a
+            # perfectly healthy node. Heat and power still count.
+            self._emit("gpu_efficiency_skipped", shard=sr.index,
+                       node_id=sr.node_id, efficiency=tele["efficiency"],
+                       why="no GPU workload declared - an idle GPU reads efficiency 0")
+            inefficient = False
+        pressured = hot or inefficient
         if not pressured:
             return
 
@@ -840,6 +853,8 @@ class NgeOrchestrator:
         # mission intents - default on, an engineer can turn either off
         self_heal = bool(scenario.get("self_heal", True))
         auto_fix = bool(scenario.get("auto_fix", True))
+        # do the shards put work on the GPU? pytest shards do not
+        gpu_workload = bool(scenario.get("gpu_workload", False))
 
         # Split the work. The planner's vocabulary decides *how*: glob/grep
         # mean "go look first", so the file list is discovered from the tree;
@@ -915,7 +930,8 @@ class NgeOrchestrator:
             if self_heal:
                 self._react_to_pressure(shard_results[-1], tele, target,
                                         collect, gpu_type,
-                                        reserved_ids=node_ids[i + 1:])
+                                        reserved_ids=node_ids[i + 1:],
+                                        gpu_workload=gpu_workload)
 
             sr = shard_results[-1]
             # a shard that produced pytest output is a usable baseline for its
