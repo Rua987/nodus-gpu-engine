@@ -2,9 +2,10 @@
 
 > Copy-paste ready for the **Coding & Agentic Engineering** submission.  
 > English = judges. Honesty first: mock shows the full loop; live proves Nebius.  
-> Written **2026-09-12** from measured runs, not from the wish list.
+> Written **2026-09-12** from measured runs, not from the wish list; reviewed end to end
+> **2026-10-03** (reasoning lever, bugbench, Compute probe, recaptured film).
 
-Do **not** paste `AUTORESEARCH_VISION.md` / SkillSpector / Compute Phase 2 as if shipped.
+Do **not** paste `AUTORESEARCH_VISION.md` / SkillSpector / Compute Phase 3 (heal on real GPU load) as if shipped.
 
 ---
 
@@ -20,7 +21,7 @@ Not a chatbot: a control loop that plans, shards tests, migrates off a hot node,
 Coding & Agentic Engineering
 
 **Built with**  
-Nebius Token Factory · NVIDIA Nemotron 3 (Ultra / Super / Nano) · Token Factory Sandboxes (Contree) · local Nodus 324M planner · Python
+Nebius Token Factory · NVIDIA Nemotron 3 (Ultra / Super / Nano) · Token Factory Sandboxes (Contree) · Nebius AI Cloud Compute (GPU VM probe) · local Nodus 324M planner · Python
 
 ---
 
@@ -30,7 +31,8 @@ A code-completion wrapper suggests a fix.
 **Nodus-GPU Engine runs the job:** local plan → sharded pytest on a fleet → migrate off a hot node **after scoring the destination** → patch in a fresh sandbox → re-run the suite → keep only what stays green.
 
 Mock film (`--heuristic-plan`): **2/3 auto-fixed & verified** + GPU migrate `02 → 03`.  
-Live (`--live`): real **Nemotron @ Token Factory** + Contree sandboxes. Contree is **CPU today** (`probe_kind=cpu-fallback`); thermal heal is **gated** until real `nvidia-smi` — we refuse fake H100 metrics.
+Live (`--live`): real **Nemotron @ Token Factory** + Contree sandboxes. Contree is **CPU today** (`probe_kind=cpu-fallback`); thermal heal is **gated** until real `nvidia-smi` — we refuse fake H100 metrics.  
+Real GPU: the engine's own probe read `nvidia-smi` on a Nebius AI Cloud **L40S** and deleted the VM — one reading, not the heal loop.
 
 ---
 
@@ -44,9 +46,12 @@ python -m nge.demo_nebius --mock --watch --watch-delay 2.0 --heuristic-plan
 # ~85 s; then open the printed html: path
 ```
 
-Live (needs Token Factory key):
+Live (needs a Token Factory key and project — `NEBIUS_API_KEY`, `NEBIUS_PROJECT_ID`, or the files
+`packages/engine/.nebius_api_key` / `.nebius_project_id`; the extra packages are what CI's
+live job installs):
 
 ```bash
+pip install -r requirements.txt -r ../nodus/requirements-ci.txt contree-sdk
 python -m nge.demo_nebius --live --shards 1
 ```
 
@@ -69,6 +74,12 @@ We use **Nebius Token Factory** as the OpenAI-compatible endpoint and **NVIDIA N
 - **Sandboxes:** Contree SDK — spawn, upload, exec, jail on every shell command.  
 - **Usage ledger:** calls + tokens per model; Nano/Ultra 404/5xx → **one hop to Super**, never silent Super→Nano.  
 - **IDs are case-sensitive** (verified against `GET /v1/models`).
+- **Reasoning per call class:** Nemotron 3 reasons inside `max_tokens`; short replies run with
+  `enable_thinking: false`, patches keep it — chosen from measurements, not taste (Challenges).
+- **Nebius AI Cloud Compute:** the Python SDK reads every region the account has (platforms,
+  presets, subnets, CUDA images) without creating anything, then one probe creates an **L40S**
+  VM, reads `nvidia-smi` over SSH (27 °C, 67.8 W, classified `datacenter`) and deletes it —
+  192 s, `packages/engine/evidence/compute_probe_20261003T231022Z.json`.
 
 Token Factory Contree nodes are **not** physical H100s. Live probes report `cpu-fallback`. That is a product fact, not a bug.
 
@@ -148,20 +159,22 @@ Next: feed that real telemetry to the heal loop under load (architecture A: Comp
 3. **One command** (real CLI, not `nge run`):
 
 ```bash
-python -m nge.demo_nebius --mock --watch --heuristic-plan
+python -m nge.demo_nebius --mock --watch --watch-delay 2.0 --heuristic-plan
 ```
 
 4. **Screenshot** — HTML control room (fleet cards + Story + patches).  
 5. **Four criteria** — the sections above.  
-6. **Limits** — mock = synthetic H100 for the film; live = Token Factory + Nemotron; Contree = CPU, heal gated.
+6. **Limits** — mock = synthetic H100 for the film; live = Token Factory + Nemotron; Contree = CPU, heal gated;
+   one real `nvidia-smi` reading on an AI Cloud L40S, but the heal loop has not run on real GPUs.
 
 Do **not** invent “GPU $ saved”. We did not invoice that.
 
 ## Video / screenshot checklist
 
-1. Terminal: `--mock --watch --heuristic-plan` — plan, bars, migrate, `2/3`.  
+1. Terminal: `--mock --watch --watch-delay 2.0 --heuristic-plan` (~85 s) — plan, bars, migrate, `2/3`.  
 2. Browser: **control room** HTML (cards + Story + diffs).  
 3. Optional 10 s: `--live` usage line + `heal gated` / `cpu-fallback`.  
+3b. Optional 10 s: the Compute probe report — `probe_kind=nvidia-smi`, `NVIDIA L40S`, `deleted: true`.  
 4. Do **not** lead with taxonomy benches or AutoResearch.
 
 ---
@@ -169,6 +182,7 @@ Do **not** invent “GPU $ saved”. We did not invoice that.
 ## Do not write on Devpost
 
 - “We heal real H100s in production today.”  
+- “The engine heals real GPUs.” (one probe read a real L40S; the heal loop under real load is not done)  
 - “Ultra is billed on every `--live` plan.” (often 324M).  
 - “3/3 always verified.”  
 - DeepSeek / Ollama as the submission path (`NGE_TRACK=nebius` blocks them).
