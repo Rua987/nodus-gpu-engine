@@ -146,6 +146,17 @@ def _timeline(events) -> str:
                 + (f' ({_esc(rsn)} reasoning)' if rsn else "")
                 + ' &rarr; template command</div>'
             )
+        elif k == "gpu_efficiency_skipped":
+            rows.append(f'<div class="pill">efficiency not counted on '
+                        f'<code>{_esc(e.get("node_id"))}</code> '
+                        f'({_esc(e.get("efficiency"))}): no GPU work declared &mdash; '
+                        f'an idle GPU reads 0, that is not pressure</div>')
+        elif k == "shard_output_truncated":
+            rows.append(f'<div class="pill pressure">! shard #{_esc(e.get("index"))} output cut at '
+                        f'the sandbox size limit &mdash; failures past the cut are not '
+                        f'counted</div>')
+        elif k == "autofix_skipped":
+            rows.append(f'<div class="pill">autofix off: {_esc(e.get("reason"))}</div>')
         elif k == "gpu_pressure":
             rows.append(f'<div class="pill pressure">! pressure shard {e["shard"]} on '
                         f'<code>{_esc(e["node_id"])}</code>: {_esc(e["health"])} '
@@ -175,6 +186,7 @@ def _timeline(events) -> str:
 
 _STORY_KINDS = frozenset({
     "gpu_pressure", "gpu_placement", "gpu_placement_refused",
+    "gpu_efficiency_skipped", "shard_output_truncated",
     "gpu_remediation", "gpu_provision_replacement",
     "fix_verified", "fix_rejected", "triage", "plan_gated_autofix",
 })
@@ -222,7 +234,7 @@ def _truncations(events: List[dict]) -> Dict[str, dict]:
     return out
 
 
-def _fix_subtitle(fixes: List[dict]) -> str:
+def _fix_subtitle(fixes: List[dict], skipped: str = "") -> str:
     n_tried = len(fixes or [])
     n_kept = sum(1 for f in (fixes or []) if f.get("verified"))
     n_with_patch = sum(1 for f in (fixes or []) if f.get("patch"))
@@ -232,6 +244,8 @@ def _fix_subtitle(fixes: List[dict]) -> str:
     )
     n_empty = n_tried - n_with_patch
     if n_tried == 0:
+        if skipped:
+            return f"No patches attempted: autofix {skipped}."
         return "No patches attempted (plan gate off, or nothing in scope)."
     if n_kept == n_tried:
         return f"{n_kept}/{n_tried} kept. All attempted patches re-tested green."
@@ -467,6 +481,11 @@ def render(rep: Dict[str, Any], path) -> Path:
             '<div class="pill">no remediation — heal gated '
             '(cpu-fallback, no GPU thermometer)</div>'
         )
+    elif _event(events, "gpu_efficiency_skipped"):
+        rem_rows = (
+            '<div class="pill">no remediation - real GPUs, idle and cool; efficiency 0 '
+            'with no GPU work declared is not pressure</div>'
+        )
     else:
         rem_rows = (
             '<div class="pill">no remediation - every node stayed within budget</div>'
@@ -497,6 +516,9 @@ def render(rep: Dict[str, Any], path) -> Path:
         honest = "Mock telemetry (synthetic H100). Same loop as live; Contree live is CPU — heal gated."
     elif probe == "cpu-fallback":
         honest = "Live Token Factory Contree: probe=cpu-fallback. Thermal heal gated (not a physical GPU)."
+    elif fleet == "compute" and probe == "nvidia-smi":
+        honest = ("Real GPUs: Nebius AI Cloud VMs, nvidia-smi over SSH, created and deleted "
+                  "by the engine. Shards run in Token Factory sandboxes.")
     if cpu_fallback:
         story_sub = (
             "This run: Contree shard &rarr; triage &rarr; Super patch attempt. "
@@ -538,7 +560,7 @@ def render(rep: Dict[str, Any], path) -> Path:
 <table><tr><th>#</th><th>node</th><th>exit</th><th>dur (s)</th><th>failures</th></tr>{shard_rows}</table>
 
 <h2>Auto-fixes</h2>
-<p class="sub">Symptom &rarr; why kept or skipped &rarr; urgency. {_esc(_fix_subtitle(fixes))}</p>
+<p class="sub">Symptom &rarr; why kept or skipped &rarr; urgency. {_esc(_fix_subtitle(fixes, _event(events, "autofix_skipped").get("reason") or ""))}</p>
 <table><tr><th>test</th><th>outcome</th><th>why / cause / fragility</th></tr>{fix_rows or '<tr><td colspan=3>none</td></tr>'}</table>
 
 {fail_block}

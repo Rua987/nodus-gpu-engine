@@ -142,3 +142,38 @@ def test_orchestrator_writes_html_next_to_md(tmp_path):
             assert nid in doc
         assert "VERIFY" in doc
         assert "already in Auto-fixes" in doc
+
+
+def _compute_run(extra_events):
+    return {
+        "plan": {"names": ["bash"], "source": "nodus-324m"},
+        "shards": [{"index": 0, "node_id": "cg-l40s-a-00", "exit_code": 1,
+                    "duration_s": 6.3, "failures": [{}], "migrated_from": None}],
+        "failures": [], "routes": [], "remediations": [], "fixes": [],
+        "events": [{"kind": "capabilities", "expect_probe": "nvidia-smi"},
+                   {"kind": "run_start", "fleet_mode": "compute",
+                    "sandbox_mode": "token_factory"}, *extra_events],
+    }
+
+
+def test_real_gpu_heal_decision_is_in_story_and_timeline(tmp_path):
+    """Phase 3: the decision that mattered - an idle real GPU is not pressure -
+    was only in the raw JSON at the bottom of the page."""
+    doc = report_html.render(_compute_run([
+        {"kind": "gpu_efficiency_skipped", "shard": 0, "node_id": "cg-l40s-a-00",
+         "efficiency": 0.0, "why": "no GPU workload declared"},
+        {"kind": "autofix_skipped", "reason": "disabled by mission"},
+    ]), tmp_path / "r.html").read_text(encoding="utf-8")
+    body = doc.split("raw event log")[0]
+    assert body.count("efficiency not counted on <code>cg-l40s-a-00</code>") == 2  # story + log
+    assert "Real GPUs: Nebius AI Cloud VMs" in body
+    assert "idle and cool" in body and "every node stayed within budget" not in body
+    assert "No patches attempted: autofix disabled by mission." in body
+
+
+def test_a_cut_shard_output_is_flagged_in_the_story(tmp_path):
+    doc = report_html.render(_compute_run([
+        {"kind": "shard_output_truncated", "index": 0, "node_id": "cg-l40s-a-00",
+         "stdout_chars": 65535},
+    ]), tmp_path / "r.html").read_text(encoding="utf-8")
+    assert doc.split("raw event log")[0].count("output cut at the sandbox size limit") == 2

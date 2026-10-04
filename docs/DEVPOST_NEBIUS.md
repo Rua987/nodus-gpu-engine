@@ -62,8 +62,9 @@ Oral script: `packages/engine/docs/JUDGE_DRY_RUN.md`
 Mock film (2/3 + migrate): `packages/engine/evidence/report_20261003T233405Z.html`  
 Live Nebius proof (Contree + Super 0/3): `packages/engine/evidence/report_20260913T053458Z_honest.html` (a re-render of that run — provenance in `packages/engine/evidence/README.md`)  
 Live after the reasoning fix (real sandboxes, simulated fleet): `packages/engine/evidence/report_20261002T055558Z.html`  
-Real GPUs (Compute fleet of 2 × L40S + Token Factory sandboxes): `packages/engine/evidence/report_20261004T031503Z.html`
-— it lists one failure that does not exist, `test_connect_mc`; why is under Challenges
+Real GPUs (Compute fleet of 2 × L40S + Token Factory sandboxes): `packages/engine/evidence/report_20261004T031503Z_rerender.html`
+— the same run re-rendered so the heal decision shows in the story (provenance in the evidence README); it lists
+one failure that does not exist, `test_connect_mc`; why is under Challenges
 
 ---
 
@@ -189,8 +190,8 @@ Do **not** invent “GPU $ saved”. We did not invoice that.
 2. Browser: **control room** HTML (cards + Story + diffs).  
 3. Optional 10 s: `--live` usage line + `heal gated` / `cpu-fallback`.  
 3b. Optional 10 s: the Compute probe report — `probe_kind=nvidia-smi`, `NVIDIA L40S`, `deleted: true` — or the
-    hybrid report `report_20261004T031503Z`: two `cg-l40s-a` cards at 25 °C, 0 migrations
-    (`gpu_efficiency_skipped` is in the raw event log at the bottom, not in the timeline).  
+    hybrid report `report_20261004T031503Z_rerender.html`: two `cg-l40s-a` cards at 25 °C, 0 migrations, and in
+    the story « efficiency not counted … an idle GPU reads 0, that is not pressure ».  
 4. Do **not** lead with taxonomy benches or AutoResearch.
 
 ---
