@@ -92,6 +92,8 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | 2026-10-03 | Compute Phase 2 : code prêt, **pas lancé** | `compute_probe.py` (delete dans un `finally`, deadline 30 min, étiquette + `cleanup`), SA `phase2` séparé ; 0 VM créée |
 | 2026-10-03 | **Phase 2, 1er live** (Go) | VM L40S créée en 49 s ; `nvidia-smi` manuel = **L40S 23 °C** ; sonde muette 28 min (`\r\n` Windows) ; process tué par le superviseur → `finally` sauté ; `cleanup` à +36 min ; ~1 $ ; 0 ressource restante (vérifié) |
 | 2026-10-03 | Fixes Phase 2 | octets LF ; échecs SSH journalisés ; auto-extinction cloud-init à max+5 min ; refus si VM étiquetée existante |
+| 2026-10-03 | Phase 3, avant toute VM : faille du plan | GPU sans charge → efficacité 0 → le heal aurait migré hors de GPU sains ; corrigé (`gpu_workload`) ; preuve visée revue |
+| 2026-10-03 | Phase 3 : `ComputeGpuFleet` + `hybrid` | flotte réelle (VM étiquetées, auto-extinction, release sûr), run hybride autofix coupé ; testé sans réseau ; **pas lancé** |
 | 2026-10-03 | **Phase 2, 2e live** (Go 15 min) — **verte** | `probe_kind=nvidia-smi` NVIDIA L40S 27 °C 67,8 W `datacenter` à 89 s ; VM supprimée à 192 s ; 0 ressource restante (vérifié) ; ~0,08 $ |
 
 ---

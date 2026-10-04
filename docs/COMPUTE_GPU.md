@@ -236,8 +236,37 @@ seule lecture, GPU au repos (0 % d'utilisation), aucune migration. C'est la Phas
 
 1. `NGE_FLEET_MODE=compute` + `NGE_SANDBOX=token_factory` (hybride)
 2. Pressure → placement sur status **réels** → migrate = re-run shard (comme aujourd’hui)
-3. Preuve : event `gpu_remediation` avec `probe_kind=nvidia-smi` (pas synthetic)
+3. ~~Preuve : event `gpu_remediation` avec `probe_kind=nvidia-smi`~~ — **revue, voir ci-dessous**
 4. Film / HTML optionnel (perso ou juges selon timing)
+
+**Ce que le plan ne voyait pas (2026-10-03, avant toute VM).** En archi A les
+shards sont des pytest dans des sandboxes Token Factory ; la VM GPU ne fait que
+rapporter sa télémétrie, et ne porte **aucun travail GPU**. Conséquences :
+
+- **Migrations fantômes.** L'efficacité (travail utile par watt) y vaut 0 par
+  construction. La vraie lecture de la Phase 2 (L40S, 27 °C, 0 %, 67,8 W) donnait
+  santé `ok`, efficacité `0.0` < 0,25 : le heal aurait migré des shards hors de GPU
+  sains — le bug déjà corrigé pour les sandboxes CPU, revenu par la porte des vraies
+  métriques. **Corrigé** (`a68ece3`) : sur `nvidia-smi`, une efficacité basse ne
+  compte que si le scénario déclare `gpu_workload` et que le nœud n'est pas déjà
+  chaud ; sinon `gpu_efficiency_skipped`. Chaleur et puissance déclenchent toujours.
+- **Pas de vraie surchauffe à attendre.** 87 °C sur un GPU qui ne travaille pas ne
+  viendra pas ; provoquer une surchauffe serait une mise en scène. La preuve visée
+  devient donc : *le heal lit de la vraie télémétrie GPU et ne migre rien à tort*.
+- Les seuils « datacenter » sont calés sur un H100 (700 W) ; une L40S plafonne vers
+  350 W — la règle de puissance est donc prudente (jamais de fausse alerte), pas
+  précise. Seuils par SKU : non faits.
+
+**Code (2026-10-03)** — `nge/fleet/compute_fleet.py`, `ComputeGpuFleet` (plus un
+squelette) : `provision` crée N VM étiquetées et s'éteignant seules, attend SSH ;
+`status` = `nvidia-smi` par SSH, santé/efficacité selon la classe du GPU ; un
+provision raté à mi-chemin supprime ce qu'il a créé ; `release` ne lève jamais et
+liste ce qu'il n'a pas pu supprimer. Rien sans `NGE_COMPUTE_SPAWN=1`, refus si une
+VM étiquetée traîne. `python -m nge.fleet.compute hybrid --i-know-cost` lance un
+run d'orchestrateur flotte Compute + sandboxes Token Factory, **autofix coupé** :
+chaque tentative de correctif réserve un nœud de flotte, ici une VM payante de plus
+pour une vérification qui tourne en sandbox. 1 à 3 shards (= VM), 30 min max.
+Tests : `tests/test_compute_fleet.py`, `tests/test_real_gpu_heal_gate.py`.
 
 ### Phase 4 — (optionnel, plus tard) Exec sur Compute
 Seulement si Contree devient limitant. = glissement vers archi B partielle. **Hors plan court.**

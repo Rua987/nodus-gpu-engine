@@ -76,16 +76,17 @@ def test_orchestrator_emits_capabilities(tmp_path, monkeypatch):
     assert caps and caps[0]["expect_probe"] == "synthetic"
 
 
-def test_build_fleet_compute_is_skeleton():
+def test_build_fleet_compute_refuses_to_spend_without_opt_in(monkeypatch):
+    """No longer a skeleton (Phase 3): it creates paid VMs - but only on demand."""
+    import pytest
     from nge.fleet import build_fleet
     from nge.fleet.compute import ComputeGpuFleet
+    monkeypatch.delenv("NGE_COMPUTE_SPAWN", raising=False)
     f = build_fleet("compute")
     assert isinstance(f, ComputeGpuFleet)
-    try:
+    with pytest.raises(RuntimeError, match="NGE_COMPUTE_SPAWN"):
         f.provision(1)
-        assert False, "expected NotImplementedError"
-    except NotImplementedError as exc:
-        assert "ComputeGpuFleet" in str(exc)
+    assert f.nodes() == [] and f.status() == []
 
 
 def test_compute_check_credentials_no_spawn(monkeypatch):

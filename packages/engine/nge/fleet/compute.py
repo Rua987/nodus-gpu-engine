@@ -4,8 +4,9 @@ Distinct from :class:`nge.fleet.nebius.NebiusFleet`, which uses Token Factory
 **Contree microVMs** (CPU only today). This module targets Compute instances
 (``gpu-h100-sxm`` / ``gpu-h200-sxm`` …) via the Nebius Python SDK (``nebius``).
 
-Status (2026-09-05): **skeleton** — interface + credential preflight only.
-Provisioning a paid GPU VM requires an explicit operator **Go** (cost).
+Phase 0 (credentials), Phase 1 (read-only inventory), Phase 2 (one probe) and
+the Phase 3 fleet (``compute_fleet.ComputeGpuFleet``) live here and next door.
+Every paid action needs an explicit operator **Go** (cost).
 See ``docs/ENGINE_BACKLOG.md`` M1/M2 and ``docs/COMPUTE_GPU.md``.
 """
 from __future__ import annotations
@@ -14,37 +15,10 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from nge.fleet.base import GpuFleet, GpuNode, GpuNodeStatus
 from nge.fleet import telemetry
 
 
-class ComputeGpuFleet(GpuFleet):
-    """Real Nebius Compute GPU nodes — not Contree sandboxes."""
-
-    mode = "compute"
-
-    def __init__(self, config=None) -> None:
-        from nge import config as _cfg
-        self.cfg = config or _cfg.load()
-        self._nodes: Dict[str, dict] = {}
-        self._next = 0
-
-    def provision(self, n: int, gpu_type: str = "H100") -> List[GpuNode]:
-        raise NotImplementedError(
-            "ComputeGpuFleet: not wired yet. Needs Nebius Compute SDK "
-            "(platform gpu-h100-sxm / gpu-h200-sxm), SA credentials, subnet, "
-            "boot disk (ubuntu*-cuda*). See docs/COMPUTE_GPU.md. "
-            "Until then use fleet_mode=mock (demo) or nebius (TF Contree CPU)."
-        )
-
-    def status(self, node_id: Optional[str] = None) -> List[GpuNodeStatus]:
-        raise NotImplementedError("ComputeGpuFleet.status: see provision()")
-
-    def allocate(self, job: str, node_id: Optional[str] = None) -> GpuNode:
-        raise NotImplementedError("ComputeGpuFleet.allocate: see provision()")
-
-    def release(self, node_ids: Optional[List[str]] = None) -> List[str]:
-        return []
+from nge.fleet.compute_fleet import ComputeGpuFleet  # noqa: E402,F401  (re-export)
 
 
 def expected_probe_kind() -> str:
@@ -277,10 +251,17 @@ def _main(argv: List[str]) -> int:
     pr.add_argument("--max-minutes", type=float, default=30)
     cl = sub.add_parser("cleanup", help="delete every VM this tool labelled")
     cl.add_argument("--project-id", default=None)
+    hy = sub.add_parser("hybrid", help="Phase 3: the orchestrator on real GPU VMs "
+                                       "(telemetry) + Token Factory sandboxes (shards)")
+    hy.add_argument("--i-know-cost", action="store_true")
+    hy.add_argument("--shards", type=int, default=2)
+    hy.add_argument("--max-minutes", type=float, default=12)
     args = ap.parse_args(argv)
 
     if args.cmd in ("probe", "cleanup"):
         return _phase2(args)
+    if args.cmd == "hybrid":
+        return _phase3(args)
 
     if args.cmd == "inventory":
         r = check_credentials()
@@ -384,6 +365,80 @@ def _phase2(args) -> int:
             sdk.sync_close()
         except Exception:
             pass
+
+
+HYBRID_MAX_SHARDS = 3            # each shard is one paid GPU VM
+
+
+def _phase3(args) -> int:
+    """One orchestrator run with fleet_mode=compute (real GPU VMs, telemetry
+    only) and sandbox_mode=token_factory (the shards). Autofix is off: every fix
+    attempt reserves a fleet node, which here would be one more paid VM for a
+    verification that runs in a sandbox anyway. The claim under test is the
+    heal loop on real telemetry, not the fixes."""
+    from nge import config as _cfg
+    from nge.fleet import compute_probe as cp
+
+    creds = _engine_dir() / key_files("phase2")["credentials"]
+    why = _credentials_file_check(creds) if creds.is_file() else "file not found"
+    if why:
+        print(f"Phase 3 needs the write-capable service account: {creds.name} - {why}")
+        return 1
+    if not args.i_know_cost or os.environ.get("NGE_COMPUTE_SPAWN") != "1":
+        print("refusing: a hybrid run creates one paid GPU VM per shard. Re-run with "
+              "--i-know-cost and NGE_COMPUTE_SPAWN=1.")
+        return 2
+    if not 0 < args.max_minutes <= cp.MAX_MINUTES or not 1 <= args.shards <= HYBRID_MAX_SHARDS:
+        print(f"refusing: --max-minutes in (0, {cp.MAX_MINUTES}], --shards in "
+              f"[1, {HYBRID_MAX_SHARDS}]")
+        return 2
+
+    os.environ["NGE_COMPUTE_MAX_MINUTES"] = str(args.max_minutes)
+    os.environ.setdefault("NGE_TRACK", "nebius")
+    from nge.backends import usage as _usage
+    from nge.demo_nebius import _DEFAULT_SCENARIO, _live_chat_fn, _load_scenario
+    from nge.orchestrator import NgeOrchestrator
+    from nge.tools import handlers
+
+    cfg = _cfg.load(fleet_mode="compute", sandbox_mode="token_factory")
+    _usage.reset_usage()
+    _usage.set_jsonl_path(cfg.out_dir / "nemotron_usage.jsonl")
+    scenario = {**_load_scenario(_DEFAULT_SCENARIO), "shards": args.shards,
+                "auto_fix": False, "gpu_workload": False}
+    cost = cp.estimate_usd({"platform": "gpu-l40s-a"}, args.max_minutes)
+    print(f"[hybrid] {args.shards} GPU VM(s), max {args.max_minutes:g} min each - compute "
+          + (f"~${round(cost * args.shards, 2)} before tax (+ disks, public IPs, "
+             "Nemotron and sandbox calls)" if cost is not None else "cost unknown"))
+    orch = NgeOrchestrator(config=cfg, chat_fn=_live_chat_fn(cfg.nemotron_model))
+    report, err = None, None
+    try:
+        report = orch.run(scenario)
+    except BaseException as exc:                # the fleet was released by run()
+        err = exc
+    fleet = handlers.state().fleet
+    undeleted = list(getattr(fleet, "undeleted", []))
+    tele = [e["telemetry"] for e in orch.events
+            if e["kind"] == "gpu_status" and e.get("telemetry")]
+    kinds = [e["kind"] for e in orch.events]
+    for t in tele:
+        print(f"[hybrid] telemetry {t['id']}: {t['probe_kind']} {t.get('gpu_name')!r} "
+              f"{t['temp_c']}C {t['power_w']}W util={t['util_pct']}% health={t['health']} "
+              f"efficiency={t['efficiency']}")
+    print(f"[hybrid] efficiency skipped={kinds.count('gpu_efficiency_skipped')} "
+          f"pressure={kinds.count('gpu_pressure')} remediations={kinds.count('gpu_remediation')}")
+    if report is not None:
+        print(f"[hybrid] report {report.artifact_path}")
+    print(_usage.format_summary())
+    if undeleted:
+        print(f"[hybrid] WARNING: deletion NOT confirmed for {undeleted} - run "
+              "`python -m nge.fleet.compute cleanup` and check the console")
+        return 3
+    if err is not None:
+        print(f"[hybrid] run failed: {type(err).__name__}: {err}")
+        if not isinstance(err, Exception):
+            raise err
+        return 1
+    return 0
 
 
 if __name__ == "__main__":                       # pragma: no cover
