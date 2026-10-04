@@ -129,5 +129,7 @@ LLM benches require `--i-know-cost`.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE). The vendored `packages/nodus/` subtree is also
-MIT (Copyright (c) 2024 Temple IAM), with its own [`packages/nodus/LICENSE`](packages/nodus/LICENSE).
+MIT — see [`LICENSE`](LICENSE). The vendored `packages/nodus/` subtree is a snapshot of
+[Rua987/nodus](https://github.com/Rua987/nodus), also MIT (Copyright (c) 2024 Temple IAM), with its own
+[`packages/nodus/LICENSE`](packages/nodus/LICENSE). (That note used to sit at the end of `LICENSE`,
+which stopped GitHub from recognising the file as MIT.)
