@@ -46,8 +46,9 @@ in a venv containing nothing else.
 | 324M planner actually loading and planning | yes | **no** — CI has no checkpoint and no torch |
 
 CI runs on `ubuntu-24.04`, pinned on purpose: GitHub moves `ubuntu-latest` to
-Ubuntu 26 from 2026-10-19, twelve days before the submission deadline, and a
-runner change mid-judging is not a risk worth taking. Unpin after 2026-10-31.
+Ubuntu 26 from 2026-10-19, eleven days before the submission deadline
+(2026-10-30 10:00 PDT), and a runner change mid-judging is not a risk worth
+taking. Unpin once judging is over.
 
 The last two rows are the current blind spot: the checkpoint fetch and the real
 planner are only ever exercised on one machine, running one OS.

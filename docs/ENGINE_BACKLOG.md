@@ -103,7 +103,8 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 
 ## Prochaines actions (ordre)
 
-1. **Soumission** — répéter le film juges, relire le Devpost (deadline 2026-10-31)
+1. **Soumission** — deadline **2026-10-30 10:00 PDT** (règlement officiel ; le 31 était faux) :
+   rendre le dépôt **public**, vidéo < 3 min **publique sur YouTube**, remplir Devpost (`docs/DEVPOST_NEBIUS.md`, *Form map*)
 2. ~~Compute Phase 3~~ — fait 2026-10-04 (`docs/COMPUTE_GPU.md`)
 2. **Répéter oral** juges (mock A2 + `RISKS_TO_STRENGTHS.md`)
 3. ~~Compute Phase 1–2~~ — faites 2026-10-03 (L40S, pas H100 : cible de l'inventaire)

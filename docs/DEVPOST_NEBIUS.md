@@ -10,6 +10,42 @@ Do **not** paste `AUTORESEARCH_VISION.md` / SkillSpector / a migration under rea
 
 ---
 
+## Official requirements — checked against the rules (2026-10-04)
+
+Source: `nebiusglobalaihackathon.devpost.com/rules`. **Deadline: 2026-10-30, 10:00 AM PDT**
+(17:00 UTC) — not the 31st, which earlier notes said.
+
+| requirement (rules) | status |
+|---|---|
+| Runs on Token Factory or AI Cloud, uses an NVIDIA open model | yes — Nemotron 3 on Token Factory, sandboxes, and AI Cloud GPU VMs |
+| Track chosen | Coding and Agentic Engineering — « agents that write, run, and test code in Token Factory » |
+| Text description of features and functionality | the *About the project* blocks below |
+| Demo video **under 3 minutes**, **public on YouTube** | **to do** — film ~85 s + optional shots (checklist below) |
+| Code repo **public**, open-source licence file | MIT `LICENSE` present; repo **private today — must be made public** (history scanned 2026-10-04: no key, no account id, no ip) |
+| README with setup instructions | `README.md` (*Quick start*, no credentials) |
+| Free testing access for judges | the mock demo needs no key and no network (*Testing instructions*) |
+| Highlight Nemotron, Token Factory, other Nebius tools | *Technological Implementation* below |
+| Feedback on Token Factory, AI Cloud, NVIDIA | *Feedback* block below |
+| English | all paste blocks are English |
+| New, or significantly updated after 2026-08-26 | every commit is from 2026-09-01 on |
+
+## Form map — which block goes in which field
+
+| Devpost field | paste |
+|---|---|
+| Project name | `Nodus-GPU Engine` |
+| Elevator pitch | the tagline (≤ 200 chars) |
+| About the project | in order: *Inspiration*, *What it does*, *How we built it*, *Challenges*, *Accomplishments*, *What we learned*, *What's next* |
+| Built with | `python` `nvidia-nemotron` `nebius-token-factory` `nebius-ai-cloud` `contree-sandboxes` `pytorch` `mcp` |
+| Try it out | https://github.com/Rua987/nodus-gpu-engine |
+| Video demo link | the public YouTube URL |
+| Track | Coding and Agentic Engineering |
+| Testing instructions | *Testing instructions* block |
+| How you used Nemotron / Token Factory / Nebius | *Technological Implementation* section |
+| Feedback | *Feedback* block |
+
+---
+
 ## Fields (short)
 
 **Project name**  
@@ -133,6 +169,18 @@ We built the missing loop on **Nebius Token Factory + NVIDIA Nemotron**, with a 
 
 ---
 
+## “What it does” (paste block)
+
+Give it a task and a repo. It plans which tools it needs (a 324M model running locally, or a keyword
+plan), shards the test suite across a GPU fleet, watches each node's telemetry, and moves a shard off
+a node that runs hot — after scoring where it can go. Failing tests go to Nemotron, which proposes a
+patch; the patch is applied in a fresh Token Factory sandbox and the **whole** suite is re-run. A patch
+is kept only if its test passes and nothing else broke. Everything ends in one HTML control room: fleet
+cards, a short story of the run, the patches kept and why the others were not.
+
+It also says what it did not do: a CPU sandbox reports `cpu-fallback` instead of a fake 0 °C, a cut
+model reply is labelled cut, and a sandbox that cut its output never yields a "verified" fix.
+
 ## “How we built it” (paste block)
 
 - Vendored Nodus runtime (unmodified) + engine package `nge`.  
@@ -154,6 +202,26 @@ We built the missing loop on **Nebius Token Factory + NVIDIA Nemotron**, with a 
 
 ---
 
+## “Accomplishments that we're proud of” (paste block)
+
+- One closed loop on a real repo — plan, test, heal, patch, prove — with every judge-facing claim
+  checked by a test against the run's own event log (`packages/engine/tests/test_evidence.py`).
+- On six seeded bugs re-checked against held-out cases the model never saw, every patch the loop called
+  verified was a real fix, and none broke another test.
+- The heal loop ran on real Nebius L40S GPUs it created and deleted itself, and migrated nothing by
+  mistake.
+- Bugs found by measuring, not guessing: reasoning eating the token budget, `-x` hiding failures, a
+  prompt placeholder copied into a command, and a 64 KiB output cut that invented a test.
+
+## “What we learned” (paste block)
+
+- Measure the lever before pulling it. Turning Nemotron's reasoning off fixed short replies outright; for
+  patches it was a tie, and we wrote that down instead of claiming a win.
+- A green exit code is not a verdict. A sandbox that ran nothing, a shard told to stop at the first
+  failure, an output cut at 64 KiB — each looked like success until the failure sets were compared.
+- Real metrics can lie like fake ones. An idle GPU reads efficiency 0; the fix for CPU sandboxes had to
+  be generalised before the first real VM.
+
 ## “What’s next” (honest, short)
 
 Done since the first draft: the engine's own probe created a Nebius AI Cloud **L40S** VM, read `nvidia-smi` (27 °C, 67.8 W, classified `datacenter`) and deleted it — 192 s end to end, evidence in `packages/engine/evidence/compute_probe_20261003T231022Z.json`. Its first live run failed (a Windows CRLF bug, and a VM that outlived a killed process); both causes are fixed and documented.
@@ -165,6 +233,53 @@ Next: a migration under real GPU pressure needs GPU work on the node (the shards
 per-SKU thresholds (they are H100-tuned; an L40S tops out near 350 W). Not claimed as done.
 
 ---
+
+## Testing instructions (paste block)
+
+No key, no network, about 2 minutes:
+
+```bash
+git clone https://github.com/Rua987/nodus-gpu-engine
+cd nodus-gpu-engine/packages/engine
+pip install -r requirements.txt
+python -m pytest -q
+python -m nge.demo_nebius --mock --watch --watch-delay 2.0 --heuristic-plan
+```
+
+On a clean install the tests report about 490 passed and 26 skipped: the skipped ones need the optional
+cloud SDKs (`nebius`, `cryptography`, `patch-ng`), which the mock path does not. The last command plays
+the full loop on a simulated fleet (~85 s) and prints the path of an HTML report;
+open it in a browser. Expected: a migration `nb-h100-02 → nb-h100-03` and 2 of 3 failures fixed and
+verified. Recorded runs, including the live Nebius ones, are in `packages/engine/evidence/` with their
+provenance in its `README.md`. The live path needs a Token Factory key (`--live`, see the README).
+
+## Feedback — Token Factory, AI Cloud, NVIDIA (paste block)
+
+From building this, in the order we hit things:
+
+- **Token Factory — OpenAI-compatible was the right call.** Our backend is a thin, reversible patch over
+  an OpenAI-style client; `usage` reports `reasoning_tokens`, which is how we found the next problem.
+- **Nemotron 3 reasons inside `max_tokens`.** Our first live patches came back empty at 2048 tokens: 99 %
+  of the output was reasoning and `content` was empty, with `finish_reason=length` as the only sign.
+  `chat_template_kwargs: {"enable_thinking": false}` solved it for short replies. A per-request reasoning
+  budget, or a clearer note in the model card, would save others that day.
+- **Model ids are case-sensitive and not uniform** (`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`, but
+  `nvidia/nemotron-3-super-120b-a12b`); `GET /v1/models` was the source of truth.
+- **Sandboxes (ContreeSDK):** stdout is cut at 64 KiB by default. The `truncated` flag exists but is easy to
+  miss; our first real-GPU run counted a test that does not exist because of it. A warning, or a larger
+  default, would help. Also: a `files` value of type `str` is read as a *local path* and only `bytes` as
+  content — we shipped a file named after a whole diff before noticing. Occasional timeouts on file
+  upload/download were absorbed by retries.
+- **The default `python:3.12-slim` image** has no git and no `patch`; fine once known (we use `patch-ng`).
+- **AI Cloud:** the Python SDK made a read-only inventory of every region easy, and an L40S VM was created in
+  49 s. Friction was in the console: Token Factory ids (`aiproject-…`) and AI Cloud ids (`project-…`) look
+  alike but are different worlds; the service-account page accepts an uploaded public key but offers no
+  downloadable credentials file (the *Access keys* tab gives S3 keys, which Compute does not use), so we
+  generate the key pair and assemble the SDK file ourselves; and the AI Cloud balance is separate from the
+  Token Factory one. A per-instance time-to-live in the API would let us drop our own safety nets
+  (labels, a cloud-init power-off, a refuse-if-leftovers check).
+- **Nemotron itself:** Super was a solid triage and patch model once the token budget was right; on our
+  seeded bugs every patch the loop verified was a real fix.
 
 ## Devpost page order (paste)
 
