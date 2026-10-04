@@ -157,6 +157,20 @@ def _timeline(events) -> str:
                         f'counted</div>')
         elif k == "autofix_skipped":
             rows.append(f'<div class="pill">autofix off: {_esc(e.get("reason"))}</div>')
+        elif k == "gpu_load_induced":
+            rows.append(f'<div class="pill pressure">! induced load (declared, not organic): '
+                        f'GPU burn on <code>{_esc(e.get("node_id"))}</code> for '
+                        f'{_esc(e.get("seconds"))} s &mdash; {_esc(e.get("how"))}</div>')
+        elif k == "gpu_load_not_induced":
+            rows.append(f'<div class="pill">induced load not started on '
+                        f'<code>{_esc(e.get("node_id"))}</code>: '
+                        f'{_esc(e.get("why") or e.get("error"))}</div>')
+        elif k == "gpu_pressure" and e.get("health") == "busy":
+            rows.append(f'<div class="pill pressure">! pressure shard {e["shard"]} on '
+                        f'<code>{_esc(e["node_id"])}</code>: busy &mdash; '
+                        f'{_esc(e.get("util_pct"))}% utilisation after our shard ended'
+                        + (f'; on the GPU: <code>{_esc(e["gpu_processes"])}</code>'
+                           if e.get("gpu_processes") else "") + '</div>')
         elif k == "gpu_pressure":
             rows.append(f'<div class="pill pressure">! pressure shard {e["shard"]} on '
                         f'<code>{_esc(e["node_id"])}</code>: {_esc(e["health"])} '
@@ -166,8 +180,13 @@ def _timeline(events) -> str:
                         f'pick <code>{_esc(e.get("chosen") or "none")}</code> '
                         f'score={_esc(e.get("score"))}</div>')
         elif k == "gpu_remediation":
+            took = ""
+            if e.get("duration_before_s") is not None and e.get("duration_after_s") is not None:
+                took = (f' &mdash; same shard {_esc(e["duration_before_s"])} s there, '
+                        f'{_esc(e["duration_after_s"])} s here')
             rows.append(f'<div class="pill remediation">&#8635; migrate shard {e["shard"]}: '
-                        f'<code>{_esc(e["from"])}</code> &rarr; <code>{_esc(e["to"])}</code></div>')
+                        f'<code>{_esc(e["from"])}</code> &rarr; <code>{_esc(e["to"])}</code>'
+                        f'{took}</div>')
         elif k == "fix_verified":
             rows.append(f'<div class="pill fix">fix OK <code>{_esc(e["test"])}</code> '
                         f'(re-tested green on {_esc(e.get("node"))})</div>')
@@ -187,6 +206,7 @@ def _timeline(events) -> str:
 _STORY_KINDS = frozenset({
     "gpu_pressure", "gpu_placement", "gpu_placement_refused",
     "gpu_efficiency_skipped", "shard_output_truncated",
+    "gpu_load_induced", "gpu_load_not_induced",
     "gpu_remediation", "gpu_provision_replacement",
     "fix_verified", "fix_rejected", "triage", "plan_gated_autofix",
 })

@@ -107,12 +107,24 @@ class ConsoleWatch:
                 f"probe non-GPU  {f.get('node_id')}  "
                 f"{f.get('probe_kind')} — heal skipped ({f.get('why')})",
                 _YELLOW))
+        elif kind in ("gpu_load_induced", "gpu_load_not_induced"):
+            if kind == "gpu_load_induced":
+                self._log.append(self._c(
+                    f"! induced load (declared)  {f.get('node_id')}: GPU burn for "
+                    f"{f.get('seconds')} s", _YELLOW + _BOLD))
+            else:
+                self._log.append(self._c(
+                    f"induced load NOT started  {f.get('node_id')}: "
+                    f"{f.get('why') or f.get('error')}", _RED))
         elif kind == "gpu_pressure":
             nd = self._nodes.setdefault(f["node_id"], {})
             nd["pressured"] = True
+            util = f" util {f['util_pct']}%" if f.get("util_pct") is not None else ""
             self._log.append(self._c(
                 f"! pressure  shard {f['shard']} on {f['node_id']}: "
-                f"{f['health']}  {f.get('temp_c')}C / {f.get('power_w')}W", _RED))
+                f"{f['health']}{util}  {f.get('temp_c')}C / {f.get('power_w')}W", _RED))
+            if f.get("gpu_processes"):
+                self._log.append(self._c(f"  on the GPU: {f['gpu_processes']}", _RED))
         elif kind == "gpu_placement":
             chosen = f.get("chosen") or "(none)"
             self._log.append(self._c(
@@ -128,8 +140,11 @@ class ConsoleWatch:
                 self._nodes[src].update(state="released", shard=None)
             nd = self._nodes.setdefault(dst, {})
             nd.update(state="running", shard=f["shard"], migrated_from=src, pressured=False)
+            took = ""
+            if f.get("duration_before_s") is not None and f.get("duration_after_s") is not None:
+                took = f"  ({f['duration_before_s']}s there, {f['duration_after_s']}s here)"
             self._log.append(self._c(
-                f"↻ migrate  shard {f['shard']}:  {src}  ──▶  {dst}", _CYAN + _BOLD))
+                f"↻ migrate  shard {f['shard']}:  {src}  ──▶  {dst}{took}", _CYAN + _BOLD))
         elif kind == "gpu_release":
             for nid in f.get("released", []):
                 if nid in self._nodes:

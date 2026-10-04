@@ -64,8 +64,15 @@ def _restrict(path: Path) -> None:
         os.chmod(path, 0o600)
 
 
+# Set up by cloud-init when the VM must run shards itself (contention runs):
+# a venv with pytest, writable by the SSH user, then a marker that says ready.
+VENV = "/opt/nge/venv"
+READY_MARKER = "/var/lib/nge-ready"
+
+
 def cloud_init(public_key: str, user: str = SSH_USER,
-               poweroff_after_minutes: Optional[int] = None) -> str:
+               poweroff_after_minutes: Optional[int] = None,
+               gpu_runtime: bool = False) -> str:
     """User + key, and optionally a power-off scheduled by the VM itself.
 
     The power-off is the safety net that does not depend on this process: the
@@ -79,9 +86,18 @@ def cloud_init(public_key: str, user: str = SSH_USER,
             "    shell: /bin/bash\n"
             "    ssh_authorized_keys:\n"
             f"      - {public_key}\n")
+    if gpu_runtime:
+        # Ubuntu ships python3 but not venv/pip; the image already has the CUDA
+        # toolkit (nvcc) the GPU bench compiles with.
+        text += "package_update: true\npackages:\n  - python3-venv\n"
+    cmds = []
     if poweroff_after_minutes:
-        text += ("runcmd:\n"
-                 f"  - [shutdown, -h, '+{int(poweroff_after_minutes)}']\n")
+        cmds.append(f"  - [shutdown, -h, '+{int(poweroff_after_minutes)}']\n")
+    if gpu_runtime:
+        cmds.append(f"  - [sh, -c, 'python3 -m venv {VENV} && {VENV}/bin/pip install -q pytest"
+                    f" && chown -R {user} /opt/nge && touch {READY_MARKER}']\n")
+    if cmds:
+        text += "runcmd:\n" + "".join(cmds)
     return text
 
 

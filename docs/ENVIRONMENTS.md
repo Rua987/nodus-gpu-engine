@@ -38,7 +38,7 @@ in a venv containing nothing else.
 
 | path | Windows (local) | Ubuntu (CI) |
 |---|---|---|
-| unit tests (525 on 2026-10-04) | yes | yes — Python 3.10 / 3.11 / 3.12 |
+| unit tests (538 on 2026-10-04) | yes | yes — Python 3.10 / 3.11 / 3.12 |
 | MCP client ↔ GPU MCP server | yes | yes |
 | `--mock` demo | yes | yes |
 | `--live` (real Nemotron + real sandboxes) | yes | yes — `live-smoke`, manual or weekday cron |

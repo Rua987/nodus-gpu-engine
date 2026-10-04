@@ -256,12 +256,18 @@ def _main(argv: List[str]) -> int:
     hy.add_argument("--i-know-cost", action="store_true")
     hy.add_argument("--shards", type=int, default=2)
     hy.add_argument("--max-minutes", type=float, default=12)
+    ct = sub.add_parser("contention", help="GPU shards on the VMs, a declared induced load "
+                                           "on one node: a real migration (2 VMs + 1 replacement)")
+    ct.add_argument("--i-know-cost", action="store_true")
+    ct.add_argument("--max-minutes", type=float, default=20)
     args = ap.parse_args(argv)
 
     if args.cmd in ("probe", "cleanup"):
         return _phase2(args)
     if args.cmd == "hybrid":
         return _phase3(args)
+    if args.cmd == "contention":
+        return _contention(args)
 
     if args.cmd == "inventory":
         r = check_credentials()
@@ -435,6 +441,95 @@ def _phase3(args) -> int:
         return 3
     if err is not None:
         print(f"[hybrid] run failed: {type(err).__name__}: {err}")
+        if not isinstance(err, Exception):
+            raise err
+        return 1
+    return 0
+
+
+CONTENTION_SCENARIO = "gpu_contention.json"
+CONTENTION_MAX_VMS = 3           # two shards + the one replacement a migration opens
+
+
+def _contention(args) -> int:
+    """The heal on real GPU pressure: two shards whose tests run CUDA on the VMs
+    themselves (sandbox ``compute``), and a GPU job started on node 0 before
+    they run - declared in the event log as induced. The shard on node 0 finds
+    the GPU busy, the heal moves it to a fresh VM, and both timings are kept."""
+    import json
+    from dataclasses import replace
+    from nge import config as _cfg
+    from nge import planner as _pl
+    from nge.fleet import compute_probe as cp
+
+    creds = _engine_dir() / key_files("phase2")["credentials"]
+    why = _credentials_file_check(creds) if creds.is_file() else "file not found"
+    if why:
+        print(f"contention needs the write-capable service account: {creds.name} - {why}")
+        return 1
+    if not args.i_know_cost or os.environ.get("NGE_COMPUTE_SPAWN") != "1":
+        print(f"refusing: a contention run creates up to {CONTENTION_MAX_VMS} paid GPU VMs. "
+              "Re-run with --i-know-cost and NGE_COMPUTE_SPAWN=1.")
+        return 2
+    if not 0 < args.max_minutes <= cp.MAX_MINUTES:
+        print(f"refusing: --max-minutes in (0, {cp.MAX_MINUTES}]")
+        return 2
+
+    os.environ["NGE_COMPUTE_MAX_MINUTES"] = str(args.max_minutes)
+    os.environ.setdefault("NGE_TRACK", "nebius")
+    from nge.backends import usage as _usage
+    from nge.demo_nebius import _live_chat_fn
+    from nge.orchestrator import NgeOrchestrator
+    from nge.tools import handlers
+
+    scenario = json.loads((_engine_dir() / "scenarios" / CONTENTION_SCENARIO)
+                          .read_text(encoding="utf-8"))
+    if int(scenario.get("shards", 0)) + 1 > CONTENTION_MAX_VMS:
+        print(f"refusing: the scenario asks for more than {CONTENTION_MAX_VMS} VMs")
+        return 2
+    cfg = _cfg.load(fleet_mode="compute", sandbox_mode="compute")
+    # the plan does not matter here (autofix is off); skip loading the 324M
+    cfg = replace(cfg, nodus_plan_ckpt=str(Path(_pl.FORCE_HEURISTIC) / "missing.pt"))
+    _usage.reset_usage()
+    _usage.set_jsonl_path(cfg.out_dir / "nemotron_usage.jsonl")
+    cost = cp.estimate_usd({"platform": "gpu-l40s-a"}, args.max_minutes)
+    print(f"[contention] up to {CONTENTION_MAX_VMS} GPU VMs, max {args.max_minutes:g} min each "
+          "- compute " + (f"~${round(cost * CONTENTION_MAX_VMS, 2)} at most before tax (+ disks, "
+                          "public IPs, Nemotron calls)" if cost is not None else "cost unknown"))
+    orch = NgeOrchestrator(config=cfg, chat_fn=_live_chat_fn(cfg.nemotron_model))
+    report, err = None, None
+    try:
+        report = orch.run(scenario)
+    except BaseException as exc:                # the fleet was released by run()
+        err = exc
+    fleet = handlers.state().fleet
+    undeleted = list(getattr(fleet, "undeleted", []))
+    for e in orch.events:
+        k = e["kind"]
+        if k in ("gpu_load_induced", "gpu_load_not_induced"):
+            print(f"[contention] {k} {e.get('node_id')}: {e.get('reading_after_5s') or ''} "
+                  f"{e.get('error') or e.get('why') or ''}".rstrip())
+        elif k == "shard_done":
+            print(f"[contention] shard {e['index']} on {e['node_id']}: exit={e['exit_code']} "
+                  f"failures={e['failures']}")
+        elif k == "gpu_status" and e.get("telemetry"):
+            t = e["telemetry"]
+            print(f"[contention] telemetry {t['id']}: {t['probe_kind']} {t['temp_c']}C "
+                  f"{t['power_w']}W util={t['util_pct']}% on-gpu={t.get('gpu_processes') or '-'}")
+        elif k == "gpu_pressure":
+            print(f"[contention] pressure {e['node_id']}: {e['health']} util={e.get('util_pct')}%")
+        elif k == "gpu_remediation":
+            print(f"[contention] migrate shard {e['shard']}: {e['from']} -> {e['to']}  "
+                  f"{e.get('duration_before_s')}s there, {e.get('duration_after_s')}s here")
+    if report is not None:
+        print(f"[contention] report {report.artifact_path}")
+    print(_usage.format_summary())
+    if undeleted:
+        print(f"[contention] WARNING: deletion NOT confirmed for {undeleted} - run "
+              "`python -m nge.fleet.compute cleanup` and check the console")
+        return 3
+    if err is not None:
+        print(f"[contention] run failed: {type(err).__name__}: {err}")
         if not isinstance(err, Exception):
             raise err
         return 1

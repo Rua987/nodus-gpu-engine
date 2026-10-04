@@ -69,7 +69,7 @@ def load_value(basename: str, env_name: str) -> str:
 @dataclass(frozen=True)
 class Config:
     fleet_mode: str = "mock"          # mock | nebius
-    sandbox_mode: str = "mock"        # mock | token_factory
+    sandbox_mode: str = "mock"        # mock | token_factory | compute
     track: str = ""                   # "" | nebius
     nemotron_model: str = DEFAULT_NEMOTRON_MODEL      # default working tier (super)
     nemotron_ultra: str = NEMOTRON_ULTRA_MODEL        # reasoning / orchestration

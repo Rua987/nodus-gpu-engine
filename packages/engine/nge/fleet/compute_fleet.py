@@ -17,12 +17,18 @@ from __future__ import annotations
 
 import os
 import time
+from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 from nge.fleet import telemetry
 from nge.fleet.base import GpuFleet, GpuNode, GpuNodeStatus
 
 DEFAULT_MAX_MINUTES = 15
+_BURN_SRC = Path(__file__).with_name("gpu_burn.cu")
+# appended to the telemetry probe: who is on the GPU right now
+_APPS = ("echo __NGE_APPS__\n"
+         "nvidia-smi --query-compute-apps=pid,process_name,used_memory "
+         "--format=csv,noheader 2>/dev/null || true\n")
 
 
 class ComputeGpuFleet(GpuFleet):
@@ -33,6 +39,7 @@ class ComputeGpuFleet(GpuFleet):
     def __init__(self, config=None, *, api=None, target: Optional[Dict[str, str]] = None,
                  ssh: Optional[Callable] = None, ssh_key=None, public_key: Optional[str] = None,
                  max_minutes: Optional[float] = None,
+                 gpu_runtime: bool = False,
                  clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], None] = time.sleep,
                  log: Callable[[str], None] = print) -> None:
@@ -43,6 +50,9 @@ class ComputeGpuFleet(GpuFleet):
         self.max_minutes = float(max_minutes or os.environ.get("NGE_COMPUTE_MAX_MINUTES")
                                  or DEFAULT_MAX_MINUTES)
         self._clock, self._sleep, self._log = clock, sleep, log
+        # True when shards run on the VMs themselves (contention runs): each VM
+        # then sets up a venv at boot and is ready only once that is done.
+        self.gpu_runtime = bool(gpu_runtime) or getattr(self.cfg, "sandbox_mode", "") == "compute"
         self._nodes: Dict[str, dict] = {}      # node id -> {instance_id, ip, state, job, gpu}
         self._next = 0
         self._checked_leftovers = False
@@ -86,7 +96,8 @@ class ComputeGpuFleet(GpuFleet):
         gpu = self._target["platform"]
         deadline = self._clock() + self.max_minutes * 60
         user_data = cp.cloud_init(self._pub, poweroff_after_minutes=int(self.max_minutes)
-                                  + cp.POWEROFF_GRACE_MINUTES)
+                                  + cp.POWEROFF_GRACE_MINUTES,
+                                  gpu_runtime=self.gpu_runtime)
         made: List[str] = []
         try:
             pending = []
@@ -123,8 +134,17 @@ class ComputeGpuFleet(GpuFleet):
             if self._clock() > deadline:
                 raise TimeoutError(f"{nid} not running before the deadline")
             self._sleep(10)
+        from nge.fleet import compute_probe as cp
+        # With a runtime, ready = cloud-init finished the venv; if cloud-init
+        # itself failed (exit 8) waiting on would only bill the VM to the deadline.
+        check = (f"if [ ! -f {cp.READY_MARKER} ]; then\n"
+                 '  case "$(cloud-init status 2>/dev/null)" in *error*) '
+                 "cloud-init status --long 2>&1 | tail -5; exit 8;; esac\n"
+                 f"  exit 7\nfi\n{_PROBE}") if self.gpu_runtime else _PROBE
         while True:                            # ready = SSH answers the probe
-            rc, out, err = self._ssh(node["ip"], self._key, _PROBE, timeout=30.0)
+            rc, out, err = self._ssh(node["ip"], self._key, check, timeout=30.0)
+            if rc == 8:
+                raise RuntimeError(f"{nid}: cloud-init failed - {out.strip()[-300:]}")
             if rc == 0 and out.strip():
                 node["state"] = "ready"
                 self._log(f"[compute-fleet] {nid} ready at {node['ip']}")
@@ -141,8 +161,10 @@ class ComputeGpuFleet(GpuFleet):
                 continue
             if node["state"] == "gone":
                 continue
-            rc, text, _err = (self._ssh(node["ip"], self._key, _PROBE, timeout=30.0)
+            rc, text, _err = (self._ssh(node["ip"], self._key, _PROBE + _APPS, timeout=30.0)
                               if node["ip"] else (1, "", "no ip"))
+            text, _, apps = text.partition("__NGE_APPS__")
+            apps = "; ".join(l.strip() for l in apps.splitlines() if l.strip())
             m = _parse_probe(text) if rc == 0 else None
             if not m:
                 out.append(GpuNodeStatus(id=nid, state=node["state"], util_pct=0.0,
@@ -158,8 +180,37 @@ class ComputeGpuFleet(GpuFleet):
                 health=telemetry.health_from_metrics(m["temp_c"], m["util_pct"],
                                                      m["power_w"], cls),
                 efficiency=telemetry.efficiency_score(m["util_pct"], m["power_w"], cls),
-                probe_kind=m["probe_kind"], gpu_class=cls, gpu_name=m["gpu_name"]))
+                probe_kind=m["probe_kind"], gpu_class=cls, gpu_name=m["gpu_name"],
+                gpu_processes=apps))
         return out
+
+    # -- used by the compute sandbox and the contention run ------------------
+    def run_on(self, node_id: str, script: str, timeout: float):
+        """(rc, stdout, stderr) of ``script`` run on the node's VM over SSH."""
+        node = self._nodes.get(node_id)
+        if not node or node["state"] == "gone" or not node["ip"]:
+            return 1, "", f"node {node_id!r} has no running VM"
+        return self._ssh(node["ip"], self._key, script, timeout=timeout)
+
+    def induce_load(self, node_id: str, seconds: int) -> Dict[str, object]:
+        """Start a GPU job on ``node_id`` that keeps every SM busy for ``seconds``
+        and then exits on its own: the declared neighbour of the contention run.
+        Built from ``gpu_burn.cu`` with the image's nvcc, detached from SSH."""
+        src = _BURN_SRC.read_text(encoding="utf-8")
+        script = (
+            "set -e\nexport PATH=/usr/local/cuda/bin:$PATH\n"
+            "mkdir -p /tmp/nge_load && cd /tmp/nge_load\n"
+            f"cat > gpu_burn.cu <<'NGE_EOF'\n{src}\nNGE_EOF\n"
+            "nvcc -O2 -o nge_burn gpu_burn.cu\n"
+            f"setsid nohup ./nge_burn {int(seconds)} > burn.log 2>&1 < /dev/null &\n"
+            "sleep 5\n"
+            "nvidia-smi --query-gpu=utilization.gpu,power.draw --format=csv,noheader,nounits\n")
+        rc, out, err = self.run_on(node_id, script, timeout=180.0)
+        self._log(f"[compute-fleet] induced load on {node_id}: rc={rc} {out.strip()[:80]}")
+        return {"ok": rc == 0, "seconds": int(seconds),
+                "how": "gpu_burn.cu (FMA loop on every SM), built with nvcc on the VM",
+                "reading_after_5s": out.strip()[-120:],
+                "error": "" if rc == 0 else (err.strip() or out.strip())[-300:]}
 
     def allocate(self, job: str, node_id: Optional[str] = None) -> GpuNode:
         for nid, node in self._nodes.items():

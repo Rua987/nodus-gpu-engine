@@ -34,6 +34,9 @@ class GpuNodeStatus:
     probe_kind: str = "unknown"    # nvidia-smi | cpu-fallback | synthetic | failed
     gpu_class: str = "none"        # datacenter | consumer | synthetic | none
     gpu_name: str = ""             # nvidia-smi product name when known
+    # Compute processes on the GPU at read time (pid, name, memory), when the
+    # fleet can list them - the evidence behind a "busy" reading.
+    gpu_processes: str = ""
 
     def as_dict(self) -> Dict:
         return self.__dict__.copy()

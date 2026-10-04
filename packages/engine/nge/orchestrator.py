@@ -150,6 +150,10 @@ class RunReport:
 class NgeOrchestrator:
     # trigger a remediation when a node throttles or drops below this efficiency
     MIN_EFFICIENCY = 0.25
+    # A real GPU is read after the shard has finished, so utilisation still
+    # present then belongs to some other process: a GPU job placed there shares
+    # the SMs with it. Counted only when the scenario declares GPU work.
+    BUSY_UTIL_PCT = 90.0
     # how many distinct failures the code agent tries to auto-fix per run
     MAX_FIXES = 3
     # cap on the source tree shipped into a sandbox (bytes)
@@ -707,25 +711,35 @@ class NgeOrchestrator:
             return
         hot = tele["health"] == "throttle"
         inefficient = tele["efficiency"] < self.MIN_EFFICIENCY
-        if (inefficient and not hot and tele.get("probe_kind") == _tele.PROBE_NVIDIA
-                and not gpu_workload):
-            # Efficiency is useful work per watt. On a real GPU that carries no
-            # GPU work - the pytest shards run in Token Factory sandboxes - it
-            # is 0 by construction: the real idle L40S read 27 C, 0 %, 67.8 W,
+        busy = False
+        if tele.get("probe_kind") == _tele.PROBE_NVIDIA:
+            # Efficiency is useful work per watt, and a real GPU is read after
+            # the shard has finished. Without declared GPU work it is 0 by
+            # construction (the real idle L40S read 27 C, 0 %, 67.8 W ->
             # efficiency 0.0, and this rule would have migrated shards off a
-            # perfectly healthy node. Heat and power still count.
-            self._emit("gpu_efficiency_skipped", shard=sr.index,
-                       node_id=sr.node_id, efficiency=tele["efficiency"],
-                       why="no GPU workload declared - an idle GPU reads efficiency 0")
-            inefficient = False
-        pressured = hot or inefficient
+            # healthy node); with GPU work, ours has just ended - 0 again, and
+            # it would flag exactly the nodes that are free. Heat still counts.
+            if inefficient and not hot:
+                self._emit("gpu_efficiency_skipped", shard=sr.index,
+                           node_id=sr.node_id, efficiency=tele["efficiency"],
+                           why=("read after the shard finished - our GPU work has "
+                                "ended, so 0 measures nothing" if gpu_workload else
+                                "no GPU workload declared - an idle GPU reads "
+                                "efficiency 0"))
+                inefficient = False
+            busy = gpu_workload and float(tele.get("util_pct") or 0) >= self.BUSY_UTIL_PCT
+        pressured = hot or inefficient or busy
         if not pressured:
             return
+        reason = "busy" if busy and not hot else tele["health"]
 
         self._route("healthcheck")   # telemetry reasoning -> Nano tier
         self._emit("gpu_pressure", shard=sr.index, node_id=sr.node_id,
-                   health=tele["health"], efficiency=tele["efficiency"],
-                   temp_c=tele["temp_c"], power_w=tele["power_w"])
+                   health=reason, efficiency=tele["efficiency"],
+                   temp_c=tele["temp_c"], power_w=tele["power_w"],
+                   util_pct=tele.get("util_pct"),
+                   **({"gpu_processes": tele["gpu_processes"]}
+                      if tele.get("gpu_processes") else {}))
 
         from nge.fleet import placement as _place
         needs = _place.WorkloadNeeds()
@@ -766,6 +780,7 @@ class NgeOrchestrator:
         res = handlers.run_in_sandbox(command=sr.command, node_id=repl,
                                       collect=collect, timeout=180)
         old_node = sr.node_id
+        before_s = sr.duration_s
         sr.migrated_from = old_node
         sr.node_id = repl
         sr.exit_code = res["exit_code"]
@@ -776,9 +791,11 @@ class NgeOrchestrator:
             self._emit("shard_output_truncated", index=sr.index, node_id=repl,
                        stdout_chars=len(res["stdout"] or ""))
         rec = {"shard": sr.index, "from": old_node, "to": repl,
-               "reason": tele["health"], "efficiency": tele["efficiency"],
+               "reason": reason, "efficiency": tele["efficiency"],
                "temp_c": tele["temp_c"], "power_w": tele["power_w"],
-               "placement_score": decision.score if decision else None}
+               "placement_score": decision.score if decision else None,
+               # the same shard, timed on the node it left and on the new one
+               "duration_before_s": before_s, "duration_after_s": sr.duration_s}
         self.remediations.append(rec)
         self._emit("gpu_remediation", **rec)
 
@@ -840,6 +857,7 @@ class NgeOrchestrator:
         failures: List[dict] = []
         fixes: List[dict] = []
         try:
+            self._induce_load(scenario, node_ids)
             self._fan_out_and_fix(scenario, pr, node_ids, shard_results,
                                   failures, fixes)
         except BaseException as exc:                    # incl. KeyboardInterrupt
@@ -864,6 +882,26 @@ class NgeOrchestrator:
             routes=list(self.routes), remediations=list(self.remediations),
             fixes=list(self.fixes),
         )
+
+    def _induce_load(self, scenario: dict, node_ids: List[str]) -> None:
+        """Contention runs: start a known GPU job on one node before the shards,
+        and say so in the event log - the report must not let an induced load
+        pass for an organic one."""
+        spec = scenario.get("induce_gpu_load")
+        if not spec:
+            return
+        i = int(spec.get("node_index", 0))
+        secs = max(10, min(int(spec.get("seconds", 180)), 900))
+        nid = node_ids[i] if 0 <= i < len(node_ids) else None
+        fleet = handlers.state().fleet
+        if nid is None or not hasattr(fleet, "induce_load"):
+            self._emit("gpu_load_not_induced", node_id=nid,
+                       why="no such node" if nid is None
+                       else f"the {self.config.fleet_mode} fleet cannot run a GPU job")
+            return
+        res = fleet.induce_load(nid, secs)
+        self._emit("gpu_load_induced" if res.get("ok") else "gpu_load_not_induced",
+                   node_id=nid, declared=True, **res)
 
     def _fan_out_and_fix(self, scenario: dict, pr, node_ids: List[str],
                          shard_results: List["ShardResult"],

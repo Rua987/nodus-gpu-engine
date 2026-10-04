@@ -249,8 +249,12 @@ rapporter sa télémétrie, et ne porte **aucun travail GPU**. Conséquences :
   santé `ok`, efficacité `0.0` < 0,25 : le heal aurait migré des shards hors de GPU
   sains — le bug déjà corrigé pour les sandboxes CPU, revenu par la porte des vraies
   métriques. **Corrigé** (`a68ece3`) : sur `nvidia-smi`, une efficacité basse ne
-  compte que si le scénario déclare `gpu_workload` et que le nœud n'est pas déjà
-  chaud ; sinon `gpu_efficiency_skipped`. Chaleur et puissance déclenchent toujours.
+  comptait que si le scénario déclare `gpu_workload` ; sinon `gpu_efficiency_skipped`.
+  Chaleur et puissance déclenchent toujours. *Revu le 2026-10-04 (Phase 4) : même
+  avec `gpu_workload`, la lecture est prise après la fin du shard — notre travail GPU
+  est fini, 0 ne mesure rien et désignerait justement les nœuds libres. Sur
+  `nvidia-smi`, l'efficacité ne déclenche donc plus jamais ; c'est `busy` qui compte
+  (voir Phase 4).*
 - **Pas de vraie surchauffe à attendre.** 87 °C sur un GPU qui ne travaille pas ne
   viendra pas ; provoquer une surchauffe serait une mise en scène. La preuve visée
   devient donc : *le heal lit de la vraie télémétrie GPU et ne migre rien à tort*.
@@ -309,8 +313,45 @@ coupe serait invisible. Tests : `tests/test_output_truncation.py`. Les preuves
 antérieures ne sont pas touchées : dans les 41 autres rapports de `evidence/`, chaque
 nom de test en échec existe dans le code.
 
-### Phase 4 — (optionnel, plus tard) Exec sur Compute
-Seulement si Contree devient limitant. = glissement vers archi B partielle. **Hors plan court.**
+### Phase 4 — Exec sur Compute : une vraie migration, sous charge **induite et déclarée**
+
+*Construit le 2026-10-04, testé sans réseau, **pas encore lancé** (Go € à venir).*
+
+Pourquoi : en Phase 3 aucun GPU ne travaillait, donc aucune pression réelle ne pouvait
+exister, et provoquer une surchauffe aurait été une mise en scène. Ici, la charge est
+provoquée **et dite** : le rapport l'annonce comme induite, jamais comme spontanée.
+
+- **Des shards qui utilisent le GPU.** `bench/gpubench` : un produit matriciel CUDA
+  (`matmul.cu`, 4096², vérifié sur 16 entrées recalculées en double sur CPU), compilé
+  avec le `nvcc` de l'image (`ubuntu24.04-cuda13.0` embarque le CUDA Toolkit 13.0).
+  Deux fichiers de test identiques, un par shard : le shard du nœud chargé et celui du
+  nœud libre chronomètrent le même travail.
+- **Exécutés sur la VM.** Sandbox `compute` (`nge/sandbox/compute.py`) : un répertoire
+  sur la VM du nœud, fichiers envoyés en tar.gz dans le script SSH, venv (pytest)
+  installé par cloud-init, `nvcc` sur le PATH. La commande passe toujours par le jail.
+  Une VM n'est « prête » qu'une fois le venv en place ; un cloud-init en erreur arrête
+  l'attente au lieu de facturer la VM jusqu'à l'échéance.
+- **La charge induite.** `nge/fleet/gpu_burn.cu` : une boucle FMA sur tous les SM
+  pendant N s, puis sortie seule ; compilée sur la VM, détachée de SSH. Le scénario
+  (`scenarios/gpu_contention.json`) la déclare (`induce_gpu_load`) ; l'événement
+  `gpu_load_induced` (`declared: true`) l'écrit dans le journal, la console et le
+  rapport (« induced load (declared, not organic) »).
+- **La règle `busy`.** Une VM est lue après la fin du shard : l'utilisation encore
+  présente appartient à un autre processus. Avec `gpu_workload`, ≥ 90 % = `busy` →
+  pression → placement → migration. La lecture liste les processus présents sur le
+  GPU (`nvidia-smi --query-compute-apps`) : la preuve de *qui* occupe le nœud.
+- **La mesure.** La remédiation garde les deux durées du même shard : sur le nœud
+  quitté et sur le nouveau (`duration_before_s` / `duration_after_s`).
+
+Commande (garde-fous de `hybrid` ; au plus 3 VM — 2 shards + le remplacement) :
+`NGE_COMPUTE_SPAWN=1 python -m nge.fleet.compute contention --i-know-cost --max-minutes 20`.
+Coût estimé : ~30 min-VM L40S au total, ≈ 0,8 $ (plafond 3 × 20 min ≈ 1,6 $), disques et
+IP en sus.
+
+Ce que ça prouvera, si le run passe : la boucle voit une vraie contention sur de vraies
+métriques, migre, et le gain se mesure. Ce que ça ne prouvera pas : une surchauffe ou une
+panne spontanée ; la charge est la nôtre, et le rapport le dit. Tests :
+`tests/test_gpu_contention.py`, `tests/test_real_gpu_heal_gate.py`.
 
 ---
 
@@ -372,5 +413,6 @@ Seulement si Contree devient limitant. = glissement vers archi B partielle. **Ho
 2. ~~**Go Phase 1**~~ — **fait 2026-10-03** (cible : L40S eu-north1)  
 3. ~~**Go Phase 2**~~ — **fait 2026-10-03** (L40S ; 1er essai raté puis corrigé, 2e réussi)
 4. ~~**Phase 3**~~ — **fait 2026-10-04** (2 L40S, rien migré à tort ; a révélé la coupe de sortie ContreeSDK, corrigée)
+5. **Phase 4** (contention induite et déclarée) — construite et testée sans réseau ; **Go € requis** pour le run
 
 Sans Phase 0, tout le reste est du papier.

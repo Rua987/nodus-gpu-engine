@@ -50,10 +50,35 @@ def test_the_real_idle_l40s_reading_is_not_pressure(orch):
     assert "gpu_pressure" not in kinds and "gpu_remediation" not in kinds
 
 
-def test_declared_gpu_work_makes_low_efficiency_count_again(orch):
+def test_declared_gpu_work_does_not_make_an_idle_reading_count(orch):
+    """The reading is taken after the shard finished: with GPU work declared,
+    ours has just ended, and efficiency 0 would flag exactly the free nodes.
+    (Until 2026-10-04 declared GPU work re-enabled this rule.)"""
     orch._react_to_pressure(_sr(), _tele(27.0, 0.0, 67.8), "packages/nodus/tests", [],
                             gpu_workload=True)
-    assert "gpu_pressure" in _kinds(orch)
+    kinds = _kinds(orch)
+    assert "gpu_pressure" not in kinds
+    (skip,) = [e for e in orch.events if e["kind"] == "gpu_efficiency_skipped"]
+    assert "after the shard finished" in skip["why"]
+
+
+def test_a_gpu_another_process_saturates_is_busy_when_gpu_work_is_declared(orch):
+    """Utilisation left after our shard ended belongs to someone else: a GPU
+    job placed there shares the SMs."""
+    tele = _tele(55.0, 100.0, 300.0)
+    tele["gpu_processes"] = "4242, /tmp/nge_burn, 400 MiB"
+    orch._react_to_pressure(_sr(), tele, "packages/nodus/tests", [], gpu_workload=True)
+    (p,) = [e for e in orch.events if e["kind"] == "gpu_pressure"]
+    assert p["health"] == "busy" and p["util_pct"] == 100.0
+    assert p["gpu_processes"] == "4242, /tmp/nge_burn, 400 MiB"
+    (rem,) = [e for e in orch.events if e["kind"] == "gpu_remediation"]
+    assert rem["reason"] == "busy"
+    assert "duration_before_s" in rem and "duration_after_s" in rem
+
+
+def test_a_busy_gpu_does_not_matter_to_shards_that_do_not_use_it(orch):
+    orch._react_to_pressure(_sr(), _tele(55.0, 100.0, 300.0), "packages/nodus/tests", [])
+    assert "gpu_pressure" not in _kinds(orch)
 
 
 def test_heat_on_a_real_gpu_is_pressure_regardless(orch):

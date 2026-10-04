@@ -1,0 +1,17 @@
+{
+  "name": "gpu_contention",
+  "task": "Run the GPU test suite across the GPU fleet, triage the failures, and deliver a consolidated Markdown report.",
+  "shards": 2,
+  "gpu_type": "L40S",
+  "target": "packages/engine/bench/gpubench/tests",
+  "collect": [],
+  "auto_fix": false,
+  "gpu_workload": true,
+  "induce_gpu_load": {
+    "node_index": 0,
+    "seconds": 240
+  },
+  "payload": [
+    "packages/engine/bench/gpubench/matmul.cu"
+  ]
+}

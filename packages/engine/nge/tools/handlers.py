@@ -97,7 +97,10 @@ class EngineState:
     @property
     def sandbox(self) -> Sandbox:
         if self._sandbox is None:
-            self._sandbox = build_sandbox(self.config.sandbox_mode, self.config)
+            mode = self.config.sandbox_mode
+            # a compute sandbox is a directory on one of the fleet's VMs
+            self._sandbox = build_sandbox(
+                mode, self.config, fleet=self.fleet if mode == "compute" else None)
         return self._sandbox
 
 
