@@ -112,6 +112,22 @@ Open HTML: KPI `2/3`, migration row, diffs under Auto-fixes.
 - [ ] One honest sentence: Contree ≠ H100
 - [ ] Archi if asked: TF for exec; Compute for real `nvidia-smi` (one probe + one hybrid heal run on 2 × L40S; no real-pressure migration)
 
+## YouTube video (rules: under 3 min, public) — shot list
+
+Five clips, recorded separately so a bad take costs one clip; target **2:45**, never 3:00.
+Narration in English, spoken over each clip (or recorded after, in the editor).
+
+| # | time | screen | say |
+|---|---|---|---|
+| 1 | 0:00–0:12 | GitHub repo page (README top, CI badge) | « This is Nodus-GPU Engine, on Nebius Token Factory and NVIDIA Nemotron. Not a chatbot: a control loop that plans, runs tests across a GPU fleet, heals a hot node, and keeps only the patches that stay green. » |
+| 2 | 0:12–1:40 | terminal, the capture command (85 s) | plan: « A local plan picks the tools; for this film, a keyword plan, so `edit_file` is in it — that unlocks the code agent. » · bars: « Three simulated H100s run the sharded suite. Ultra, Super and Nano are roles per decision, and every shell command goes through a jail. » · migrate: « Node 02 overheats. The engine scores where the shard can go, re-provisions, and moves it to 03. » · fixes: « Failures go to Nemotron Super. Each patch is applied in a fresh sandbox and the whole suite re-runs. » · summary: « Two fixes verified. The third had no patch — we report it instead of faking three out of three. » |
+| 3 | 1:40–2:05 | browser: the HTML the command printed | « Everything lands in one control room: the fleet — the red node is the one we left — the story of the run, and the diffs we kept. » |
+| 4 | 2:05–2:30 | browser: `evidence/report_20261004T031503Z_rerender.html` | « The film uses simulated GPUs. On real hardware, the engine created two Nebius L40S VMs, read their real nvidia-smi, and — idle GPUs are not under pressure — correctly migrated nothing. Then it deleted them. » |
+| 5 | 2:30–2:45 | GitHub repo page (or `evidence/`) | « Every claim here is checked by a test against the run's own log. Public, MIT — clone it and run this demo in two minutes, no key needed. » |
+
+Before recording: terminal font large (~20 pt), window maximised, notifications off, `cls`,
+`cd packages/engine`; run the command once to warm imports; open both HTML files in tabs.
+
 ## Rehearsal notes — 2026-10-04
 
 Replayed A2 after Compute Phase 3 and the report changes, same capture command:
