@@ -38,12 +38,16 @@ in a venv containing nothing else.
 
 | path | Windows (local) | Ubuntu (CI) |
 |---|---|---|
-| unit tests (509 on 2026-10-03) | yes | yes — Python 3.10 / 3.11 / 3.12 |
+| unit tests (515 on 2026-10-04) | yes | yes — Python 3.10 / 3.11 / 3.12 |
 | MCP client ↔ GPU MCP server | yes | yes |
 | `--mock` demo | yes | yes |
 | `--live` (real Nemotron + real sandboxes) | yes | yes — `live-smoke`, manual or weekday cron |
 | `fetch_ckpt` (real 988 MB download) | yes | **no** |
 | 324M planner actually loading and planning | yes | **no** — CI has no checkpoint and no torch |
+
+CI runs on `ubuntu-24.04`, pinned on purpose: GitHub moves `ubuntu-latest` to
+Ubuntu 26 from 2026-10-19, twelve days before the submission deadline, and a
+runner change mid-judging is not a risk worth taking. Unpin after 2026-10-31.
 
 The last two rows are the current blind spot: the checkpoint fetch and the real
 planner are only ever exercised on one machine, running one OS.
