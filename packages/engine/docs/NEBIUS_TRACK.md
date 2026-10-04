@@ -31,7 +31,7 @@ applicative DSL down to GPU resource management.
 ```bash
 cd packages/engine
 pip install -r requirements.txt          # requests + pytest only
-python -m pytest -q                       # 509 tests, no network
+python -m pytest -q                       # 515 tests, no network
 python -m nge.demo_nebius --mock          # deterministic end-to-end
 python -m nge.demo_nebius --mock --watch  # same run, live fleet view
 # Judge film with verified patches (keyword plan unlocks edit_file):
@@ -149,7 +149,7 @@ mock for a partial-real run.
 
 ## What runs for real
 
-Sandboxes beta access landed, so `--live` is no longer a skeleton. 509 tests,
+Sandboxes beta access landed, so `--live` is no longer a skeleton. 515 tests,
 plus an MCP integration job and `live-smoke` — the full pipeline against real
 sandboxes on Ubuntu, on demand and on a weekday cron.
 

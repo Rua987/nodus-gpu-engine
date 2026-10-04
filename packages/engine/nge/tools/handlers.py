@@ -163,6 +163,7 @@ def run_in_sandbox(command: str, node_id: Optional[str] = None,
             "exit_code": res.exit_code, "ok": res.ok,
             "stdout": res.stdout, "stderr": res.stderr,
             "duration_s": res.duration_s, "artifacts": artifacts,
+            "truncated": bool(getattr(res, "truncated", False)),
         }
     finally:
         sbx.destroy(sid)

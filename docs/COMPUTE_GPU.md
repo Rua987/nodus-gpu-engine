@@ -1,7 +1,8 @@
-# Nebius Compute GPU — PLAN (avant tout spawn)
+# Nebius Compute GPU — plan et résultats
 
-> **Statut : PLAN ONLY.** Aucune VM GPU tant qu’il n’y a pas un **Go budget** séparé.  
-> Dernière écriture : **2026-10-03** (**Phases 0, 1 et 2 vertes** : `nvidia-smi` réel sur une L40S Nebius ; Phase 3 non faite).  
+> **Statut : Phases 0 à 3 faites.** Chaque VM a eu son **Go budget** explicite ; aucune sans.  
+> Dernière écriture : **2026-10-04** (**Phases 0 à 3 vertes** : `nvidia-smi` réel sur une L40S, puis le heal
+> en hybride sur 2 L40S — télémétrie réelle, rien migré à tort ; migration sur vraie pression : non démontrée).  
 > Lié : `ENGINE_BACKLOG.md` (M1/M2/M13) · `RISKS_TO_STRENGTHS.md` · `AUTORESEARCH_VISION.md` (perso).
 
 Objectif : `probe_kind=nvidia-smi` sur un **device NVIDIA réel**, pour que heal + placement deviennent une **preuve**, pas seulement un mock.
@@ -268,6 +269,46 @@ chaque tentative de correctif réserve un nœud de flotte, ici une VM payante de
 pour une vérification qui tourne en sandbox. 1 à 3 shards (= VM), 30 min max.
 Tests : `tests/test_compute_fleet.py`, `tests/test_real_gpu_heal_gate.py`.
 
+**Run live (Go « hybrid 2 L40S max 12 min », 2026-10-04 ~03:08–03:15 UTC)** —
+`NGE_COMPUTE_SPAWN=1 python -m nge.fleet.compute hybrid --i-know-cost --shards 2 --max-minutes 12`,
+code `251b6ad`. Rapport : [`evidence/report_20261004T031503Z.md`](../packages/engine/evidence/report_20261004T031503Z.md)
+(+ `.html`), couvert par `tests/test_evidence.py`.
+
+| t (s) | événement |
+|---|---|
+| 0 | `run_start` — flotte `compute`, sandbox `token_factory` |
+| 192 | 2 VM L40S prêtes (SSH répond) : `cg-l40s-a-00`, `cg-l40s-a-01` |
+| 214 / 231 | shard 0 / 1 fini ; `nvidia-smi` : L40S 25 °C, 36,5 / 35,1 W, 0 %, santé `ok`, efficacité 0.0 → `gpu_efficiency_skipped` ×2, 0 remediation |
+| 231 | triage : 5 « échecs uniques », dont un faux (plus bas) ; autofix coupé par la mission |
+| 439 | les 2 VM supprimées par le moteur (`gpu_release`) |
+
+Après le run : 0 instance, 0 disque dans le projet (vérifié à part, en lecture
+seule, avec le SA `phase2`). Coût : ≈ 6–7 min de VM ×2, soit ≈ 0,35 $ au tarif
+L40S (disques et IP en sus), plus 2 appels Nemotron (0,0003 $).
+
+Ce que ça prouve : le chemin hybride tourne de bout en bout. L'orchestrateur réserve
+de vrais GPU Nebius, chaque décision de heal reçoit de la vraie télémétrie
+`nvidia-smi`, une L40S au repos n'est pas prise pour un nœud inefficace (le correctif
+`a68ece3` a joué deux fois, en vrai), et le moteur supprime ses VM. Ce que ça ne
+prouve pas : une migration sur vraie pression. Il n'y en avait aucune, et on n'en a
+pas fabriqué ; la règle chaleur/puissance sur vrai GPU n'est testée que hors réseau.
+
+**Ce que le run a révélé : un nom de test coupé, compté comme un échec.** Le rapport
+liste `test_nodus_grafana.py::test_connect_mc`, un test qui n'existe pas. ContreeSDK
+coupe stdout à 65 535 octets par défaut ; la sortie `-v` du shard 0 en faisait
+≈ 65 600 : la dernière ligne `FAILED` a été coupée au milieu du nom, et le vrai
+`test_connect_mcp_forwards_org_id_env` n'a jamais été vu. Rejoué en sandbox Token
+Factory (sans VM) aux deux limites :
+[`evidence/output_cut_replay_20261004.txt`](../packages/engine/evidence/output_cut_replay_20261004.txt),
+`python -m bench.output_cut_replay --i-know-cost`. **Corrigé** : le moteur demande
+4 MiB (`NGE_CONTREE_OUTPUT_BYTES`) et lit le drapeau `truncated` du SDK ; s'il est
+levé, la dernière ligne (le fragment) est ignorée, l'événement
+`shard_output_truncated` et le rapport le disent, et une vérification de correctif
+dont la sortie est coupée n'est jamais `verified` — une régression au-delà de la
+coupe serait invisible. Tests : `tests/test_output_truncation.py`. Les preuves
+antérieures ne sont pas touchées : dans les 41 autres rapports de `evidence/`, chaque
+nom de test en échec existe dans le code.
+
 ### Phase 4 — (optionnel, plus tard) Exec sur Compute
 Seulement si Contree devient limitant. = glissement vers archi B partielle. **Hors plan court.**
 
@@ -312,7 +353,7 @@ Seulement si Contree devient limitant. = glissement vers archi B partielle. **Ho
 | 0 | `check_credentials()["ready_for_wire"] is True` |
 | 1 | Script read-only liste platform/image OK — **fait** (`inventory`) |
 | 2 | 1 run : provision → `nvidia-smi` → delete ; log `probe_kind=nvidia-smi` — **fait 2026-10-03** (L40S, 192 s) |
-| 3 | 1 live hybride : pressure réelle → placement → remediation loguée |
+| 3 | 1 live hybride : télémétrie réelle → décision de heal, rien migré à tort, VM supprimées — **fait 2026-10-04** (2 L40S). Migration sur vraie pression : non démontrée (aucune pression réelle) |
 
 ---
 
@@ -330,6 +371,6 @@ Seulement si Contree devient limitant. = glissement vers archi B partielle. **Ho
 1. ~~**Go Phase 0**~~ — **fait 2026-10-03** (`ready_for_wire=True`)  
 2. ~~**Go Phase 1**~~ — **fait 2026-10-03** (cible : L40S eu-north1)  
 3. ~~**Go Phase 2**~~ — **fait 2026-10-03** (L40S ; 1er essai raté puis corrigé, 2e réussi)
-4. **Phase 3** (heal sous charge réelle) — non commencée ; un nouveau Go € sera nécessaire
+4. ~~**Phase 3**~~ — **fait 2026-10-04** (2 L40S, rien migré à tort ; a révélé la coupe de sortie ContreeSDK, corrigée)
 
 Sans Phase 0, tout le reste est du papier.

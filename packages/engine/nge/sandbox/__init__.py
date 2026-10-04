@@ -1,7 +1,7 @@
 """Isolated execution layer.
 
 ``mock``          -> deterministic in-process sandbox (no creds, CI)
-``token_factory`` -> Nebius Token Factory Sandboxes (live path, skeleton)
+``token_factory`` -> Nebius Token Factory Sandboxes (live path)
 """
 from nge.sandbox.base import ExecResult, Sandbox, SandboxSpec
 

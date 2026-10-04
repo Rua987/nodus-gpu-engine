@@ -112,6 +112,19 @@ is the shape of the `git: not found` bug, where a sandbox that ran nothing
 looked exactly like a clean run. Rejected as
 `sandbox produced no output - nothing ran`.
 
+### A cut output is not a verdict
+
+ContreeSDK cuts stdout at 64 KiB unless asked for more. The first real-GPU run
+(`report_20261004T031503Z`) hit it on a shard: a `-v` output of about 65.6 KB
+ended on `FAILED ...::test_connect_mc`, which parsed as a test that does not exist,
+while the real `test_connect_mcp_forwards_org_id_env` was past the cut. In a
+verification run the same cut would hide regressions: a clean-looking head says
+nothing about the tail. The engine now asks for 4 MiB and reads the SDK's
+`truncated` flag; on a cut, the trailing fragment is dropped, the shard is named
+(`shard_output_truncated`, and in the report), and a fix is rejected as
+`re-run output cut at the sandbox size limit`. Replay at both limits:
+`evidence/output_cut_replay_20261004.txt`.
+
 ## The sandbox is bare
 
 `python:3.12-slim` has no pytest, no dependencies, no git, no patch, and none
@@ -315,6 +328,8 @@ Caveats, so the table is not over-read:
 - Hunks with no file header are not recovered. Guessing the target file would
   apply the diff to the wrong one. (A header that is present but lost its
   `--- `/`+++ ` prefixes is a different case, and is restored.)
+- A shard whose output is still cut at 4 MiB loses the failures past the cut.
+  The report says so; it does not recover them (`report.xml` is not read back).
 - The patch-reasoning default is a tie broken by weak evidence (one fix on the
   hard set), not a measured win. Re-run `bench/thinking_ab.py --target bugbench`
   with more runs, or on harder bugs, before arguing it either way.

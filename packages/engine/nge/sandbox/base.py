@@ -23,6 +23,7 @@ class ExecResult:
     stderr: str = ""
     duration_s: float = 0.0
     artifacts: Dict[str, str] = field(default_factory=dict)  # path -> text content
+    truncated: bool = False    # the backend cut stdout/stderr at its size limit
 
     @property
     def ok(self) -> bool:

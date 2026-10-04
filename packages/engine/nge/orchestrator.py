@@ -42,6 +42,7 @@ _TEST_ID = r"[^\s;&|`$(){}<>'\"\\]+"
 # `FAILED <nodeid>`, which is exactly what the first working live run
 # produced - 3 real failures that parsed as zero.
 _FAILED_RE = re.compile(rf"^FAILED\s+({_TEST_ID})(?:\s+-\s+(.*))?$", re.M)
+_NO_MESSAGE = "(no message; see shard output)"
 # files a unified diff touches: "--- a/path" / "+++ b/path"
 _PATCH_FILE_RE = re.compile(r"^(?:---|\+\+\+)\s+[ab]/(\S+)", re.M)
 # @@ -old,n +new,m @@ trailer
@@ -73,6 +74,22 @@ _NARROWING_FLAGS = frozenset("""
 
 _TB_STYLES = frozenset({"auto", "long", "short", "line", "native", "no"})
 
+
+def _complete_stdout(res: dict) -> str:
+    """Sandbox stdout minus the fragment a size cut leaves at its end.
+
+    Live (Compute Phase 3 hybrid run), a `-v` shard outgrew ContreeSDK's 64 KiB
+    default; its output ended on `FAILED ...::test_connect_mc`, which parsed as
+    a test that does not exist. The cut keeps the head, so only the last line
+    can be a fragment."""
+    out = res.get("stdout") or ""
+    return out[:out.rfind("\n") + 1] if res.get("truncated") else out
+
+
+def _parse_failures(res: dict) -> List[dict]:
+    return [{"test": m.group(1), "error": m.group(2) or _NO_MESSAGE}
+            for m in _FAILED_RE.finditer(_complete_stdout(res))]
+
 _FIX_HINTS = [
     ("not unique", "Make `old_string` unique or pass replace_all=True."),
     ("out of order", "Sort plan names to match executor step order before asserting."),
@@ -99,6 +116,7 @@ class ShardResult:
     failures: List[dict] = field(default_factory=list)
     migrated_from: Optional[str] = None
     stdout: str = ""            # kept so triage can quote the traceback
+    truncated: bool = False     # the sandbox cut the output: failures past it are unseen
 
 
 @dataclass
@@ -752,8 +770,11 @@ class NgeOrchestrator:
         sr.node_id = repl
         sr.exit_code = res["exit_code"]
         sr.duration_s = res["duration_s"]
-        sr.failures = [{"test": m.group(1), "error": m.group(2) or "(no message; see shard output)"}
-                       for m in _FAILED_RE.finditer(res["stdout"])]
+        sr.failures = _parse_failures(res)
+        sr.truncated = bool(res.get("truncated"))
+        if sr.truncated:
+            self._emit("shard_output_truncated", index=sr.index, node_id=repl,
+                       stdout_chars=len(res["stdout"] or ""))
         rec = {"shard": sr.index, "from": old_node, "to": repl,
                "reason": tele["health"], "efficiency": tele["efficiency"],
                "temp_c": tele["temp_c"], "power_w": tele["power_w"],
@@ -914,12 +935,15 @@ class NgeOrchestrator:
             res = handlers.run_in_sandbox(command=cmd, node_id=node_id,
                                           files=payload, collect=collect,
                                           timeout=180)
-            fails = [{"test": m.group(1), "error": m.group(2) or "(no message; see shard output)"}
-                     for m in _FAILED_RE.finditer(res["stdout"])]
+            fails = _parse_failures(res)
+            if res.get("truncated"):
+                self._emit("shard_output_truncated", index=i, node_id=node_id,
+                           stdout_chars=len(res["stdout"] or ""))
             shard_results.append(ShardResult(
                 index=i, node_id=node_id, command=cmd,
                 exit_code=res["exit_code"], duration_s=res["duration_s"], failures=fails,
                 stdout=(res["stdout"] or "")[-20000:],
+                truncated=bool(res.get("truncated")),
             ))
             st = handlers.gpu_status(node_id=node_id)["nodes"]
             tele = st[0] if st else None
@@ -1222,8 +1246,10 @@ class NgeOrchestrator:
             res = handlers.run_in_sandbox(
                 command=cmd, node_id=node, files=files, timeout=300,
             )
-            out = res["stdout"] or ""
+            out = _complete_stdout(res)
             after = {m.group(1) for m in _FAILED_RE.finditer(out)}
+            # a regression past the cut would be invisible: no verdict on that
+            cut = bool(res.get("truncated"))
             # A shard that was skipped or died (exit 126/127) never produced a
             # baseline for its files, so a pre-existing failure there would
             # look like damage. Only judge files the shards really ran.
@@ -1241,18 +1267,22 @@ class NgeOrchestrator:
             ran = bool(out.strip())
             target_fixed = ran and f["test"] not in after
             verified = (target_fixed and not regressions
-                        and not res.get("blocked"))
+                        and not res.get("blocked") and not cut)
             if regressions:
                 self._emit("fix_regression", test=f["test"], broke=regressions)
             self._emit("fix_verified" if verified else "fix_rejected",
                        test=f["test"], node=node,
-                       target_fixed=target_fixed, regressions=len(regressions))
+                       target_fixed=target_fixed, regressions=len(regressions),
+                       **({"output_truncated": True} if cut else {}))
             if regressions:
                 why = "broke " + ", ".join(regressions)
             elif verified:
                 why = "re-tested green in a fresh sandbox"
             elif not ran:
                 why = "sandbox produced no output - nothing ran"
+            elif cut:
+                why = ("re-run output cut at the sandbox size limit - "
+                       "regressions past the cut cannot be ruled out")
             else:
                 why = "target test still failing"
             from nge.fix_cause import annotate_fix
@@ -1297,6 +1327,10 @@ class NgeOrchestrator:
                 node += f" _(migrated from `{sr.migrated_from}`)_"
             lines.append(f"| {sr.index} | {node} | {sr.exit_code} | "
                          f"{sr.duration_s} | {len(sr.failures)} |")
+        for sr in shard_results:
+            if sr.truncated:
+                lines += ["", f"**Shard {sr.index}: output cut at the sandbox size limit** - "
+                              "failures past the cut are not counted."]
 
         lines += ["", "## Self-managed compute", ""]
         seen_tiers = {}

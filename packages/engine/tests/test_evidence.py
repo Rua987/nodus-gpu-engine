@@ -184,3 +184,35 @@ def test_current_a2_capture_has_a_clean_header():
         text = (EVIDENCE / f"report_20261003T233405Z{ext}").read_text(encoding="utf-8")
         assert "NOT FOUND" not in text
         assert "heuristic requested" in text
+
+
+def test_hybrid_run_read_two_real_gpus_and_migrated_nothing():
+    """docs/COMPUTE_GPU.md, Phase 3: a Compute fleet of two L40S VMs under Token
+    Factory sandboxes - real nvidia-smi reached the heal decision, the idle GPUs
+    were not called inefficient, and both VMs were deleted."""
+    ev = _events("report_20261004T031503Z")
+    rs = _kinds(ev, "run_start")[0]
+    assert (rs["fleet_mode"], rs["sandbox_mode"]) == ("compute", "token_factory")
+    tele = [e["telemetry"] for e in _kinds(ev, "gpu_status")]
+    assert len(tele) == 2
+    assert all(t["probe_kind"] == "nvidia-smi" and t["gpu_name"] == "NVIDIA L40S"
+               and t["health"] == "ok" and t["efficiency"] == 0.0 for t in tele)
+    assert len(_kinds(ev, "gpu_efficiency_skipped")) == 2
+    assert not _kinds(ev, "gpu_remediation")
+    assert sorted(_kinds(ev, "gpu_release")[-1]["released"]) == ["cg-l40s-a-00", "cg-l40s-a-01"]
+    for ext in (".md", ".html"):
+        text = (EVIDENCE / f"report_20261004T031503Z{ext}").read_text(encoding="utf-8")
+        assert not re.search(r"computeinstance-|project-e0|\b\d{1,3}(?:\.\d{1,3}){3}\b", text)
+
+
+def test_hybrid_run_counted_a_cut_name_and_the_replay_shows_why():
+    """The same run counted `test_connect_mc` - a FAILED line the sandbox cut at
+    64 KiB. The replay at both limits is what the fix rests on."""
+    md = (EVIDENCE / "report_20261004T031503Z.md").read_text(encoding="utf-8")
+    assert "test_nodus_grafana.py::test_connect_mc`" in md
+    replay = (EVIDENCE / "output_cut_replay_20261004.txt").read_text(encoding="utf-8")
+    cut, full = replay.split("limit=4194304")
+    assert "truncated=True" in cut and "stdout_bytes=65535" in cut
+    assert "engine parses  : ['test_connect_mcp_falls_back_to_mock_without_launcher']" in cut
+    assert "truncated=False" in full
+    assert "'test_connect_mcp_forwards_org_id_env']" in full.split("engine parses")[1]

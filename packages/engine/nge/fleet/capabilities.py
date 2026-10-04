@@ -85,7 +85,7 @@ def fleet_expectation(cfg) -> Dict[str, Any]:
             "probe_kind": _tele.PROBE_NVIDIA,
             "real_gpu_metrics": True,
             "image": "(compute-vm)",
-            "reason": "Nebius Compute GPU VM path (skeleton — needs SA + Go)",
+            "reason": "Nebius Compute GPU VMs, nvidia-smi over SSH (paid: NGE_COMPUTE_SPAWN=1)",
             "image_hints_gpu": True,
         }
 

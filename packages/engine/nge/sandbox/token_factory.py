@@ -29,6 +29,11 @@ DEFAULT_IMAGE = "python:3.12-slim"
 # Contree file GET/upload occasionally times out mid-live; retry before failing.
 DEFAULT_RETRIES = 4
 DEFAULT_RETRY_S = 2.0
+# ContreeSDK cuts stdout at 64 KiB unless told otherwise. A `-v` shard of the
+# nodus suite outgrew that live (Compute Phase 3 hybrid run, 2026-10-04): the
+# last `FAILED` line was cut mid-name and counted as a second, phantom test, and
+# anything past the cut was lost without a word.
+DEFAULT_OUTPUT_BYTES = 4 * 1024 * 1024
 
 
 def _retry_budget() -> Tuple[int, float]:
@@ -41,6 +46,21 @@ def _retry_budget() -> Tuple[int, float]:
     except ValueError:
         delay = DEFAULT_RETRY_S
     return n, delay
+
+
+def _output_limit() -> int:
+    try:
+        return max(65535, int(os.environ.get("NGE_CONTREE_OUTPUT_BYTES")
+                              or DEFAULT_OUTPUT_BYTES))
+    except ValueError:
+        return DEFAULT_OUTPUT_BYTES
+
+
+def _was_truncated(done) -> bool:
+    try:
+        return bool(done.result.truncated)
+    except Exception:          # older SDKs / fakes: no flag, nothing to report
+        return False
 
 
 def _transient_contree(exc: BaseException) -> bool:
@@ -113,7 +133,8 @@ class TokenFactorySandbox(Sandbox):
             try:
                 # ContreeSDK takes `shell="<line>"` (or command=+args=); passing
                 # /bin/sh via args alone raises "Either command or shell…".
-                done = sess.run(shell=command, files=files, timeout=timeout).wait()
+                done = sess.run(shell=command, files=files, timeout=timeout,
+                                truncate_output_at=_output_limit()).wait()
                 self.last_retries = attempt - 1
                 break
             except Exception as exc:
@@ -144,6 +165,7 @@ class TokenFactorySandbox(Sandbox):
             stderr=getattr(done, "stderr", "") or "",
             duration_s=round(dur if dur is not None
                              else time.perf_counter() - t0, 3),
+            truncated=_was_truncated(done),
         )
 
     def collect(self, sandbox_id: str, paths: list) -> Dict[str, str]:

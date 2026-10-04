@@ -1,0 +1,11 @@
+# python -m bench.output_cut_replay --i-know-cost   (2026-10-04 UTC)
+# Shard 0 of report_20261004T031503Z, replayed in one Token Factory sandbox
+# per limit (no VM). Output of the committed bench, verbatim; see evidence/README.md.
+limit=65535 exit=1 stdout_bytes=65535 truncated=True
+   raw FAILED ids : ['test_connect_mcp_falls_back_to_mock_without_launcher', 'test_connect_mcp']
+   engine parses  : ['test_connect_mcp_falls_back_to_mock_without_launcher']
+   tail           : '_mock_without_launcher\nFAILED packages/nodus/tests/test_nodus_grafana.py::test_connect_mcp'
+limit=4194304 exit=1 stdout_bytes=65637 truncated=False
+   raw FAILED ids : ['test_connect_mcp_falls_back_to_mock_without_launcher', 'test_connect_mcp_forwards_org_id_env']
+   engine parses  : ['test_connect_mcp_falls_back_to_mock_without_launcher', 'test_connect_mcp_forwards_org_id_env']
+   tail           : 'g_id_env\n======================== 2 failed, 580 passed in 2.01s =========================\n'

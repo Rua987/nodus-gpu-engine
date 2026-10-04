@@ -35,7 +35,8 @@ class _Session:
             raise ValueError("Either command or shell must be provided")
         cmd = shell if shell is not None else command
         self.calls.append({"shell": cmd, "files": dict(files or {}),
-                           "timeout": timeout})
+                           "timeout": timeout,
+                           "truncate_output_at": kw.get("truncate_output_at")})
         if files:
             self.fs.update(files)
         if "pytest" in cmd:
@@ -178,3 +179,22 @@ def test_exec_retries_transient_timeout(sbx, monkeypatch):
     assert res.exit_code == 0
     assert sbx.last_retries == 2
     assert n["i"] == 3
+
+
+def test_exec_asks_for_more_than_the_sdk_default_and_reports_a_cut(sbx, monkeypatch):
+    """ContreeSDK cuts stdout at 64 KiB by default; a `-v` shard outgrew it live
+    and its last FAILED line was cut mid-name. Ask for more, and say when even
+    that was not enough."""
+    sid = sbx.create(SandboxSpec(image="python:3.12-slim"))
+    sess = sbx._sessions[sid]
+    res = sbx.exec(sid, "python -m pytest -v", timeout=30)
+    assert sess.calls[-1]["truncate_output_at"] == tf.DEFAULT_OUTPUT_BYTES > 65535
+    assert res.truncated is False                     # fake has no result flag
+
+    class _Result:
+        truncated = True
+    sess.result = _Result()
+    monkeypatch.setenv("NGE_CONTREE_OUTPUT_BYTES", "100")   # floor: the SDK default
+    res = sbx.exec(sid, "python -m pytest -v", timeout=30)
+    assert sess.calls[-1]["truncate_output_at"] == 65535
+    assert res.truncated is True

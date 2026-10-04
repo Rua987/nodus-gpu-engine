@@ -2,7 +2,7 @@
 
 ``mock``    -> deterministic fleet with synthetic telemetry (no creds, CI)
 ``nebius``  -> Token Factory Contree microVMs (CPU; probe cpu-fallback)
-``compute`` -> Nebius AI Cloud GPU VMs (skeleton — real H100/H200 path)
+``compute`` -> Nebius AI Cloud GPU VMs, real nvidia-smi (paid, opt-in)
 """
 from nge.fleet.base import GpuFleet, GpuNode, GpuNodeStatus
 

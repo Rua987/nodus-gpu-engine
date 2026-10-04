@@ -3,9 +3,10 @@
 > Copy-paste ready for the **Coding & Agentic Engineering** submission.  
 > English = judges. Honesty first: mock shows the full loop; live proves Nebius.  
 > Written **2026-09-12** from measured runs, not from the wish list; reviewed end to end
-> **2026-10-03** (reasoning lever, bugbench, Compute probe, recaptured film).
+> **2026-10-03** (reasoning lever, bugbench, Compute probe, recaptured film); Compute Phase 3
+> hybrid run added **2026-10-04**.
 
-Do **not** paste `AUTORESEARCH_VISION.md` / SkillSpector / Compute Phase 3 (heal on real GPU load) as if shipped.
+Do **not** paste `AUTORESEARCH_VISION.md` / SkillSpector / a migration under real GPU pressure (never happened) as if shipped.
 
 ---
 
@@ -32,7 +33,9 @@ A code-completion wrapper suggests a fix.
 
 Mock film (`--heuristic-plan`): **2/3 auto-fixed & verified** + GPU migrate `02 → 03`.  
 Live (`--live`): real **Nemotron @ Token Factory** + Contree sandboxes. Contree is **CPU today** (`probe_kind=cpu-fallback`); thermal heal is **gated** until real `nvidia-smi` — we refuse fake H100 metrics.  
-Real GPU: the engine's own probe read `nvidia-smi` on a Nebius AI Cloud **L40S** and deleted the VM — one reading, not the heal loop.
+Real GPU: on two Nebius AI Cloud **L40S** VMs it created itself, the heal loop read real `nvidia-smi`,
+migrated nothing by mistake (an idle GPU is not "inefficient") and deleted both VMs. There was no real
+pressure, so no real migration — we did not stage one.
 
 ---
 
@@ -79,7 +82,9 @@ We use **Nebius Token Factory** as the OpenAI-compatible endpoint and **NVIDIA N
 - **Nebius AI Cloud Compute:** the Python SDK reads every region the account has (platforms,
   presets, subnets, CUDA images) without creating anything, then one probe creates an **L40S**
   VM, reads `nvidia-smi` over SSH (27 °C, 67.8 W, classified `datacenter`) and deletes it —
-  192 s, `packages/engine/evidence/compute_probe_20261003T231022Z.json`.
+  192 s, `packages/engine/evidence/compute_probe_20261003T231022Z.json`. Then a hybrid run: two L40S
+  VMs as the fleet, shards in Token Factory sandboxes, real telemetry in every heal decision, both
+  VMs deleted — `packages/engine/evidence/report_20261004T031503Z.md`.
 
 Token Factory Contree nodes are **not** physical H100s. Live probes report `cpu-fallback`. That is a product fact, not a bug.
 
@@ -129,7 +134,7 @@ We built the missing loop on **Nebius Token Factory + NVIDIA Nemotron**, with a 
 
 - Vendored Nodus runtime (unmodified) + engine package `nge`.  
 - Reversible `nebius:` chat backend: `max_tokens`, usage (incl. `reasoning_tokens`), reasoning on/off per call class, `ModelUnavailableError`.  
-- Fleet: `mock` (synthetic H100 telemetry for the film) · `nebius` (Contree) · `compute`: the engine's own probe creates a Nebius AI Cloud GPU VM, reads `nvidia-smi` and deletes it — **one real reading, not the heal loop**.  
+- Fleet: `mock` (synthetic H100 telemetry for the film) · `nebius` (Contree) · `compute`: the engine's own probe creates a Nebius AI Cloud GPU VM, reads `nvidia-smi` and deletes it; the heal loop runs on that real telemetry (one hybrid run, 2 × L40S).  
 - Mock autofix uses canned patches so the verify loop is deterministic for judges; live slot-fill/triage hits Super.
 
 ---
@@ -141,14 +146,19 @@ We built the missing loop on **Nebius Token Factory + NVIDIA Nemotron**, with a 
 - **Patches that fix one test and break others.** Keep only suite-green diffs.  
 - **Flaky / truncated model replies.** Caps, `patch_truncated`, bounded retries — not an infinite Super bill.
 - **The model spent its budget thinking.** Live patches came back empty at 2048 tokens: Nemotron 3 reasons inside the same `max_tokens`, and 99% of output was reasoning. We measured reasoning on/off per call class on real sandboxes (`bench/thinking_ab.py`): short replies went from 0/6 to 12/12 usable with reasoning off; patches keep reasoning with an 8192 ceiling. On six seeded, OS-independent bugs re-checked against held-out cases the model never saw (`bench/bugbench`), every patch the loop verified was a real fix and none broke a test: 16/18 with reasoning on or off, 12/16 with the old setting. Measuring it also exposed the model adding `-x` to shard commands (hid failures, got good patches rejected) and copying the prompt's `--tb=` placeholder (a shard that ran nothing) — both now refused.
+- **A sandbox that cuts its output.** The real-GPU run listed a failing test that does not exist, `test_connect_mc`. ContreeSDK cuts stdout at 64 KiB; that shard printed about 65.6 KB, so its last `FAILED` line was cut mid-name and the real test never reached the parser. Replayed at both limits (`bench/output_cut_replay.py`), then fixed: a larger limit, the SDK's `truncated` flag read, the fragment dropped and reported, and no patch is ever called verified on cut output.
 
 ---
 
 ## “What’s next” (honest, short)
 
 Done since the first draft: the engine's own probe created a Nebius AI Cloud **L40S** VM, read `nvidia-smi` (27 °C, 67.8 W, classified `datacenter`) and deleted it — 192 s end to end, evidence in `packages/engine/evidence/compute_probe_20261003T231022Z.json`. Its first live run failed (a Windows CRLF bug, and a VM that outlived a killed process); both causes are fixed and documented.
+Then the heal loop ran on real GPUs: two L40S VMs, real `nvidia-smi` in each heal decision, nothing migrated by mistake,
+both VMs deleted (`packages/engine/evidence/report_20261004T031503Z.md`). Building it caught a flaw first: an idle GPU
+reads efficiency 0, which would have migrated shards off healthy nodes — fixed before any VM was created.
 
-Next: feed that real telemetry to the heal loop under load (architecture A: Compute for telemetry, Token Factory for exec). Not claimed as done.
+Next: a migration under real GPU pressure needs GPU work on the node (the shards run on CPU sandboxes today), and
+per-SKU thresholds (they are H100-tuned; an L40S tops out near 350 W). Not claimed as done.
 
 ---
 
@@ -165,7 +175,8 @@ python -m nge.demo_nebius --mock --watch --watch-delay 2.0 --heuristic-plan
 4. **Screenshot** — HTML control room (fleet cards + Story + patches).  
 5. **Four criteria** — the sections above.  
 6. **Limits** — mock = synthetic H100 for the film; live = Token Factory + Nemotron; Contree = CPU, heal gated;
-   one real `nvidia-smi` reading on an AI Cloud L40S, but the heal loop has not run on real GPUs.
+   the heal loop has run once on real GPUs (2 × L40S, real telemetry, nothing migrated by mistake); no migration
+   under real pressure — there was none.
 
 Do **not** invent “GPU $ saved”. We did not invoice that.
 
@@ -174,7 +185,8 @@ Do **not** invent “GPU $ saved”. We did not invoice that.
 1. Terminal: `--mock --watch --watch-delay 2.0 --heuristic-plan` (~85 s) — plan, bars, migrate, `2/3`.  
 2. Browser: **control room** HTML (cards + Story + diffs).  
 3. Optional 10 s: `--live` usage line + `heal gated` / `cpu-fallback`.  
-3b. Optional 10 s: the Compute probe report — `probe_kind=nvidia-smi`, `NVIDIA L40S`, `deleted: true`.  
+3b. Optional 10 s: the Compute probe report — `probe_kind=nvidia-smi`, `NVIDIA L40S`, `deleted: true` — or the
+    hybrid report `report_20261004T031503Z`: two `cg-l40s-a` nodes, `gpu_efficiency_skipped`, no remediation.  
 4. Do **not** lead with taxonomy benches or AutoResearch.
 
 ---

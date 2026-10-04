@@ -21,7 +21,7 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | C6 | Preflight `[capabilities]` | **OK** | banner heal gated |
 | C7 | `probe_kind` honnête | **OK** | live : 3× `cpu-fallback` |
 | C8 | Heal gate (0 migration sans vrai GPU) | **OK** | live 211401Z : remediations **None** |
-| C9 | Seuils DC vs consumer | **PARTIEL** | classe prouvée sur vrai GPU (L40S → `datacenter`, `evidence/compute_probe_*`) ; seuils sous charge : Phase 3 |
+| C9 | Seuils DC vs consumer | **PARTIEL** | classe prouvée sur vrai GPU (L40S → `datacenter`, `evidence/compute_probe_*`) ; seuils sous charge : non mesurés (le run hybride n'avait aucune charge GPU) |
 | C10 | `--local` Ollama | **OK** | exit 0 |
 | C11 | `--deepseek` perso | **PARTIEL** | pas de clé |
 | C12 | `NGE_FLEET_IMAGE` / `HAS_GPU` / `REQUIRE_REAL_GPU` | **OK** | config + tests |
@@ -42,7 +42,7 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 
 | Id | Item | Priorité | Notes |
 |----|------|----------|-------|
-| M1 | **Vrai GPU** (Nebius Compute VM) | **PARTIEL** | Phase 2 verte : `probe` lit `nvidia-smi` sur une L40S et supprime la VM seul ; heal sous charge (Phase 3) à faire |
+| M1 | **Vrai GPU** (Nebius Compute VM) | **PARTIEL** | Phase 2 verte : `probe` lit `nvidia-smi` sur une L40S et supprime la VM seul. Phase 3 verte : run hybride 2 L40S, télémétrie réelle dans le heal, rien migré à tort, VM supprimées ; migration sur vraie pression non démontrée |
 | M2 | Brancher SDK Compute (SA, create/delete, probe SSH) | **P0** | Phases 0 et 1 **vertes** 2026-10-03 (clé acceptée ; inventaire 9 régions ; cible L40S eu-north1) · **next : Phase 2 sur Go** |
 | M3 | ~~Probe TF run complet~~ | **OK** | fermé 2026-09-05 |
 | M4 | Image CUDA Contree (deps only) | **P2** | |
@@ -94,6 +94,8 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | 2026-10-03 | Fixes Phase 2 | octets LF ; échecs SSH journalisés ; auto-extinction cloud-init à max+5 min ; refus si VM étiquetée existante |
 | 2026-10-03 | Phase 3, avant toute VM : faille du plan | GPU sans charge → efficacité 0 → le heal aurait migré hors de GPU sains ; corrigé (`gpu_workload`) ; preuve visée revue |
 | 2026-10-03 | Phase 3 : `ComputeGpuFleet` + `hybrid` | flotte réelle (VM étiquetées, auto-extinction, release sûr), run hybride autofix coupé ; testé sans réseau ; **pas lancé** |
+| 2026-10-04 | **Phase 3, live hybride** (Go 2 L40S 12 min) — **verte** | 2 L40S prêtes à 192 s ; `nvidia-smi` réel ×2 (25 °C, ~36 W, 0 %) → `gpu_efficiency_skipped` ×2, 0 remediation ; VM supprimées à 439 s ; 0 ressource restante (vérifié) ; ≈ 0,35 $ |
+| 2026-10-04 | Coupe de sortie ContreeSDK (révélée par la Phase 3) | stdout coupé à 64 KiB → `test_connect_mc` compté, vrai test perdu ; rejoué aux deux limites ; limite 4 MiB + drapeau `truncated` : fragment ignoré, rapport le dit, aucun correctif `verified` sur sortie coupée |
 | 2026-10-03 | **Phase 2, 2e live** (Go 15 min) — **verte** | `probe_kind=nvidia-smi` NVIDIA L40S 27 °C 67,8 W `datacenter` à 89 s ; VM supprimée à 192 s ; 0 ressource restante (vérifié) ; ~0,08 $ |
 
 ---
@@ -101,7 +103,7 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 ## Prochaines actions (ordre)
 
 1. **Soumission** — répéter le film juges, relire le Devpost (deadline 2026-10-31)
-2. Compute Phase 3 (heal sous charge réelle) — optionnel, Go € séparé (`docs/COMPUTE_GPU.md`)
+2. ~~Compute Phase 3~~ — fait 2026-10-04 (`docs/COMPUTE_GPU.md`)
 2. **Répéter oral** juges (mock A2 + `RISKS_TO_STRENGTHS.md`)
-3. **Compute Phase 1–2** seulement après Go budget explicite (1× H100 éphémère)
+3. ~~Compute Phase 1–2~~ — faites 2026-10-03 (L40S, pas H100 : cible de l'inventaire)
 4. Vision perso AutoResearch — inchangé, hors juges
