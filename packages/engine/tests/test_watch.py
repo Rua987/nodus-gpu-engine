@@ -69,3 +69,21 @@ def test_watch_is_a_valid_telemetry_sink():
     assert "migrate  shard 2" in out
     assert "nb-h100-02" in out and "nb-h100-03" in out
     assert "fix OK" in out                     # auto-fix loop surfaced in the watch
+
+
+def test_a_cpu_sandbox_is_not_drawn_as_an_idle_gpu():
+    """Live film: Token Factory nodes have no GPU. Bars at 0 C marked OK read
+    as a healthy H100; the row must say what the node is."""
+    buf = io.StringIO()
+    w = ConsoleWatch(stream=buf, color=False)
+    w.record("capabilities", expect_probe="cpu-fallback", heal_enabled=False,
+             host_summary="none")
+    w.record("gpu_provision", provisioned=1, nodes=[{"id": "nb-cpu-00"}])
+    w.record("shard_start", index=0, node_id="nb-cpu-00")
+    w.record("gpu_status", telemetry={"id": "nb-cpu-00", "util_pct": 0, "temp_c": 0,
+             "power_w": 0, "health": "ok", "probe_kind": "cpu-fallback"})
+    rows = [l for l in buf.getvalue().splitlines() if l.startswith("  nb-cpu-00 ")]
+    assert len(rows) >= 3                     # before and after the first probe
+    for row in rows:
+        assert "cpu sandbox" in row and "no GPU telemetry" in row
+        assert "0.0C" not in row and "OK" not in row

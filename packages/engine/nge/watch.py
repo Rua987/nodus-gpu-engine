@@ -54,6 +54,7 @@ class ConsoleWatch:
         self._log: list[str] = []
         self._title = "fleet"
         self._done = False
+        self._expect_cpu = False      # capabilities said: no GPU in these nodes
 
     # -- colour helper --------------------------------------------------
     def _c(self, s: str, code: str) -> str:
@@ -62,6 +63,7 @@ class ConsoleWatch:
     # -- telemetry sink ----------------------------------------------
     def record(self, kind: str, **f) -> None:
         if kind == "capabilities":
+            self._expect_cpu = f.get("expect_probe") == "cpu-fallback"
             heal = "heal ON" if f.get("heal_enabled") else "heal gated"
             self._log.append(self._c(
                 f"capabilities  host={f.get('host_summary')}  "
@@ -195,6 +197,13 @@ class ConsoleWatch:
             name = f"{nid:<12}"
             if released:
                 row = self._c(f"  {name} {state:<9} (freed)", _DIM)
+            elif nd.get("probe_kind") == "cpu-fallback" or (
+                    self._expect_cpu and not nd.get("probe_kind")):
+                # Live film: a Token Factory sandbox has no GPU. Bars at 0 C
+                # marked OK read as a healthy, idle H100 - say what it is.
+                tag = f"shard#{shard}" if shard is not None else ""
+                row = (f"  {name} {self._c('cpu sandbox', _YELLOW)}  "
+                       f"no GPU telemetry - heal gated  {tag}")
             else:
                 tag = f"shard#{shard}" if shard is not None else ""
                 if nd.get("migrated_from"):

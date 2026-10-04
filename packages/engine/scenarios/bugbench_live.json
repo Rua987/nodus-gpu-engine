@@ -1,0 +1,10 @@
+{
+  "name": "bugbench_live",
+  "task": "Run the failing pytest suite across the GPU fleet, triage the failures, propose fixes, and deliver a consolidated Markdown report.",
+  "shards": 2,
+  "gpu_type": "cpu",
+  "target": "packages/engine/bench/bugbench/tests",
+  "collect": [],
+  "max_fixes": 6,
+  "holdout": "bugbench"
+}

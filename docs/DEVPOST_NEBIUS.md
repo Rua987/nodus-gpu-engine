@@ -67,7 +67,9 @@ Nebius Token Factory · NVIDIA Nemotron 3 (Ultra / Super / Nano) · Token Factor
 A code-completion wrapper suggests a fix.  
 **Nodus-GPU Engine runs the job:** local plan → sharded pytest on a fleet → migrate off a hot node **after scoring the destination** → patch in a fresh sandbox → re-run the suite → keep only what stays green.
 
-Mock film (`--heuristic-plan`): **2/3 auto-fixed & verified** + GPU migrate `02 → 03`.  
+Live film (`--live`, six seeded bugs): **real Nemotron patches — 5/6 verified in fresh Token Factory sandboxes, and
+all 5 also pass hidden cases the model never saw** (three runs: 15/18 verified, 15/15 hold).  
+Mock film (`--heuristic-plan`): the heal — GPU migrate `02 → 03` on simulated H100s — with canned patches, 2/3.  
 Live (`--live`): real **Nemotron @ Token Factory** + Contree sandboxes. Contree is **CPU today** (`probe_kind=cpu-fallback`); thermal heal is **gated** until real `nvidia-smi` — we refuse fake H100 metrics.  
 Real GPU: on two Nebius AI Cloud **L40S** VMs it created itself, the heal loop read real `nvidia-smi`,
 migrated nothing by mistake (an idle GPU is not "inefficient") and deleted both VMs. There was no real
@@ -95,6 +97,9 @@ python -m nge.demo_nebius --live --shards 1
 ```
 
 Oral script: `packages/engine/docs/JUDGE_DRY_RUN.md`  
+Live film (real patches + hidden checks): `packages/engine/evidence/report_20261004T222707Z.html` and its
+`.holdout.json`; run it with
+`python -m nge.demo_nebius --live --watch --heuristic-plan --scenario scenarios/bugbench_live.json` (~2 min, about one cent)  
 Mock film (2/3 + migrate): `packages/engine/evidence/report_20261003T233405Z.html`  
 Live Nebius proof (Contree + Super 0/3): `packages/engine/evidence/report_20260913T053458Z_honest.html` (a re-render of that run — provenance in `packages/engine/evidence/README.md`)  
 Live after the reasoning fix (real sandboxes, simulated fleet): `packages/engine/evidence/report_20261002T055558Z.html`  
@@ -207,7 +212,8 @@ model reply is labelled cut, and a sandbox that cut its output never yields a "v
 - One closed loop on a real repo — plan, test, heal, patch, prove — with every judge-facing claim
   checked by a test against the run's own event log (`packages/engine/tests/test_evidence.py`).
 - On six seeded bugs re-checked against held-out cases the model never saw, every patch the loop called
-  verified was a real fix, and none broke another test.
+  verified was a real fix, and none broke another test — in the benchmark, and again in the live film
+  (15/15 across three runs).
 - The heal loop ran on real Nebius L40S GPUs it created and deleted itself, and migrated nothing by
   mistake.
 - Bugs found by measuring, not guessing: reasoning eating the token budget, `-x` hiding failures, a
@@ -293,7 +299,8 @@ python -m nge.demo_nebius --mock --watch --watch-delay 2.0 --heuristic-plan
 
 4. **Screenshot** — HTML control room (fleet cards + Story + patches).  
 5. **Four criteria** — the sections above.  
-6. **Limits** — mock = synthetic H100 for the film; live = Token Factory + Nemotron; Contree = CPU, heal gated;
+6. **Limits** — the heal is shown on simulated H100s; the patches are shown live (Token Factory + Nemotron, seeded
+   bugs we wrote); Contree = CPU, heal gated;
    the heal loop has run once on real GPUs (2 × L40S, real telemetry, nothing migrated by mistake); no migration
    under real pressure — there was none.
 
@@ -301,7 +308,8 @@ Do **not** invent “GPU $ saved”. We did not invoice that.
 
 ## Video / screenshot checklist
 
-1. Terminal: `--mock --watch --watch-delay 2.0 --heuristic-plan` (~85 s) — plan, bars, migrate, `2/3`.  
+1. Terminal: the live film (A3) — real patches, `held-out: 5/5`; then the mock film for the migrate moment.
+   Shot list and narration: `packages/engine/docs/JUDGE_DRY_RUN.md`, *YouTube video*.  
 2. Browser: **control room** HTML (cards + Story + diffs).  
 3. Optional 10 s: `--live` usage line + `heal gated` / `cpu-fallback`.  
 3b. Optional 10 s: the Compute probe report — `probe_kind=nvidia-smi`, `NVIDIA L40S`, `deleted: true` — or the

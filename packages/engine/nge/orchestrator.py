@@ -798,6 +798,10 @@ class NgeOrchestrator:
         gpu_type = scenario.get("gpu_type", "H100")
         target = scenario.get("target", "packages/nodus/tests")
         collect = scenario.get("collect", [])
+        # A scenario may ask for more fix attempts than the default: bugbench
+        # seeds six bugs. Bounded, since each attempt provisions a node.
+        if scenario.get("max_fixes"):
+            self.MAX_FIXES = max(1, min(int(scenario["max_fixes"]), 10))
 
         handlers.reset_state(self.config)
         self.events.clear()

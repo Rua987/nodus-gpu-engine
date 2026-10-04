@@ -40,6 +40,33 @@ def _load_scenario(path: Path) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def _bugbench_holdout(report) -> None:
+    """Re-check every verified patch against bugbench's held-out cases - tests
+    the model never saw. Passing the visible test can mean rewriting it to fit
+    the bug; passing these means the bug is gone. Written next to the report
+    (``<report>.holdout.json``) so the claim travels with the run."""
+    verified = [x for x in report.fixes if x.get("verified")]
+    try:
+        from bench.thinking_ab import holdout_check
+        rows = [{"test": x["test"], "holdout_ok": holdout_check(x.get("patch"), x["test"])}
+                for x in verified]
+    except ImportError as exc:                 # patch-ng is an optional dependency
+        print(f"held-out: not checked ({exc})")
+        return
+    judged = [r for r in rows if r["holdout_ok"] is not None]   # None: not a bugbench test
+    ok = sum(1 for r in judged if r["holdout_ok"])
+    print(f"held-out: {ok}/{len(judged)} verified patch(es) also pass cases "
+          f"the model never saw")
+    for r in rows:
+        mark = {True: "OK ", False: "KO ", None: "n/a"}[r["holdout_ok"]]
+        print(f"  {mark} {r['test']}")
+    side = Path(report.artifact_path).with_suffix(".holdout.json")
+    side.write_text(json.dumps({"verified": len(rows), "judged": len(judged),
+                                "holdout_ok": ok, "rows": rows},
+                               indent=2), encoding="utf-8")
+    print(f"held-out: {side}")
+
+
 def _live_chat_fn(model):
     """Route live chat through ``chat_nebius`` so max_tokens + usage apply."""
     from nge.backends import register
@@ -182,6 +209,8 @@ def run_orchestrated(args, live: bool) -> int:
     print(f"artifact: {report.artifact_path}")
     if report.html_path:
         print(f"html:     {report.html_path}")
+    if scenario.get("holdout") == "bugbench" and report.artifact_path:
+        _bugbench_holdout(report)
     if args.json:
         print(json.dumps(report.as_dict(), indent=2, ensure_ascii=False))
     return 0 if report.ok else 1

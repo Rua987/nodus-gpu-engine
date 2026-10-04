@@ -6,6 +6,7 @@ through here, so auth lives in exactly one place.
 """
 from __future__ import annotations
 
+import logging
 from typing import Dict
 
 DEFAULT_TF_BASE_URL = "https://api.tokenfactory.nebius.com/sandboxes/"
@@ -37,9 +38,26 @@ def build_contree_client(cfg):
             "Token Factory: no project id - set NEBIUS_PROJECT_ID / "
             "packages/engine/.nebius_project_id (Nebius console).")
     ContreeSync, ContreeConfig, IAMAuth = _import_contree()
+    _quiet_token_expiry()
     base = cfg.token_factory_base_url or DEFAULT_TF_BASE_URL
     auth = IAMAuth(token=key, project_id=pid, base_url=base)
     return ContreeSync(config=ContreeConfig(auth=auth))
+
+
+class _DropTokenExpiry(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not str(record.getMessage()).startswith("Token expires in")
+
+
+def _quiet_token_expiry() -> None:
+    """ContreeSDK warns "Token expires in 0 hours" on every call: the sandbox
+    token minted from the API key lives ~5 minutes and is minted again on the
+    next call (measured 2026-10-04: its expiry moved from 22:22:58 to 22:26:19
+    UTC between two calls). Live, it printed in the middle of the judge film.
+    An API key that really expired would fail auth, not warn."""
+    lg = logging.getLogger("contree_sdk.sdk.client._base")
+    if not any(isinstance(f, _DropTokenExpiry) for f in lg.filters):
+        lg.addFilter(_DropTokenExpiry())
 
 
 def sandbox_permissions(client) -> Dict[str, bool]:

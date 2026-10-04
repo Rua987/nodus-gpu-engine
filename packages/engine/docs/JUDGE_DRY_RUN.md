@@ -9,10 +9,12 @@ Last rehearsal: **2026-10-04** — A2 replayed end to end; see *Rehearsal notes*
 |------|---------|-------------------|------|
 | **A2 — recommended film** | `--mock --watch --heuristic-plan` | Keyword plan + `edit_file` → migrate → **auto-fixed 2/3** | €0 |
 | **A — 324M honesty** | `--mock --watch` | Plan 324M → migrate → often **autofix OFF** | €0 |
+| **A3 — live film (real patches)** | `--live --watch --heuristic-plan --scenario scenarios/bugbench_live.json` | Real Nemotron patches on 6 seeded bugs, verified in fresh Token Factory sandboxes, then re-checked on **hidden cases**: 5/6 verified, 5/5 hold (3 runs: 15/18, 15/15). Nodes marked `cpu sandbox`, heal gated | ~1 ¢ |
 | **B — live honesty** | `--live --shards 1` | Contree `cpu-fallback`, heal **gated**, Super usage | cents |
 
-**Pitch rule:** Prefer **A2** if you only have one film — it matches the
-« patch and verify » claim. Mention that with the 324M alone (mode A) the plan
+**Pitch rule:** **A3** is the proof of « patch and verify » — real model, real sandboxes, hidden
+checks. **A2** is the only place the heal is visible (it needs GPU metrics). The video uses both,
+A3 first. If only one: A3. (Before 2026-10-04 the rule was A2: the patches were canned.) Mention that with the 324M alone (mode A) the plan
 may omit `edit_file` and we triage only — same engine, different outcome.
 
 ---
@@ -114,19 +116,24 @@ Open HTML: KPI `2/3`, migration row, diffs under Auto-fixes.
 
 ## YouTube video (rules: under 3 min, public) — shot list
 
-Five clips, recorded separately so a bad take costs one clip; target **2:45**, never 3:00.
-Narration in English, spoken over each clip (or recorded after, in the editor).
+Six clips, recorded separately so a bad take costs one clip; target **2:45**, never 3:00.
+The live clip (A3) is the proof — real patches; the mock clip (A2) only shows the heal, which
+needs GPU metrics the live sandboxes do not have. Narration in English, over each clip.
 
 | # | time | screen | say |
 |---|---|---|---|
-| 1 | 0:00–0:12 | GitHub repo page (README top, CI badge) | « This is Nodus-GPU Engine, on Nebius Token Factory and NVIDIA Nemotron. Not a chatbot: a control loop that plans, runs tests across a GPU fleet, heals a hot node, and keeps only the patches that stay green. » |
-| 2 | 0:12–1:40 | terminal, the capture command (85 s) | plan: « A local plan picks the tools; for this film, a keyword plan, so `edit_file` is in it — that unlocks the code agent. » · bars: « Three simulated H100s run the sharded suite. Ultra, Super and Nano are roles per decision, and every shell command goes through a jail. » · migrate: « Node 02 overheats. The engine scores where the shard can go, re-provisions, and moves it to 03. » · fixes: « Failures go to Nemotron Super. Each patch is applied in a fresh sandbox and the whole suite re-runs. » · summary: « Two fixes verified. The third had no patch — we report it instead of faking three out of three. » |
-| 3 | 1:40–2:05 | browser: the HTML the command printed | « Everything lands in one control room: the fleet — the red node is the one we left — the story of the run, and the diffs we kept. » |
-| 4 | 2:05–2:30 | browser: `evidence/report_20261004T031503Z_rerender.html` | « The film uses simulated GPUs. On real hardware, the engine created two Nebius L40S VMs, read their real nvidia-smi, and — idle GPUs are not under pressure — correctly migrated nothing. Then it deleted them. » |
-| 5 | 2:30–2:45 | GitHub repo page (or `evidence/`) | « Every claim here is checked by a test against the run's own log. Public, MIT — clone it and run this demo in two minutes, no key needed. » |
+| 1 | 0:00–0:12 | GitHub repo page (README top, CI badge) | « This is Nodus-GPU Engine, on Nebius Token Factory and NVIDIA Nemotron. Not a chatbot: a control loop that runs tests, fixes what breaks, and keeps only the fixes it can prove. » |
+| 2 | 0:12–1:22 | terminal, **A3 live** (~140 s real; speed the model waits up 2× in the editor and caption « 2× ») | start: « Live: Nemotron Super on Nebius Token Factory, six seeded bugs. Every node is a Token Factory sandbox — CPU, so the screen says heal gated. » · fixes: « Each failure goes to Nemotron, which writes a patch; it is applied in a fresh sandbox and the whole suite re-runs. » · end: « Five of six verified. Then each kept patch is re-checked on hidden cases the model never saw: five of five. The sixth did not make it — we keep only what we can prove. » |
+| 3 | 1:22–1:52 | terminal, **A2 mock**, `--mock --watch --watch-delay 0.8 --heuristic-plan` (35 s) | « The heal needs GPU metrics, so here it runs on simulated H100s: node 02 overheats, the engine scores a destination and moves the shard to 03. » |
+| 4 | 1:52–2:12 | browser: the HTML the A3 run printed | « Everything lands in one control room: the sandboxes, honestly marked CPU, the story of the run, and the diffs we kept. » |
+| 5 | 2:12–2:32 | browser: `evidence/report_20261004T031503Z_rerender.html` | « On real GPUs, the engine created two Nebius L40S VMs, read their real nvidia-smi, and — idle GPUs are not under pressure — correctly migrated nothing. Then it deleted them. » |
+| 6 | 2:32–2:45 | GitHub repo page | « Every claim here is checked by a test against the run's own log. Public, MIT — clone it and run it yourself. » |
+
+Which bug fails in A3 varies by run (three runs: a diff citing code that does not exist, twice;
+a patch cut at its token ceiling, once) — keep the line generic, as above.
 
 Before recording: terminal font large (~20 pt), window maximised, notifications off, `cls`,
-`cd packages/engine`; run the command once to warm imports; open both HTML files in tabs.
+`cd packages/engine`; run each command once to warm up; open the HTML files in tabs.
 
 ## Rehearsal notes — 2026-10-04
 
