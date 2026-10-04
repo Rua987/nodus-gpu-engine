@@ -1,7 +1,7 @@
 # Judge dry-run — filmable (~90 s)
 
 Source of truth for the **Coding & Agentic Engineering** pitch.
-Last rehearsal: **2026-10-03** — A2 replayed end to end; see *Rehearsal notes* below.
+Last rehearsal: **2026-10-04** — A2 replayed end to end; see *Rehearsal notes* below.
 
 ## Which demo when
 
@@ -59,7 +59,7 @@ python -m bench.tier_smoke --i-know-cost --live-failover --skip-local-failover
 | `plan [heuristic]: [… 'edit_file' …]` | 1 Plan |
 | `provision x3` + util/temp bars | 2 Fleet |
 | migrate `02 ──▶ 03` | 3 Heal |
-| `plan gate … autofix ON` | 4 Gate |
+| `plan gate OK  autofix on  (edit_file, write_file)` | 4 Gate |
 | `fix OK` / `fix? … no patch` (summary: `fix --`) | 4b Verify (2/3 typical) |
 | `run complete` + HTML | Close |
 
@@ -111,6 +111,16 @@ Open HTML: KPI `2/3`, migration row, diffs under Auto-fixes.
 - [ ] Do **not** open taxonomy benches as the pitch
 - [ ] One honest sentence: Contree ≠ H100
 - [ ] Archi if asked: TF for exec; Compute for real `nvidia-smi` (one probe + one hybrid heal run on 2 × L40S; no real-pressure migration)
+
+## Rehearsal notes — 2026-10-04
+
+Replayed A2 after Compute Phase 3 and the report changes, same capture command:
+85 s, exit 0, no warning in the terminal. Cues in order: plan, provision ×3,
+migrate `02 ──▶ 03`, plan gate, `fix OK` ×2, `no patch`, run complete, `html:`;
+result 2/3, verify on 04 / 05. The HTML's visible text matches the committed
+capture `233405Z` except its timestamp, so the capture stands. One cue was
+worded from memory: the gate reads `plan gate OK  autofix on`, not
+`autofix ON` (that spelling is the post-run summary).
 
 ## Rehearsal notes — 2026-10-03
 
