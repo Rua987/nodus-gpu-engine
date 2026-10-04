@@ -315,7 +315,7 @@ nom de test en échec existe dans le code.
 
 ### Phase 4 — Exec sur Compute : une vraie migration, sous charge **induite et déclarée**
 
-*Construit le 2026-10-04, testé sans réseau, **pas encore lancé** (Go € à venir).*
+*Construit le 2026-10-04 ; **run 1 le même jour : migration réelle, relance vide** (ci-dessous).*
 
 Pourquoi : en Phase 3 aucun GPU ne travaillait, donc aucune pression réelle ne pouvait
 exister, et provoquer une surchauffe aurait été une mise en scène. Ici, la charge est
@@ -348,7 +348,39 @@ Commande (garde-fous de `hybrid` ; au plus 3 VM — 2 shards + le remplacement) 
 Coût estimé : ~30 min-VM L40S au total, ≈ 0,8 $ (plafond 3 × 20 min ≈ 1,6 $), disques et
 IP en sus.
 
-Ce que ça prouvera, si le run passe : la boucle voit une vraie contention sur de vraies
+**Run 1 (Go « contention 3 L40S max 20 min », 2026-10-04 ~23:33–23:45 UTC, code `32ec244`)** —
+[`evidence/report_20261004T234436Z.md`](../packages/engine/evidence/report_20261004T234436Z.md) (+ `.html`), couvert par
+`tests/test_evidence.py`. 0 instance / 0 disque après (vérifié à part). ≈ 25 min-VM, ≈ 0,65 $.
+
+| t (s) | événement |
+|---|---|
+| 174 | 2 VM L40S prêtes (venv compris) |
+| 186 | charge induite sur `cg-l40s-a-00` : 100 %, 323,6 W après 5 s |
+| 217 | shard 0 fini sur `-00` (10,0 s) ; `nvidia-smi` : 100 %, 324,2 W, 57 °C → **`busy`** |
+| 226 | placement : aucun nœud éligible (« fire to fire ») → une 3e VM |
+| 370–383 | `cg-l40s-a-02` prête ; **migration** `-00 → -02` |
+| 481 | relance du shard 0 sur `-02` : **exit 4** (4,7 s) |
+| 510 | shard 1 sur `-01`, nœud libre : **exit 0** (11,2 s) — le CUDA compile et le produit est juste |
+
+Ce que le run 1 prouve : sur de vraies métriques (une L40S saturée par une charge induite et
+déclarée), la boucle conclut `busy`, refuse les nœuds existants, ouvre une VM et migre.
+
+Ce qu'il ne prouve pas, et pourquoi :
+- **La relance n'a rien exécuté.** Le chemin de migration relançait la commande sans
+  renvoyer les fichiers du shard ; une VM neuve est vide → pytest « fichier introuvable »
+  (exit 4). Bug ancien du heal, invisible tant que le sandbox simulé n'exige aucun fichier.
+  Les 4,7 s « après » ne mesurent rien. **Corrigé** : la relance reçoit le payload ; le code
+  de sortie des deux passages est gardé (`exit_before` / `exit_after`).
+- **Les durées ne comparent rien.** 10,0 s sous charge contre 11,2 s à vide : `nvcc` et le
+  calcul GPU étaient du même ordre (le run 1 ne les a pas mesurés séparément). **Corrigé** :
+  600 répétitions au lieu de 120 — le GPU passe nettement devant `nvcc`, et un shard ralenti
+  2 à 3 fois reste sous le délai de 180 s quel que soit le débit réel.
+- **La liste des processus GPU était vide.** La sonde fait `exit 0` dès qu'elle a lu le GPU :
+  la requête ajoutée après ne s'exécutait jamais, et aucun faux SSH ne pouvait le voir.
+  **Corrigé** (sous-shell), avec un test qui exécute vraiment le script dans `sh` avec un faux
+  `nvidia-smi` — il échoue sur l'ancien script exactement comme le run live.
+
+Ce que ça prouvera, si un run 2 passe : la boucle voit une vraie contention sur de vraies
 métriques, migre, et le gain se mesure. Ce que ça ne prouvera pas : une surchauffe ou une
 panne spontanée ; la charge est la nôtre, et le rapport le dit. Tests :
 `tests/test_gpu_contention.py`, `tests/test_real_gpu_heal_gate.py`.
@@ -413,6 +445,6 @@ panne spontanée ; la charge est la nôtre, et le rapport le dit. Tests :
 2. ~~**Go Phase 1**~~ — **fait 2026-10-03** (cible : L40S eu-north1)  
 3. ~~**Go Phase 2**~~ — **fait 2026-10-03** (L40S ; 1er essai raté puis corrigé, 2e réussi)
 4. ~~**Phase 3**~~ — **fait 2026-10-04** (2 L40S, rien migré à tort ; a révélé la coupe de sortie ContreeSDK, corrigée)
-5. **Phase 4** (contention induite et déclarée) — construite et testée sans réseau ; **Go € requis** pour le run
+5. **Phase 4** (contention induite et déclarée) — run 1 fait 2026-10-04 : migration réelle, relance vide ; corrigé ; **run 2 : Go € requis**
 
 Sans Phase 0, tout le reste est du papier.

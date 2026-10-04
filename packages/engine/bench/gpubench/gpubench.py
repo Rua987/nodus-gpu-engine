@@ -29,7 +29,11 @@ def run_matmul(workdir: Path, n: int = SIZE, reps: int = 0) -> subprocess.Comple
                            capture_output=True, text=True, timeout=300)
     if built.returncode != 0:
         raise AssertionError(f"nvcc failed:\n{built.stderr[-2000:]}")
-    reps = reps or int(os.environ.get("NGE_GPUBENCH_REPS", "120"))
+    # At 120 reps nvcc and the GPU work were of the same order (a whole shard
+    # took 10-11 s on an L40S): an induced load could not show in its time.
+    # 600 reps puts the GPU well above nvcc, yet keeps a shard slowed 2-3x by
+    # contention under the 180 s shard timeout whatever the real throughput.
+    reps = reps or int(os.environ.get("NGE_GPUBENCH_REPS", "600"))
     run = subprocess.run([str(exe), str(n), str(reps)], capture_output=True, text=True,
                          timeout=900)
     print(run.stdout, run.stderr)

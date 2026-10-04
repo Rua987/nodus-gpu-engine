@@ -161,7 +161,10 @@ class ComputeGpuFleet(GpuFleet):
                 continue
             if node["state"] == "gone":
                 continue
-            rc, text, _err = (self._ssh(node["ip"], self._key, _PROBE + _APPS, timeout=30.0)
+            # _PROBE ends with `exit 0` once it has read the GPU: in a subshell,
+            # or the process listing after it never runs (first live run: empty)
+            rc, text, _err = (self._ssh(node["ip"], self._key, f"(\n{_PROBE}\n)\n{_APPS}",
+                                        timeout=30.0)
                               if node["ip"] else (1, "", "no ip"))
             text, _, apps = text.partition("__NGE_APPS__")
             apps = "; ".join(l.strip() for l in apps.splitlines() if l.strip())

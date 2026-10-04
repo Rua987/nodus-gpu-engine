@@ -678,7 +678,8 @@ class NgeOrchestrator:
                            target: str, collect: list,
                            gpu_type: str = "H100",
                            reserved_ids: Optional[Sequence[str]] = None,
-                           gpu_workload: bool = False) -> None:
+                           gpu_workload: bool = False,
+                           files: Optional[Dict[str, str]] = None) -> None:
         """If the shard's node is throttling / inefficient, migrate the shard
         onto a freshly provisioned healthy node. Bounded to one remediation
         per shard.
@@ -777,10 +778,13 @@ class NgeOrchestrator:
 
         self._emit("gpu_provision_replacement", node_id=repl, for_shard=sr.index)
         handlers.gpu_allocate(job=f"shard-{sr.index}-retry", node_id=repl)
+        # The replacement starts as empty as any sandbox: re-running without the
+        # shard's files had pytest exit 4 on "file not found" - the first real
+        # migration (Compute, 2026-10-04) re-ran nothing and timed it.
         res = handlers.run_in_sandbox(command=sr.command, node_id=repl,
-                                      collect=collect, timeout=180)
+                                      files=files, collect=collect, timeout=180)
         old_node = sr.node_id
-        before_s = sr.duration_s
+        before_s, exit_before = sr.duration_s, sr.exit_code
         sr.migrated_from = old_node
         sr.node_id = repl
         sr.exit_code = res["exit_code"]
@@ -795,7 +799,8 @@ class NgeOrchestrator:
                "temp_c": tele["temp_c"], "power_w": tele["power_w"],
                "placement_score": decision.score if decision else None,
                # the same shard, timed on the node it left and on the new one
-               "duration_before_s": before_s, "duration_after_s": sr.duration_s}
+               "duration_before_s": before_s, "duration_after_s": sr.duration_s,
+               "exit_before": exit_before, "exit_after": sr.exit_code}
         self.remediations.append(rec)
         self._emit("gpu_remediation", **rec)
 
@@ -997,7 +1002,7 @@ class NgeOrchestrator:
                 self._react_to_pressure(shard_results[-1], tele, target,
                                         collect, gpu_type,
                                         reserved_ids=node_ids[i + 1:],
-                                        gpu_workload=gpu_workload)
+                                        gpu_workload=gpu_workload, files=payload)
 
             sr = shard_results[-1]
             # a shard that produced pytest output is a usable baseline for its

@@ -237,3 +237,23 @@ def test_live_bugbench_film_real_patches_pass_hidden_cases(stem, failed):
     hold = json.loads((EVIDENCE / f"{stem}.holdout.json").read_text(encoding="utf-8"))
     assert hold["verified"] == hold["judged"] == hold["holdout_ok"] == 5
     assert sorted(r["test"] for r in hold["rows"]) == sorted(verified)
+
+
+def test_first_contention_run_migrated_on_a_real_busy_gpu_but_re_ran_nothing():
+    """docs/COMPUTE_GPU.md, Phase 4, run 1: the declared induced load saturated
+    the L40S (100 %, 324 W), the heal read it as busy and migrated to a fresh VM
+    - and the re-run there had no files (pytest exit 4), so its time is void."""
+    ev = _events("report_20261004T234436Z")
+    rs = _kinds(ev, "run_start")[0]
+    assert (rs["fleet_mode"], rs["sandbox_mode"]) == ("compute", "compute")
+    (load,) = _kinds(ev, "gpu_load_induced")
+    assert load["declared"] is True and load["node_id"] == "cg-l40s-a-00"
+    (p,) = _kinds(ev, "gpu_pressure")
+    assert p["health"] == "busy" and p["util_pct"] == 100.0 and p["power_w"] > 300
+    (rem,) = _kinds(ev, "gpu_remediation")
+    assert (rem["from"], rem["to"]) == ("cg-l40s-a-00", "cg-l40s-a-02")
+    done = {e["index"]: e for e in _kinds(ev, "shard_done")}
+    assert done[0]["exit_code"] == 4                     # the empty re-run
+    assert done[1]["exit_code"] == 0                     # CUDA built and checked on an idle L40S
+    tele = [e["telemetry"] for e in _kinds(ev, "gpu_status")]
+    assert all(t["probe_kind"] == "nvidia-smi" and t["gpu_processes"] == "" for t in tele)

@@ -159,6 +159,10 @@ def test_contention_run_migrates_the_shard_off_the_loaded_node(tmp_path, monkeyp
     assert skipped and all("after the shard finished" in e["why"] for e in skipped)
     # shards ran on the VMs, not in a Token Factory sandbox, with the CUDA source
     assert any("pytest" in s and "/opt/nge/venv/bin" in s for _, s in vms.scripts)
+    # the re-run on the replacement gets the shard's files too (it re-ran
+    # nothing on the first live migration: exit 4, "file not found")
+    assert any(ip == "203.0.113.2" and "files.tgz" in s for ip, s in vms.scripts)
+    assert rem["exit_before"] == 0 and rem["exit_after"] == 0
     shipped = [_tar_in(s) for _, s in vms.scripts if "files.tgz" in s]
     assert shipped and all("packages/engine/bench/gpubench/matmul.cu" in f for f in shipped)
     assert all("packages/engine/bench/gpubench/gpubench.py" in f for f in shipped)
@@ -209,3 +213,35 @@ def test_contention_needs_both_opt_ins(tmp_path, monkeypatch):
     monkeypatch.setenv("NGE_COMPUTE_SPAWN", "1")
     assert compute._main(["contention"]) == 2
     assert compute._main(["contention", "--i-know-cost", "--max-minutes", "45"]) == 2
+
+
+def test_the_status_script_really_lists_gpu_processes(tmp_path):
+    """Run the composed status script in a real sh with a fake nvidia-smi: the
+    probe exits once it has read the GPU, so the listing after it never ran on
+    the first live contention run - every fake SSH missed that."""
+    import os
+    import shutil
+    import subprocess
+    sh = shutil.which("sh")
+    if not sh:
+        pytest.skip("no POSIX sh")
+    fake = tmp_path / "nvidia-smi"
+    fake.write_text("#!/bin/sh\n"
+                    'case "$*" in\n'
+                    "  *compute-apps*) echo '4242, /tmp/nge_load/nge_burn, 400 MiB' ;;\n"
+                    "  *) echo '100, 600, 46068, 58, 290.0, NVIDIA L40S' ;;\n"
+                    "esac\n", encoding="utf-8", newline="\n")
+    fake.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ.get('PATH', '')}"}
+
+    def real_sh(ip, key, script, timeout):
+        r = subprocess.run([sh, "-s"], input=script.encode(), capture_output=True,
+                           env=env, timeout=timeout)
+        return r.returncode, r.stdout.decode(), r.stderr.decode()
+
+    f = _fleet(real_sh)
+    f.gpu_runtime = False                       # no cloud-init marker on this host
+    (node,) = f.provision(1)
+    (row,) = f.status()
+    assert row.util_pct == 100.0 and row.gpu_name == "NVIDIA L40S"
+    assert row.gpu_processes == "4242, /tmp/nge_load/nge_burn, 400 MiB"
