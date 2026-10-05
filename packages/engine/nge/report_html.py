@@ -147,10 +147,12 @@ def _timeline(events) -> str:
                 + ' &rarr; template command</div>'
             )
         elif k == "gpu_efficiency_skipped":
+            # the event says why (no GPU work declared, or read after our GPU
+            # work ended) - a fixed sentence here was wrong for the second case
             rows.append(f'<div class="pill">efficiency not counted on '
                         f'<code>{_esc(e.get("node_id"))}</code> '
-                        f'({_esc(e.get("efficiency"))}): no GPU work declared &mdash; '
-                        f'an idle GPU reads 0, that is not pressure</div>')
+                        f'({_esc(e.get("efficiency"))}): '
+                        f'{_esc(e.get("why") or "no GPU work declared")}</div>')
         elif k == "shard_output_truncated":
             rows.append(f'<div class="pill pressure">! shard #{_esc(e.get("index"))} output cut at '
                         f'the sandbox size limit &mdash; failures past the cut are not '
@@ -292,6 +294,7 @@ def _node_cards(shards: List[dict], rems: List[dict],
                 verify_ids: Optional[List[str]] = None,
                 cpu_fallback: bool = False) -> str:
     released = {str(r.get("from")) for r in rems if r.get("from")}
+    left_because = {str(r.get("from")): r.get("reason") for r in rems if r.get("from")}
     dests = {str(r.get("to")) for r in rems if r.get("to")}
     verify_ids = list(verify_ids or [])
     ids: List[str] = []
@@ -315,8 +318,11 @@ def _node_cards(shards: List[dict], rems: List[dict],
         t = tele.get(nid) or {}
         shard = next((s for s in shards if s.get("node_id") == nid), None)
         if nid in released:
-            # Still the hot house — don't grey it into "just freed".
-            st, cls = "THROTTLED then released", "th"
+            # Still the hot house — don't grey it into "just freed". A node left
+            # because another process held its GPU was busy, not overheated.
+            st = ("BUSY then released" if left_because.get(nid) == "busy"
+                  else "THROTTLED then released")
+            cls = "th"
         elif (t.get("health") or "") == "throttle":
             st, cls = "THROTTLED", "th"
         elif nid in dests:
@@ -537,8 +543,10 @@ def render(rep: Dict[str, Any], path) -> Path:
     elif probe == "cpu-fallback":
         honest = "Live Token Factory Contree: probe=cpu-fallback. Thermal heal gated (not a physical GPU)."
     elif fleet == "compute" and probe == "nvidia-smi":
+        where = ("Shards run on the VMs themselves (GPU work)." if sandbox == "compute"
+                 else "Shards run in Token Factory sandboxes.")
         honest = ("Real GPUs: Nebius AI Cloud VMs, nvidia-smi over SSH, created and deleted "
-                  "by the engine. Shards run in Token Factory sandboxes.")
+                  f"by the engine. {where}")
     if cpu_fallback:
         story_sub = (
             "This run: Contree shard &rarr; triage &rarr; Super patch attempt. "

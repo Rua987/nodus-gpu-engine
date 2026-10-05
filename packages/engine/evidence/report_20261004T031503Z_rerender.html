@@ -74,8 +74,8 @@ details{margin-top:8px} summary{cursor:pointer;color:#737373;font-size:12px}
 <div class="pill">no remediation - real GPUs, idle and cool; efficiency 0 with no GPU work declared is not pressure</div>
 <div class="pill">route <code>plan</code> &rarr; <b>ultra</b></div>
 <div class="pill">provision &times;2: <code>cg-l40s-a-00, cg-l40s-a-01</code></div>
-<div class="pill">efficiency not counted on <code>cg-l40s-a-00</code> (0.0): no GPU work declared &mdash; an idle GPU reads 0, that is not pressure</div>
-<div class="pill">efficiency not counted on <code>cg-l40s-a-01</code> (0.0): no GPU work declared &mdash; an idle GPU reads 0, that is not pressure</div>
+<div class="pill">efficiency not counted on <code>cg-l40s-a-00</code> (0.0): no GPU workload declared - an idle GPU reads efficiency 0</div>
+<div class="pill">efficiency not counted on <code>cg-l40s-a-01</code> (0.0): no GPU workload declared - an idle GPU reads efficiency 0</div>
 <div class="pill">triage: 5 unique failure(s)</div>
 
 <h2>Shards</h2>
@@ -93,11 +93,11 @@ details{margin-top:8px} summary{cursor:pointer;color:#737373;font-size:12px}
 <div class="pill">route <code>slotfill</code> &rarr; <b>super</b></div>
 <div class="pill">shard #0 &rarr; <code>cg-l40s-a-00</code></div>
 <div class="pill">telemetry <code>cg-l40s-a-00</code> util 0.0% &middot; 25.0&deg;C &middot; 36.5 W &middot; <span class="ok">OK</span></div>
-<div class="pill">efficiency not counted on <code>cg-l40s-a-00</code> (0.0): no GPU work declared &mdash; an idle GPU reads 0, that is not pressure</div>
+<div class="pill">efficiency not counted on <code>cg-l40s-a-00</code> (0.0): no GPU workload declared - an idle GPU reads efficiency 0</div>
 <div class="pill">route <code>slotfill</code> &rarr; <b>super</b></div>
 <div class="pill">shard #1 &rarr; <code>cg-l40s-a-01</code></div>
 <div class="pill">telemetry <code>cg-l40s-a-01</code> util 0.0% &middot; 25.0&deg;C &middot; 35.1 W &middot; <span class="ok">OK</span></div>
-<div class="pill">efficiency not counted on <code>cg-l40s-a-01</code> (0.0): no GPU work declared &mdash; an idle GPU reads 0, that is not pressure</div>
+<div class="pill">efficiency not counted on <code>cg-l40s-a-01</code> (0.0): no GPU workload declared - an idle GPU reads efficiency 0</div>
 <div class="pill">triage: 5 unique failure(s)</div>
 <div class="pill">autofix off: disabled by mission</div>
 <div class="pill">release: <code>cg-l40s-a-00, cg-l40s-a-01</code></div>

@@ -12,12 +12,26 @@ def _norm(text):
     return text.replace("\r\n", "\n")
 
 
-def test_the_committed_rerender_is_what_the_tool_produces(tmp_path):
+@pytest.mark.parametrize("stem", ["report_20261004T031503Z", "report_20261005T001234Z"])
+def test_the_committed_rerender_is_what_the_tool_produces(tmp_path, stem):
     """The re-rendered evidence has a provenance anyone can repeat."""
     out = tmp_path / "r.html"
-    assert report_rerender.main([str(EVIDENCE / "report_20261004T031503Z.md"), str(out)]) == 0
+    assert report_rerender.main([str(EVIDENCE / f"{stem}.md"), str(out)]) == 0
     assert _norm(out.read_text(encoding="utf-8")) == _norm(
-        (EVIDENCE / "report_20261004T031503Z_rerender.html").read_text(encoding="utf-8"))
+        (EVIDENCE / f"{stem}_rerender.html").read_text(encoding="utf-8"))
+
+
+def test_a_node_left_for_being_busy_is_not_called_throttled():
+    rep = report_rerender.from_markdown(
+        (EVIDENCE / "report_20261005T001234Z.md").read_text(encoding="utf-8"))
+    from nge import report_html
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        doc = report_html.render(rep, Path(td) / "r.html").read_text(encoding="utf-8")
+    body = doc.split("raw event log")[0]
+    assert "BUSY then released" in body and "THROTTLED" not in body
+    assert "Shards run on the VMs themselves" in body
+    assert "read after the shard finished" in body and "no GPU work declared" not in body
 
 
 def test_rebuilt_input_matches_the_run():

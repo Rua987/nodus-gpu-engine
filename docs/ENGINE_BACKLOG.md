@@ -42,7 +42,7 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 
 | Id | Item | Priorité | Notes |
 |----|------|----------|-------|
-| M1 | **Vrai GPU** (Nebius Compute VM) | **PARTIEL** | Phase 2 verte : `probe` lit `nvidia-smi` sur une L40S et supprime la VM seul. Phase 3 verte : run hybride 2 L40S, télémétrie réelle dans le heal, rien migré à tort, VM supprimées ; migration sur vraie pression non démontrée |
+| M1 | **Vrai GPU** (Nebius Compute VM) | **VERT** (charge induite) | Phase 2 verte : `probe` lit `nvidia-smi` sur une L40S et supprime la VM seul. Phase 3 verte : run hybride 2 L40S, télémétrie réelle dans le heal, rien migré à tort, VM supprimées. Phase 4 verte : migration réelle hors d'une L40S occupée par une charge induite et déclarée, 26,8 s → 20,3 s ; surchauffe spontanée jamais vue |
 | M2 | Brancher SDK Compute (SA, create/delete, probe SSH) | **P0** | Phases 0 et 1 **vertes** 2026-10-03 (clé acceptée ; inventaire 9 régions ; cible L40S eu-north1) · **next : Phase 2 sur Go** |
 | M3 | ~~Probe TF run complet~~ | **OK** | fermé 2026-09-05 |
 | M4 | Image CUDA Contree (deps only) | **P2** | |
@@ -95,6 +95,7 @@ Légende : **OK** = prouvé · **PARTIEL** = code là, preuve incomplète · **M
 | 2026-10-03 | Phase 3, avant toute VM : faille du plan | GPU sans charge → efficacité 0 → le heal aurait migré hors de GPU sains ; corrigé (`gpu_workload`) ; preuve visée revue |
 | 2026-10-03 | Phase 3 : `ComputeGpuFleet` + `hybrid` | flotte réelle (VM étiquetées, auto-extinction, release sûr), run hybride autofix coupé ; testé sans réseau ; **pas lancé** |
 | 2026-10-04 | **Phase 3, live hybride** (Go 2 L40S 12 min) — **verte** | 2 L40S prêtes à 192 s ; `nvidia-smi` réel ×2 (25 °C, ~36 W, 0 %) → `gpu_efficiency_skipped` ×2, 0 remediation ; VM supprimées à 439 s ; 0 ressource restante (vérifié) ; ≈ 0,35 $ |
+| 2026-10-05 | **Phase 4, run 2** (Go 3 L40S 20 min) — **verte** | charge induite déclarée 100 % / 324 W, processus `./nge_burn` identifié → `busy` → 3e VM → migration ; même shard 26,8 s chargé → 20,3 s neuf, témoin 20,3 s ; 0 ressource restante ; ≈ 0,67 $. Rapport d'origine : « THROTTLED » et « Token Factory sandboxes » faux → générateur corrigé, re-rendu |
 | 2026-10-04 | **Phase 4, run 1** (Go 3 L40S 20 min) — **migration réelle, relance vide** | charge induite 100 % / 324 W → `busy` → 3e VM → migration ; relance exit 4 (payload jamais renvoyé à la migration — bug ancien), durées non comparables (`nvcc` > GPU), liste de processus vide (`exit 0` de la sonde) ; les trois corrigés ; 0 ressource restante ; ≈ 0,65 $ |
 | 2026-10-04 | Phase 4 : contention **induite et déclarée** — construite, **pas lancée** | shards GPU (`bench/gpubench`, CUDA via `nvcc`) exécutés sur les VM (sandbox `compute`), charge `gpu_burn.cu` sur un nœud déclarée dans le rapport, règle `busy` (≥ 90 % après notre shard), durées avant/après ; l'efficacité ne déclenche plus jamais sur `nvidia-smi` (lecture post-shard) ; testé sans réseau, scripts distants vérifiés (`sh -n`, envoi rejoué en local) |
 | 2026-10-04 | **Film live sur bugbench (A3)** | vrais patchs Nemotron, sandboxes Token Factory, 6 bugs : 5/6 vérifiés ×3 runs, 15/15 sur les cas cachés (`.holdout.json`) ; ~1 ¢/run. Corrigé au passage : nœuds CPU nommés `nb-h100`, console « 0 °C OK », avertissement « Token expires in 0 hours » (jeton de 5 min recréé à chaque appel) |

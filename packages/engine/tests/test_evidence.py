@@ -257,3 +257,27 @@ def test_first_contention_run_migrated_on_a_real_busy_gpu_but_re_ran_nothing():
     assert done[1]["exit_code"] == 0                     # CUDA built and checked on an idle L40S
     tele = [e["telemetry"] for e in _kinds(ev, "gpu_status")]
     assert all(t["probe_kind"] == "nvidia-smi" and t["gpu_processes"] == "" for t in tele)
+
+
+def test_second_contention_run_moved_a_gpu_job_off_a_busy_l40s_and_timed_it():
+    """docs/COMPUTE_GPU.md, Phase 4, run 2 - the claim: under a declared induced
+    load, the heal saw a real busy GPU (and who held it), migrated, and the same
+    shard ran 26.8 s on the loaded node against 20.3 s on the fresh one; the
+    control shard on an idle node took 20.3 s too."""
+    ev = _events("report_20261005T001234Z")
+    (load,) = _kinds(ev, "gpu_load_induced")
+    assert load["declared"] is True and load["node_id"] == "cg-l40s-a-00"
+    (p,) = _kinds(ev, "gpu_pressure")
+    assert p["health"] == "busy" and p["util_pct"] == 100.0
+    assert "nge_burn" in p["gpu_processes"]
+    (rem,) = _kinds(ev, "gpu_remediation")
+    assert (rem["from"], rem["to"], rem["reason"]) == ("cg-l40s-a-00", "cg-l40s-a-02", "busy")
+    assert rem["exit_before"] == rem["exit_after"] == 0
+    assert rem["duration_before_s"] == 26.777 and rem["duration_after_s"] == 20.255
+    control = [e for e in _kinds(ev, "shard_done") if e["index"] == 1]
+    assert control[0]["exit_code"] == 0 and control[0]["node_id"] == "cg-l40s-a-01"
+    md = (EVIDENCE / "report_20261005T001234Z.md").read_text(encoding="utf-8")
+    assert "| 1 | `cg-l40s-a-01` | 0 | 20.293 | 0 |" in md
+    for ext in (".md", ".html", "_rerender.html"):
+        text = (EVIDENCE / f"report_20261005T001234Z{ext}").read_text(encoding="utf-8")
+        assert not re.search(r"computeinstance-|project-e0|\b\d{1,3}(?:\.\d{1,3}){3}\b", text)

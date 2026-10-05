@@ -6,7 +6,8 @@
 > **2026-10-03** (reasoning lever, bugbench, Compute probe, recaptured film); Compute Phase 3
 > hybrid run added **2026-10-04**, then read end to end again the same day.
 
-Do **not** paste `AUTORESEARCH_VISION.md` / SkillSpector / a migration under real GPU pressure (never happened) as if shipped.
+Do **not** paste `AUTORESEARCH_VISION.md` / SkillSpector / a spontaneous overheating migration (never happened — the real
+migration was under a load we induced and declared) as if shipped.
 
 ---
 
@@ -71,9 +72,9 @@ Live film (`--live`, six seeded bugs): **real Nemotron patches — 5/6 verified 
 all 5 also pass hidden cases the model never saw** (three runs: 15/18 verified, 15/15 hold).  
 Mock film (`--heuristic-plan`): the heal — GPU migrate `02 → 03` on simulated H100s — with canned patches, 2/3.  
 Live (`--live`): real **Nemotron @ Token Factory** + Contree sandboxes. Contree is **CPU today** (`probe_kind=cpu-fallback`); thermal heal is **gated** until real `nvidia-smi` — we refuse fake H100 metrics.  
-Real GPU: on two Nebius AI Cloud **L40S** VMs it created itself, the heal loop read real `nvidia-smi`,
-migrated nothing by mistake (an idle GPU is not "inefficient") and deleted both VMs. There was no real
-pressure, so no real migration — we did not stage one.
+Real GPU: on Nebius AI Cloud **L40S** VMs it creates and deletes itself, the heal loop reads real `nvidia-smi`.
+Idle GPUs: nothing migrated by mistake. A GPU held by another process — a load we **induced and declared** — :
+the loop named the process, moved the shard to a fresh VM, and the same work went from **26.8 s to 20.3 s**.
 
 ---
 
@@ -103,6 +104,7 @@ Live film (real patches + hidden checks): `packages/engine/evidence/report_20261
 Mock film (2/3 + migrate): `packages/engine/evidence/report_20261003T233405Z.html`  
 Live Nebius proof (Contree + Super 0/3): `packages/engine/evidence/report_20260913T053458Z_honest.html` (a re-render of that run — provenance in `packages/engine/evidence/README.md`)  
 Live after the reasoning fix (real sandboxes, simulated fleet): `packages/engine/evidence/report_20261002T055558Z.html`  
+Real migration (3 × L40S, declared induced load, timed): `packages/engine/evidence/report_20261005T001234Z_rerender.html`
 Real GPUs (Compute fleet of 2 × L40S + Token Factory sandboxes): `packages/engine/evidence/report_20261004T031503Z_rerender.html`
 — the same run re-rendered so the heal decision shows in the story (provenance in the evidence README); it lists
 one failure that does not exist, `test_connect_mc`; why is under Challenges
@@ -128,7 +130,10 @@ We use **Nebius Token Factory** as the OpenAI-compatible endpoint and **NVIDIA N
   VM, reads `nvidia-smi` over SSH (27 °C, 67.8 W, classified `datacenter`) and deletes it —
   192 s, `packages/engine/evidence/compute_probe_20261003T231022Z.json`. Then a hybrid run: two L40S
   VMs as the fleet, shards in Token Factory sandboxes, real telemetry in every heal decision, both
-  VMs deleted — `packages/engine/evidence/report_20261004T031503Z.md`.
+  VMs deleted — `packages/engine/evidence/report_20261004T031503Z.md`. Then shards whose tests run CUDA
+  on the VMs (a checked matmul built with the image's `nvcc`), a GPU burn started on one node and declared
+  as induced: the loop read the busy GPU and the process on it, opened a third VM, migrated, and timed the
+  same shard 26.8 s → 20.3 s — `packages/engine/evidence/report_20261005T001234Z_rerender.html`.
 
 Token Factory Contree nodes are **not** physical H100s. Live probes report `cpu-fallback`. That is a product fact, not a bug.
 
@@ -199,6 +204,7 @@ model reply is labelled cut, and a sandbox that cut its output never yields a "v
 
 - **324M plans are small.** Wrong tool list gates autofix off. We surface `plan(nodus-324m)` vs `plan(heuristic)` and refuse silent edits.  
 - **Contree ≠ GPU device.** Efficiency=0 on CPU used to trigger phantom migrations. Heal now requires real GPU metrics.  
+- **The first real migration re-ran nothing.** On a fresh VM the re-run had no files — pytest exit 4 — because the heal had never re-shipped them: the simulated sandbox needs none, so nobody saw it. The same run listed no GPU process because the telemetry probe exits once it has read the GPU. Both fixed, the second with a test that runs the script in a real shell; the next run migrated, re-ran and timed it.
 - **A real GPU can lie the same way.** An idle L40S reads 0 % utilisation, so efficiency 0: on real metrics the heal would have migrated shards off healthy GPUs. Caught before any VM was created; low efficiency now counts only when the job declares GPU work. The live run then skipped it twice, correctly (`gpu_efficiency_skipped`).  
 - **Patches that fix one test and break others.** Keep only suite-green diffs.  
 - **Flaky / truncated model replies.** Caps, `patch_truncated`, bounded retries — not an infinite Super bill.
@@ -214,8 +220,9 @@ model reply is labelled cut, and a sandbox that cut its output never yields a "v
 - On six seeded bugs re-checked against held-out cases the model never saw, every patch the loop called
   verified was a real fix, and none broke another test — in the benchmark, and again in the live film
   (15/15 across three runs).
-- The heal loop ran on real Nebius L40S GPUs it created and deleted itself, and migrated nothing by
-  mistake.
+- The heal loop ran on real Nebius L40S GPUs it created and deleted itself: it migrated nothing by mistake
+  on idle ones, and moved a GPU job off one that another process held (a load we induced and declared) —
+  26.8 s there, 20.3 s on the fresh VM.
 - Bugs found by measuring, not guessing: reasoning eating the token budget, `-x` hiding failures, a
   prompt placeholder copied into a command, and a 64 KiB output cut that invented a test.
 
@@ -235,8 +242,12 @@ Then the heal loop ran on real GPUs: two L40S VMs, real `nvidia-smi` in each hea
 both VMs deleted (`packages/engine/evidence/report_20261004T031503Z.md`). Building it caught a flaw first: an idle GPU
 reads efficiency 0, which would have migrated shards off healthy nodes — fixed before any VM was created.
 
-Next: a migration under real GPU pressure needs GPU work on the node (the shards run on CPU sandboxes today), and
-per-SKU thresholds (they are H100-tuned; an L40S tops out near 350 W). Not claimed as done.
+Then a real migration: CUDA shards on the VMs, a GPU load induced and declared on one node, the shard moved and
+timed, 26.8 s → 20.3 s (`packages/engine/evidence/report_20261005T001234Z_rerender.html`).
+
+Next: the heal is reactive — it re-runs a shard after reading the node, which only pays on long jobs; checking a
+node before placing work there, live migration with state, and per-SKU thresholds (H100-tuned today; an L40S
+tops out near 350 W). Not claimed as done.
 
 ---
 
@@ -301,8 +312,8 @@ python -m nge.demo_nebius --mock --watch --watch-delay 2.0 --heuristic-plan
 5. **Four criteria** — the sections above.  
 6. **Limits** — the heal is shown on simulated H100s; the patches are shown live (Token Factory + Nemotron, seeded
    bugs we wrote); Contree = CPU, heal gated;
-   the heal loop has run once on real GPUs (2 × L40S, real telemetry, nothing migrated by mistake); no migration
-   under real pressure — there was none.
+   on real GPUs (L40S) the heal migrated once, under a load we induced and declared; no spontaneous overheating
+   has been seen.
 
 Do **not** invent “GPU $ saved”. We did not invoice that.
 
@@ -313,8 +324,8 @@ Do **not** invent “GPU $ saved”. We did not invoice that.
 2. Browser: **control room** HTML (cards + Story + diffs).  
 3. Optional 10 s: `--live` usage line + `heal gated` / `cpu-fallback`.  
 3b. Optional 10 s: the Compute probe report — `probe_kind=nvidia-smi`, `NVIDIA L40S`, `deleted: true` — or the
-    hybrid report `report_20261004T031503Z_rerender.html`: two `cg-l40s-a` cards at 25 °C, 0 migrations, and in
-    the story « efficiency not counted … an idle GPU reads 0, that is not pressure ».  
+    contention report `report_20261005T001234Z_rerender.html`: « induced load (declared) », « busy … on the GPU:
+    ./nge_burn », « migrate … 26.8 s there, 20.3 s here ».  
 4. Do **not** lead with taxonomy benches or AutoResearch.
 
 ---
@@ -322,8 +333,9 @@ Do **not** invent “GPU $ saved”. We did not invoice that.
 ## Do not write on Devpost
 
 - “We heal real H100s in production today.”  
-- “The engine heals real GPUs.” (the heal loop read real L40S telemetry once, with no pressure; it has never
-  migrated off a real GPU)  
+- “The engine heals real GPUs in production.” (one real migration, off an L40S held by a load we induced)
+- “Migrating saved time.” (the same shard ran faster elsewhere; with the re-run and the VM boot, the run as a
+  whole took longer)  
 - “Ultra is billed on every `--live` plan.” (often 324M).  
 - “3/3 always verified.”  
 - DeepSeek / Ollama as the submission path (`NGE_TRACK=nebius` blocks them).

@@ -1,8 +1,9 @@
 # Nebius Compute GPU — plan et résultats
 
-> **Statut : Phases 0 à 3 faites.** Chaque VM a eu son **Go budget** explicite ; aucune sans.  
-> Dernière écriture : **2026-10-04** (**Phases 0 à 3 vertes** : `nvidia-smi` réel sur une L40S, puis le heal
-> en hybride sur 2 L40S — télémétrie réelle, rien migré à tort ; migration sur vraie pression : non démontrée).  
+> **Statut : Phases 0 à 4 faites.** Chaque VM a eu son **Go budget** explicite ; aucune sans.  
+> Dernière écriture : **2026-10-05** (**Phases 0 à 4 vertes** : `nvidia-smi` réel sur une L40S ; le heal en
+> hybride sur 2 L40S, rien migré à tort ; puis **une vraie migration** hors d'une L40S occupée par une charge
+> **induite et déclarée**, mesurée : 26,8 s → 20,3 s pour le même shard. Surchauffe spontanée : jamais vue).  
 > Lié : `ENGINE_BACKLOG.md` (M1/M2/M13) · `RISKS_TO_STRENGTHS.md` · `AUTORESEARCH_VISION.md` (perso).
 
 Objectif : `probe_kind=nvidia-smi` sur un **device NVIDIA réel**, pour que heal + placement deviennent une **preuve**, pas seulement un mock.
@@ -315,7 +316,7 @@ nom de test en échec existe dans le code.
 
 ### Phase 4 — Exec sur Compute : une vraie migration, sous charge **induite et déclarée**
 
-*Construit le 2026-10-04 ; **run 1 le même jour : migration réelle, relance vide** (ci-dessous).*
+*Construit le 2026-10-04 ; run 1 : migration réelle, relance vide ; **run 2 (2026-10-05) : vert** (ci-dessous).*
 
 Pourquoi : en Phase 3 aucun GPU ne travaillait, donc aucune pression réelle ne pouvait
 exister, et provoquer une surchauffe aurait été une mise en scène. Ici, la charge est
@@ -380,10 +381,37 @@ Ce qu'il ne prouve pas, et pourquoi :
   **Corrigé** (sous-shell), avec un test qui exécute vraiment le script dans `sh` avec un faux
   `nvidia-smi` — il échoue sur l'ancien script exactement comme le run live.
 
-Ce que ça prouvera, si un run 2 passe : la boucle voit une vraie contention sur de vraies
-métriques, migre, et le gain se mesure. Ce que ça ne prouvera pas : une surchauffe ou une
-panne spontanée ; la charge est la nôtre, et le rapport le dit. Tests :
-`tests/test_gpu_contention.py`, `tests/test_real_gpu_heal_gate.py`.
+**Run 2 (Go « contention run 2, 3 L40S max 20 min », 2026-10-05 ~00:00–00:12 UTC, code `184effd`)** —
+[`evidence/report_20261005T001234Z.md`](../packages/engine/evidence/report_20261005T001234Z.md) (+ `.html` d'origine et
+[`_rerender.html`](../packages/engine/evidence/report_20261005T001234Z_rerender.html) : le rendu d'origine disait « THROTTLED » pour un
+nœud occupé et « Shards run in Token Factory sandboxes » ; générateur corrigé, puis re-rendu par
+`nge.report_rerender`). Couvert par `tests/test_evidence.py`. 0 instance / 0 disque après (vérifié à part).
+≈ 26 min-VM, ≈ 0,67 $.
+
+| t (s) | événement |
+|---|---|
+| 167 | 2 VM L40S prêtes (venv compris) |
+| 183 | charge induite sur `cg-l40s-a-00` : 100 %, 322,9 W après 5 s |
+| 231 | shard 0 fini sur `-00` en **26,8 s** (exit 0) ; `nvidia-smi` : 100 %, 324,3 W, 61 °C, sur le GPU **`3043, ./nge_burn, 428 MiB`** → `busy` |
+| 239–377 | placement : aucun nœud éligible → une 3e VM ; `cg-l40s-a-02` choisie (score 157) |
+| 411 | **migration** `-00 → -02` ; le même shard y tourne en **20,3 s** (exit 0) |
+| 549 | shard témoin sur `-01`, nœud libre : **20,3 s** (exit 0) |
+
+Ce que le run 2 prouve : sur de vraies métriques, la boucle voit qu'un autre processus occupe
+un GPU (et lequel), refuse les nœuds existants, ouvre une VM, y relance le shard, et la
+différence se mesure : **+32 %** de temps sous charge (26,8 s contre 20,3 s), les deux mesures
+à vide concordant à 0,04 s près.
+
+Ce qu'il ne prouve pas :
+- **Une panne ou une surchauffe spontanée.** La charge est la nôtre ; le rapport le dit.
+- **Que migrer ait été rentable ici.** Le heal est réactif : il lit le nœud après le shard et
+  *relance* le shard ailleurs. Pour un shard de 27 s, la relance plus 2 min 20 de démarrage de
+  VM coûtent plus que les 6,5 s gagnées ; l'intérêt vient sur des travaux longs, ou pour les
+  placements suivants. Pas de migration à chaud (pas de reprise d'état).
+- **Un ralentissement général.** +32 % pour ce noyau et cette charge, une fois ; le partage
+  du GPU entre deux processus dépend des deux. Seuils par SKU : toujours non faits.
+
+Tests : `tests/test_gpu_contention.py`, `tests/test_real_gpu_heal_gate.py`.
 
 ---
 
@@ -426,7 +454,8 @@ panne spontanée ; la charge est la nôtre, et le rapport le dit. Tests :
 | 0 | `check_credentials()["ready_for_wire"] is True` |
 | 1 | Script read-only liste platform/image OK — **fait** (`inventory`) |
 | 2 | 1 run : provision → `nvidia-smi` → delete ; log `probe_kind=nvidia-smi` — **fait 2026-10-03** (L40S, 192 s) |
-| 3 | 1 live hybride : télémétrie réelle → décision de heal, rien migré à tort, VM supprimées — **fait 2026-10-04** (2 L40S). Migration sur vraie pression : non démontrée (aucune pression réelle) |
+| 3 | 1 live hybride : télémétrie réelle → décision de heal, rien migré à tort, VM supprimées — **fait 2026-10-04** (2 L40S) |
+| 4 | 1 live contention : charge induite déclarée → `busy` → migration → même shard plus rapide ailleurs — **fait 2026-10-05** (run 2 ; run 1 avait relancé à vide) |
 
 ---
 
@@ -445,6 +474,6 @@ panne spontanée ; la charge est la nôtre, et le rapport le dit. Tests :
 2. ~~**Go Phase 1**~~ — **fait 2026-10-03** (cible : L40S eu-north1)  
 3. ~~**Go Phase 2**~~ — **fait 2026-10-03** (L40S ; 1er essai raté puis corrigé, 2e réussi)
 4. ~~**Phase 3**~~ — **fait 2026-10-04** (2 L40S, rien migré à tort ; a révélé la coupe de sortie ContreeSDK, corrigée)
-5. **Phase 4** (contention induite et déclarée) — run 1 fait 2026-10-04 : migration réelle, relance vide ; corrigé ; **run 2 : Go € requis**
+5. ~~**Phase 4**~~ — **faite 2026-10-05** (run 2 vert : migration hors d'une L40S occupée, 26,8 s → 20,3 s ; run 1 avait révélé une relance sans fichiers)
 
 Sans Phase 0, tout le reste est du papier.
