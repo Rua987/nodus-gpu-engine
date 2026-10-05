@@ -222,6 +222,7 @@ def test_hybrid_run_counted_a_cut_name_and_the_replay_shows_why():
     ("report_20261004T221630Z", "test_cart_total_counts_every_item"),
     ("report_20261004T222054Z", "test_slug_collapses_punctuation_and_spaces"),
     ("report_20261004T222707Z", "test_discount_takes_a_percentage"),
+    ("report_20261005T004845Z", None),                    # the rehearsal: 6/6
 ])
 def test_live_bugbench_film_real_patches_pass_hidden_cases(stem, failed):
     """JUDGE_DRY_RUN mode A3 / Devpost: real Nemotron patches, verified in real
@@ -231,11 +232,14 @@ def test_live_bugbench_film_real_patches_pass_hidden_cases(stem, failed):
     assert (rs["fleet_mode"], rs["sandbox_mode"]) == ("nebius", "token_factory")
     assert _kinds(ev, "triage")[0]["unique_failures"] == 6
     verified = [e["test"] for e in _kinds(ev, "fix_verified")]
-    assert len(verified) == 5 and not any(t.endswith(failed) for t in verified)
+    if failed is None:
+        assert len(verified) == 6
+    else:
+        assert len(verified) == 5 and not any(t.endswith(failed) for t in verified)
     assert all(e["regressions"] == 0 for e in _kinds(ev, "fix_verified"))
     assert not _kinds(ev, "gpu_remediation")             # heal gated: CPU sandboxes
     hold = json.loads((EVIDENCE / f"{stem}.holdout.json").read_text(encoding="utf-8"))
-    assert hold["verified"] == hold["judged"] == hold["holdout_ok"] == 5
+    assert hold["verified"] == hold["judged"] == hold["holdout_ok"] == len(verified)
     assert sorted(r["test"] for r in hold["rows"]) == sorted(verified)
 
 

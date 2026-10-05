@@ -177,3 +177,16 @@ def test_a_cut_shard_output_is_flagged_in_the_story(tmp_path):
          "stdout_chars": 65535},
     ]), tmp_path / "r.html").read_text(encoding="utf-8")
     assert doc.split("raw event log")[0].count("output cut at the sandbox size limit") == 2
+
+
+def test_simulated_times_are_not_shown_in_story_or_log(tmp_path):
+    rem = {"kind": "gpu_remediation", "shard": 0, "from": "nb-h100-02", "to": "nb-h100-03",
+           "duration_before_s": 1.9, "duration_after_s": 1.1}
+    rep = {"plan": {"names": ["bash"], "source": "heuristic"}, "shards": [], "failures": [],
+           "routes": [], "remediations": [], "fixes": [],
+           "events": [{"kind": "run_start", "fleet_mode": "mock", "sandbox_mode": "mock"}, rem]}
+    doc = report_html.render(rep, tmp_path / "m.html").read_text(encoding="utf-8")
+    assert "s there" not in doc.split("raw event log")[0]
+    rep["events"][0]["sandbox_mode"] = "compute"
+    doc = report_html.render(rep, tmp_path / "c.html").read_text(encoding="utf-8")
+    assert doc.split("raw event log")[0].count("same shard 1.9 s there") == 2

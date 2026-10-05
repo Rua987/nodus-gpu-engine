@@ -101,8 +101,17 @@ def _last_telemetry(events: List[dict]) -> Dict[str, dict]:
     return out
 
 
-def _timeline(events) -> str:
+def _simulated(events) -> bool:
+    return any(e.get("kind") == "run_start" and e.get("sandbox_mode") == "mock"
+               for e in events or [])
+
+
+def _timeline(events, simulated: Optional[bool] = None) -> str:
     rows = []
+    # a simulated sandbox's times are made up: never show them as a speed-up.
+    # The story passes only a few events (no run_start), so it is told.
+    if simulated is None:
+        simulated = _simulated(events)
     for e in events:
         k = e.get("kind")
         if k == "model_route":
@@ -183,7 +192,8 @@ def _timeline(events) -> str:
                         f'score={_esc(e.get("score"))}</div>')
         elif k == "gpu_remediation":
             took = ""
-            if e.get("duration_before_s") is not None and e.get("duration_after_s") is not None:
+            if (not simulated and e.get("duration_before_s") is not None
+                    and e.get("duration_after_s") is not None):
                 took = (f' &mdash; same shard {_esc(e["duration_before_s"])} s there, '
                         f'{_esc(e["duration_after_s"])} s here')
             rows.append(f'<div class="pill remediation">&#8635; migrate shard {e["shard"]}: '
@@ -582,7 +592,7 @@ def render(rep: Dict[str, Any], path) -> Path:
 <h2>Story</h2>
 <p class="sub">{story_sub}</p>
 {rem_rows}
-{_timeline(_story_events(events))}
+{_timeline(_story_events(events), simulated=_simulated(events))}
 
 <h2>Shards</h2>
 <table><tr><th>#</th><th>node</th><th>exit</th><th>dur (s)</th><th>failures</th></tr>{shard_rows}</table>

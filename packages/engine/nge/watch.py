@@ -55,6 +55,7 @@ class ConsoleWatch:
         self._title = "fleet"
         self._done = False
         self._expect_cpu = False      # capabilities said: no GPU in these nodes
+        self._sandbox = ""            # from run_start; "mock" times are made up
 
     # -- colour helper --------------------------------------------------
     def _c(self, s: str, code: str) -> str:
@@ -71,6 +72,7 @@ class ConsoleWatch:
                 _GREEN if f.get("heal_enabled") else _YELLOW))
         elif kind == "run_start":
             self._title = f"fleet  ({f.get('fleet_mode')}/{f.get('sandbox_mode')}, jail={f.get('jail')})"
+            self._sandbox = f.get("sandbox_mode") or ""
             self._log.append("run start")
         elif kind == "plan":
             self._log.append(f"plan [{f.get('source')}]: {f.get('names')}")
@@ -141,7 +143,9 @@ class ConsoleWatch:
             nd = self._nodes.setdefault(dst, {})
             nd.update(state="running", shard=f["shard"], migrated_from=src, pressured=False)
             took = ""
-            if f.get("duration_before_s") is not None and f.get("duration_after_s") is not None:
+            # a simulated sandbox's times are made up: no "faster here" in the mock film
+            if (self._sandbox != "mock" and f.get("duration_before_s") is not None
+                    and f.get("duration_after_s") is not None):
                 took = f"  ({f['duration_before_s']}s there, {f['duration_after_s']}s here)"
             self._log.append(self._c(
                 f"↻ migrate  shard {f['shard']}:  {src}  ──▶  {dst}{took}", _CYAN + _BOLD))

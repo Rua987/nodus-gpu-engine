@@ -87,3 +87,17 @@ def test_a_cpu_sandbox_is_not_drawn_as_an_idle_gpu():
     for row in rows:
         assert "cpu sandbox" in row and "no GPU telemetry" in row
         assert "0.0C" not in row and "OK" not in row
+
+
+def test_simulated_times_are_not_shown_as_a_speed_up():
+    """The mock film's sandbox times are made up; "1.9s there, 1.1s here" on
+    screen would read as a measured gain."""
+    def run(sandbox):
+        buf = io.StringIO()
+        w = ConsoleWatch(stream=buf, color=False)
+        w.record("run_start", fleet_mode="x", sandbox_mode=sandbox, jail=True)
+        w.record("gpu_remediation", shard=0, duration_before_s=26.8, duration_after_s=20.3,
+                 **{"from": "a", "to": "b"})
+        return buf.getvalue()
+    assert "s there" not in run("mock")
+    assert "(26.8s there, 20.3s here)" in run("compute")

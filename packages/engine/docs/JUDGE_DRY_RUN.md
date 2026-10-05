@@ -1,7 +1,7 @@
 # Judge dry-run — filmable (~90 s)
 
 Source of truth for the **Coding & Agentic Engineering** pitch.
-Last rehearsal: **2026-10-04** — A2 replayed end to end; see *Rehearsal notes* below.
+Last rehearsal: **2026-10-05** — the six-clip video, every clip replayed; see *Rehearsal notes* below.
 
 ## Which demo when
 
@@ -9,7 +9,7 @@ Last rehearsal: **2026-10-04** — A2 replayed end to end; see *Rehearsal notes*
 |------|---------|-------------------|------|
 | **A2 — recommended film** | `--mock --watch --heuristic-plan` | Keyword plan + `edit_file` → migrate → **auto-fixed 2/3** | €0 |
 | **A — 324M honesty** | `--mock --watch` | Plan 324M → migrate → often **autofix OFF** | €0 |
-| **A3 — live film (real patches)** | `--live --watch --heuristic-plan --scenario scenarios/bugbench_live.json` | Real Nemotron patches on 6 seeded bugs, verified in fresh Token Factory sandboxes, then re-checked on **hidden cases**: 5/6 verified, 5/5 hold (3 runs: 15/18, 15/15). Nodes marked `cpu sandbox`, heal gated | ~1 ¢ |
+| **A3 — live film (real patches)** | `--live --watch --heuristic-plan --scenario scenarios/bugbench_live.json` | Real Nemotron patches on 6 seeded bugs, verified in fresh Token Factory sandboxes, then re-checked on **hidden cases**: 5 or 6 of 6 verified, every verified one holds (4 runs: 21/24, 21/21). Nodes marked `cpu sandbox`, heal gated | ~1 ¢ |
 | **B — live honesty** | `--live --shards 1` | Contree `cpu-fallback`, heal **gated**, Super usage | cents |
 
 **Pitch rule:** **A3** is the proof of « patch and verify » — real model, real sandboxes, hidden
@@ -122,18 +122,35 @@ needs GPU metrics the live sandboxes do not have. Narration in English, over eac
 
 | # | time | screen | say |
 |---|---|---|---|
-| 1 | 0:00–0:12 | GitHub repo page (README top, CI badge) | « This is Nodus-GPU Engine, on Nebius Token Factory and NVIDIA Nemotron. Not a chatbot: a control loop that runs tests, fixes what breaks, and keeps only the fixes it can prove. » |
-| 2 | 0:12–1:22 | terminal, **A3 live** (~140 s real; speed the model waits up 2× in the editor and caption « 2× ») | start: « Live: Nemotron Super on Nebius Token Factory, six seeded bugs. Every node is a Token Factory sandbox — CPU, so the screen says heal gated. » · fixes: « Each failure goes to Nemotron, which writes a patch; it is applied in a fresh sandbox and the whole suite re-runs. » · end: « Five of six verified. Then each kept patch is re-checked on hidden cases the model never saw: five of five. The sixth did not make it — we keep only what we can prove. » |
-| 3 | 1:22–1:52 | terminal, **A2 mock**, `--mock --watch --watch-delay 0.8 --heuristic-plan` (35 s) | « The heal needs GPU metrics, so here it runs on simulated H100s: node 02 overheats, the engine scores a destination and moves the shard to 03. » |
-| 4 | 1:52–2:12 | browser: the HTML the A3 run printed | « Everything lands in one control room: the sandboxes, honestly marked CPU, the story of the run, and the diffs we kept. » |
-| 5 | 2:12–2:32 | browser: `evidence/report_20261005T001234Z_rerender.html` | « On real Nebius L40S GPUs we started a load on one node — induced, and the report says so. The loop saw the busy GPU and the process on it, moved the shard to a fresh VM: 26.8 seconds there, 20.3 here. » |
+| 1 | 0:00–0:12 | GitHub repo page (README top, CI badge) | « Nodus-GPU Engine, on Nebius Token Factory and NVIDIA Nemotron: a loop that runs tests, fixes what breaks, and keeps only the fixes it can prove. » |
+| 2 | 0:12–1:27 | terminal, **A3 live** (140–210 s real — Nemotron's latency varies; cut or speed the model waits up 3× in the editor and caption « 3× ») | start: « Live: Nemotron Super on Nebius Token Factory, six seeded bugs. Every node is a Token Factory sandbox — CPU, so the screen says heal gated. » · fixes: « Each failure goes to Nemotron, which writes a patch; it is applied in a fresh sandbox and the whole suite re-runs. » · end — **say the number on screen**: 6/6 → « All six verified, and every patch also passes hidden cases the model never saw. » · 5/6 → « Five of six verified, all five pass hidden cases the model never saw; the sixth did not make it — we keep only what we can prove. » |
+| 3 | 1:27–1:52 | terminal, **A2 mock**, `--mock --watch --watch-delay 0.8 --heuristic-plan` (36 s; trim to the migrate moment) | « The heal needs GPU metrics, so here it runs on simulated H100s: node 02 overheats, the engine scores a destination and moves the shard to 03. » |
+| 4 | 1:52–2:10 | browser: the HTML the A3 run printed | « Everything lands in one control room: the sandboxes, honestly marked CPU, the story of the run, and the diffs we kept. » |
+| 5 | 2:10–2:32 | browser: `evidence/report_20261005T001234Z_rerender.html` | « On real Nebius L40S GPUs we started a load on one node — induced, and the report says so. The loop saw the busy GPU and the process on it, and moved the shard to a fresh VM: 26.8 seconds there, 20.3 here. » |
 | 6 | 2:32–2:45 | GitHub repo page | « Every claim here is checked by a test against the run's own log. Public, MIT — clone it and run it yourself. » |
 
-Which bug fails in A3 varies by run (three runs: a diff citing code that does not exist, twice;
-a patch cut at its token ceiling, once) — keep the line generic, as above.
+A3's outcome varies by run (four runs: 6/6 once; 5/6 three times — a diff citing code that
+does not exist twice, a patch cut at its token ceiling once). The end line follows the screen.
 
 Before recording: terminal font large (~20 pt), window maximised, notifications off, `cls`,
 `cd packages/engine`; run each command once to warm up; open the HTML files in tabs.
+
+## Rehearsal notes — 2026-10-05 (the six-clip video)
+
+Every clip replayed with its exact command or file:
+
+- **Clip 2 (A3 live)**: 207 s, exit 0, no token warning, nodes shown as `cpu sandbox`;
+  this take verified **6/6**, and 6/6 held. The scripted line « five of six… the sixth did not
+  make it » would have been false on camera — the end line now follows the screen. 207 s
+  (137 s on 2026-10-04): at 2× it overran its slot; the slot is now 75 s at 3×.
+- **Clip 3 (A2 mock)**: 36 s, migrate `02 ──▶ 03`. It showed « (1.9s there, 1.1s here) »: a
+  simulated sandbox's times, readable as a measured gain. Times are now shown only when the
+  shards really ran; the mock film's HTML is again identical to `233405Z` but for the time.
+- **Clip 4**: the A3 HTML marks the nodes « CPU — no GPU probe (not an H100) » and the
+  verifications « fresh box »; the diffs are there.
+- **Clip 5**: the re-rendered contention report shows « induced load (declared, not
+  organic) », `busy`, `./nge_burn`, « 26.777 s there, 20.255 s here », « BUSY then released ».
+- Narration fits at ~2.5 words/s; clip 1 was cut to fit its 12 s.
 
 ## Rehearsal notes — 2026-10-04
 
