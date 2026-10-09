@@ -18,6 +18,7 @@ When absent (mock / CI) a deterministic command template is used instead.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import time
@@ -198,7 +199,8 @@ class NgeOrchestrator:
     def _invoke_chat(self, messages, model, tools=None,
                      max_tokens: Optional[int] = None,
                      decision: Optional[str] = None,
-                     thinking: Optional[bool] = None):
+                     thinking: Optional[bool] = None,
+                     response_format: Optional[dict] = None):
         """Call ``chat_fn``; on Nano/Ultra 429/5xx, one hop to Super (logged)."""
         if self.chat_fn is None:
             raise RuntimeError("chat_fn is not set")
@@ -208,6 +210,11 @@ class NgeOrchestrator:
         from nge.backends.usage import guess_tier
 
         def _call(mdl):
+            if response_format is not None:
+                # no silent fallback: a chat_fn that cannot take a schema would
+                # return free text where the caller expects typed JSON
+                return self.chat_fn(messages, mdl, tools, max_tokens=max_tokens,
+                                    thinking=thinking, response_format=response_format)
             # chat_fn may predate either keyword; drop what it does not take
             if thinking is not None:
                 try:
@@ -252,6 +259,9 @@ class NgeOrchestrator:
         model = self._route("slotfill")
         if self.chat_fn is None:
             return f"NGE_SHARD={index}/{shards} {base}"
+        if os.environ.get("NGE_SLOTFILL", "text").strip().lower() == "schema":
+            return self._shard_command_typed(task, plan_names, target, index, shards,
+                                             own, model)
         from nge.backends.nebius import (SLOT_MAX_TOKENS, ModelUnavailableError,
                                          resolve_thinking)
         prompt = (
@@ -325,6 +335,72 @@ class NgeOrchestrator:
                            reason=reason)
                 return fallback
         return cmd
+
+    # The typed slot-fill: the model picks options, the engine writes the
+    # command. Paths, runner and everything a shell could abuse stay ours.
+    SLOT_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "verbosity": {"type": "string", "enum": ["-q", "-v"]},
+            "traceback": {"type": "string", "enum": sorted(_TB_STYLES)},
+            "junitxml": {"type": "boolean"},
+        },
+        "required": ["verbosity", "traceback", "junitxml"],
+        "additionalProperties": False,
+    }
+
+    def _shard_command_typed(self, task: str, plan_names: List[str], target: str,
+                             index: int, shards: int, own: Optional[List[str]],
+                             model: str) -> str:
+        """``NGE_SLOTFILL=schema``: Token Factory enforces the schema at decode
+        time, so an invented flag, a dropped file or a ``$(...)`` cannot be
+        produced at all - not produced and then caught. What is left to the
+        model is small, and that is the point: see docs/FIX_LOOP.md."""
+        from nge.backends.nebius import (SLOT_MAX_TOKENS, ModelUnavailableError,
+                                         resolve_thinking)
+        paths = " ".join(shlex.quote(p) for p in own) if own else shlex.quote(target)
+        fallback = (f"NGE_SHARD={index}/{shards} pip install -q pytest && "
+                    f"python -m pytest {paths} -q --tb=short -p no:cacheprovider")
+        prompt = (
+            "Choose pytest output options for one shard of a distributed test run.\n"
+            f"Task: {task}\nPlan: {plan_names}\nShard {index} of {shards}, "
+            f"{len(own) if own else 'all'} test file(s) under {target}.\n"
+            "verbosity: -q (one line per file) or -v (one line per test); "
+            "traceback: how much of each failure to print; junitxml: also write "
+            "report.xml.")
+        try:
+            msg = self._invoke_chat(
+                [{"role": "user", "content": prompt}], model, None,
+                max_tokens=SLOT_MAX_TOKENS, decision="slotfill",
+                thinking=resolve_thinking("short"),
+                response_format={"type": "json_schema", "json_schema": {
+                    "name": "slotfill", "schema": self.SLOT_SCHEMA, "strict": True}})
+        except ModelUnavailableError as exc:
+            self._emit("model_unavailable", shard=index,
+                       model=getattr(exc, "model", model),
+                       status=getattr(exc, "status", None), error=str(exc))
+            return fallback
+        except Exception as exc:
+            self._emit("slotfill_error", shard=index,
+                       error=f"{type(exc).__name__}: {exc}")
+            return fallback
+        try:
+            opts = json.loads((msg or {}).get("content") or "")
+            assert opts["verbosity"] in ("-q", "-v")
+            assert opts["traceback"] in _TB_STYLES
+            assert isinstance(opts["junitxml"], bool)
+        except Exception:
+            # enforced decoding should make this unreachable; if it is not,
+            # the run must say so rather than trust the reply
+            self._emit("slotfill_schema_violated", shard=index,
+                       reply=str((msg or {}).get("content"))[:200],
+                       finish_reason=(msg or {}).get("finish_reason"))
+            return fallback
+        self._emit("slotfill_typed", shard=index, **opts)
+        return (f"pip install -q pytest && python -m pytest {paths} {opts['verbosity']} "
+                f"--tb={opts['traceback']}"
+                + (" --junitxml=report.xml" if opts["junitxml"] else "")
+                + " -p no:cacheprovider")
 
     @staticmethod
     def _failure_context(stdout: str, test: str, limit: int = 1500) -> str:

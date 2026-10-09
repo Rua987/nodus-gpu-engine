@@ -282,6 +282,10 @@ From building this, in the order we hit things:
   budget, or a clearer note in the model card, would save others that day.
 - **Model ids are case-sensitive and not uniform** (`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`, but
   `nvidia/nemotron-3-super-120b-a12b`); `GET /v1/models` was the source of truth.
+- **Structured output:** a strict `response_format: json_schema` is enforced at decode time on Nemotron 3
+  Super — asked for forbidden values, it still answered inside the enum, 3/3. vLLM's `guided_json` is
+  accepted and silently ignored, and `json_object` is JSON without the schema: an error, or a note in the
+  docs, for the parameters that do nothing would help.
 - **Sandboxes (ContreeSDK):** stdout is cut at 64 KiB by default. The `truncated` flag exists but is easy to
   miss; our first real-GPU run counted a test that does not exist because of it. A warning, or a larger
   default, would help. Also: a `files` value of type `str` is read as a *local path* and only `bytes` as

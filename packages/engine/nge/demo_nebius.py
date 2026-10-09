@@ -73,9 +73,10 @@ def _live_chat_fn(model):
     from nge.backends.nebius import chat_nebius
     register.apply()
 
-    def chat_fn(messages, mdl=None, tools=None, max_tokens=None, thinking=None):
+    def chat_fn(messages, mdl=None, tools=None, max_tokens=None, thinking=None,
+                response_format=None):
         return chat_nebius(messages, mdl or model, tools, max_tokens=max_tokens,
-                           thinking=thinking)
+                           thinking=thinking, response_format=response_format)
     return chat_fn
 
 

@@ -156,6 +156,40 @@ handles them the way `unified_diff` handles diffs. Tool names outside the fixed
 vocabulary are dropped too: the executor only knows those eight, so an invented
 name would fail downstream instead of here.
 
+### Typed slot-fill: the schema is enforced, the gain is a guarantee
+
+Asked after reading about typed-decision models (TypeSafe's Jev): could the
+slot-fill return typed choices instead of a command? Token Factory has to
+*enforce* a schema for that to mean anything, so that was measured first
+(`bench/schema_probe.py`, `evidence/schema_probe_20261008.txt`): the prompt asks
+for values the schema forbids (`-x`, `full`).
+
+| request | replies inside the schema |
+|---|---|
+| no schema | 0/3 — `-x`, `full`, `null`, as asked |
+| `response_format: json_object` | 0/3 — JSON, any values |
+| vLLM `guided_json` | 0/3 — accepted, **silently ignored** |
+| `response_format: json_schema`, strict | **3/3** — `-v`, `short`, `false` |
+
+`NGE_SLOTFILL=schema` uses the last: the model picks verbosity, traceback style
+and junitxml from enums; the engine writes the command around the shard's own
+files. Measured against free text on the same calls (`bench/slotfill_ab.py`,
+`evidence/slotfill_ab_20261008.csv`, 10 interleaved rounds × 2 targets × 2 shards):
+
+| mode | usable commands | mean latency | mean output tokens |
+|---|---|---|---|
+| free text | 40/40 | 0.87 s | 55.9 |
+| typed | 40/40 | 0.78 s | 22.0 |
+
+So, today, no difference in what reaches the sandbox: since the reasoning and
+prompt fixes, free text already passed every guard. What the typed mode adds is
+that the failures seen live — a dropped file list, an invented `--gpu`, `$(...)`,
+`-x` — cannot be produced at all, instead of being produced and caught; and 61 %
+fewer output tokens. It also shows how little the slot-fill decides: the typed
+model chose `-v --tb=short --junitxml` every time. Free text stays the default
+until it is run on the live film; a schema request that fails falls back to the
+template like any other slot-fill error.
+
 ## Why a patch was not produced
 
 Three causes that used to share one name:
@@ -330,6 +364,8 @@ Caveats, so the table is not over-read:
   `--- `/`+++ ` prefixes is a different case, and is restored.)
 - A shard whose output is still cut at 4 MiB loses the failures past the cut.
   The report says so; it does not recover them (`report.xml` is not read back).
+- The typed slot-fill enforces the *form* of the options, not that they suit
+  the shard; and it says nothing for patches, which have to be free text.
 - The patch-reasoning default is a tie broken by weak evidence (one fix on the
   hard set), not a measured win. Re-run `bench/thinking_ab.py --target bugbench`
   with more runs, or on harder bugs, before arguing it either way.

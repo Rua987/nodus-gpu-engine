@@ -1,0 +1,81 @@
+round,mode,target,shard,files,usable,fallback_reason,seconds,out_tokens,command
+0,text,nodus,0,7,1,,0.92,91,ges/nodus/tests/test_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py -q -v --tb=short --junitxml=report.xml
+0,text,nodus,1,6,1,,1.44,71,ges/nodus/tests/test_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml
+0,text,engine,0,2,1,,1.44,41,pytest packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml
+0,text,engine,1,1,1,,0.72,30,pytest packages/engine/bench/bugbench/tests/test_shop.py -q -v --tb=short --junitxml=report.xml
+0,schema,nodus,0,7,1,,0.74,22,est_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+0,schema,nodus,1,6,1,,0.72,22,_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+0,schema,engine,0,2,1,,0.74,22, packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+0,schema,engine,1,1,1,,0.72,22,pip install -q pytest && python -m pytest packages/engine/bench/bugbench/tests/test_shop.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+1,text,nodus,0,7,1,,0.89,82,tests/test_nodus_plan_slotfill.py packages/nodus/tests/test_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py
+1,text,nodus,1,6,1,,0.86,71,ges/nodus/tests/test_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml
+1,text,engine,0,2,1,,0.74,41,pytest packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml
+1,text,engine,1,1,1,,0.7,30,pytest packages/engine/bench/bugbench/tests/test_shop.py -q -v --tb=short --junitxml=report.xml
+1,schema,nodus,0,7,1,,0.72,22,est_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+1,schema,nodus,1,6,1,,0.67,22,_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+1,schema,engine,0,2,1,,0.75,22, packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+1,schema,engine,1,1,1,,0.72,22,pip install -q pytest && python -m pytest packages/engine/bench/bugbench/tests/test_shop.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+2,text,nodus,0,7,1,,0.89,82,tests/test_nodus_plan_slotfill.py packages/nodus/tests/test_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py
+2,text,nodus,1,6,1,,0.83,71,ges/nodus/tests/test_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml
+2,text,engine,0,2,1,,0.74,41,pytest packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml
+2,text,engine,1,1,1,,0.69,30,pytest packages/engine/bench/bugbench/tests/test_shop.py -q -v --tb=short --junitxml=report.xml
+2,schema,nodus,0,7,1,,0.7,22,est_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+2,schema,nodus,1,6,1,,0.68,22,_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+2,schema,engine,0,2,1,,0.72,22, packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+2,schema,engine,1,1,1,,0.7,22,pip install -q pytest && python -m pytest packages/engine/bench/bugbench/tests/test_shop.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+3,text,nodus,0,7,1,,0.91,82,tests/test_nodus_plan_slotfill.py packages/nodus/tests/test_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py
+3,text,nodus,1,6,1,,0.86,71,ges/nodus/tests/test_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml
+3,text,engine,0,2,1,,0.74,41,pytest packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml
+3,text,engine,1,1,1,,0.88,30,pytest packages/engine/bench/bugbench/tests/test_shop.py -q -v --tb=short --junitxml=report.xml
+3,schema,nodus,0,7,1,,0.71,22,est_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+3,schema,nodus,1,6,1,,0.74,22,_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+3,schema,engine,0,2,1,,0.75,22, packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+3,schema,engine,1,1,1,,0.71,22,pip install -q pytest && python -m pytest packages/engine/bench/bugbench/tests/test_shop.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+4,text,nodus,0,7,1,,0.93,82,tests/test_nodus_plan_slotfill.py packages/nodus/tests/test_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py
+4,text,nodus,1,6,1,,0.84,71,ges/nodus/tests/test_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml
+4,text,engine,0,2,1,,0.97,41,pytest packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml
+4,text,engine,1,1,1,,0.74,30,pytest packages/engine/bench/bugbench/tests/test_shop.py -q -v --tb=short --junitxml=report.xml
+4,schema,nodus,0,7,1,,0.72,22,est_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+4,schema,nodus,1,6,1,,0.75,22,_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+4,schema,engine,0,2,1,,0.79,22, packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+4,schema,engine,1,1,1,,1.83,22,pip install -q pytest && python -m pytest packages/engine/bench/bugbench/tests/test_shop.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+5,text,nodus,0,7,1,,0.93,82,tests/test_nodus_plan_slotfill.py packages/nodus/tests/test_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py
+5,text,nodus,1,6,1,,0.9,71,ges/nodus/tests/test_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml
+5,text,engine,0,2,1,,0.79,34,pytest -v --tb=short packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py
+5,text,engine,1,1,1,,0.73,30,pytest packages/engine/bench/bugbench/tests/test_shop.py -q -v --tb=short --junitxml=report.xml
+5,schema,nodus,0,7,1,,1.41,22,est_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+5,schema,nodus,1,6,1,,0.73,22,_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+5,schema,engine,0,2,1,,0.76,22, packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+5,schema,engine,1,1,1,,0.73,22,pip install -q pytest && python -m pytest packages/engine/bench/bugbench/tests/test_shop.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+6,text,nodus,0,7,1,,0.91,82,tests/test_nodus_plan_slotfill.py packages/nodus/tests/test_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py
+6,text,nodus,1,6,1,,0.88,71,ges/nodus/tests/test_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml
+6,text,engine,0,2,1,,0.89,41,pytest -v --tb=short --junitxml=report.xml packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py
+6,text,engine,1,1,1,,0.71,30,pytest packages/engine/bench/bugbench/tests/test_shop.py -q -v --tb=short --junitxml=report.xml
+6,schema,nodus,0,7,1,,0.81,22,est_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+6,schema,nodus,1,6,1,,0.72,22,_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+6,schema,engine,0,2,1,,0.8,22, packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+6,schema,engine,1,1,1,,0.73,22,pip install -q pytest && python -m pytest packages/engine/bench/bugbench/tests/test_shop.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+7,text,nodus,0,7,1,,0.93,82,tests/test_nodus_plan_slotfill.py packages/nodus/tests/test_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py
+7,text,nodus,1,6,1,,0.87,71,ges/nodus/tests/test_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml
+7,text,engine,0,2,1,,0.78,41,pytest packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml
+7,text,engine,1,1,1,,0.77,30,pytest packages/engine/bench/bugbench/tests/test_shop.py -q -v --tb=short --junitxml=report.xml
+7,schema,nodus,0,7,1,,0.81,22,est_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+7,schema,nodus,1,6,1,,0.74,22,_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+7,schema,engine,0,2,1,,0.75,22, packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+7,schema,engine,1,1,1,,0.73,22,pip install -q pytest && python -m pytest packages/engine/bench/bugbench/tests/test_shop.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+8,text,nodus,0,7,1,,0.91,82,tests/test_nodus_plan_slotfill.py packages/nodus/tests/test_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py
+8,text,nodus,1,6,1,,0.9,71,ges/nodus/tests/test_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml
+8,text,engine,0,2,1,,0.88,34,pytest -v --tb=short packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py
+8,text,engine,1,1,1,,0.76,30,pytest packages/engine/bench/bugbench/tests/test_shop.py -q -v --tb=short --junitxml=report.xml
+8,schema,nodus,0,7,1,,0.72,22,est_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+8,schema,nodus,1,6,1,,0.78,22,_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+8,schema,engine,0,2,1,,0.72,22, packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+8,schema,engine,1,1,1,,0.91,22,pip install -q pytest && python -m pytest packages/engine/bench/bugbench/tests/test_shop.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+9,text,nodus,0,7,1,,0.93,82,tests/test_nodus_plan_slotfill.py packages/nodus/tests/test_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py
+9,text,nodus,1,6,1,,1.12,71,ges/nodus/tests/test_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml
+9,text,engine,0,2,1,,0.8,41,pytest packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml
+9,text,engine,1,1,1,,0.77,30,pytest packages/engine/bench/bugbench/tests/test_shop.py -q -v --tb=short --junitxml=report.xml
+9,schema,nodus,0,7,1,,0.74,22,est_nodus_policy.py packages/nodus/tests/test_nodus_verify.py packages/nodus/tests/test_ssrf_redirect.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+9,schema,nodus,1,6,1,,0.74,22,_nodus_planner.py packages/nodus/tests/test_nodus_tools.py packages/nodus/tests/test_secret_redaction.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+9,schema,engine,0,2,1,,0.72,22, packages/engine/bench/bugbench/tests/test_dates.py packages/engine/bench/bugbench/tests/test_textkit.py -v --tb=short --junitxml=report.xml -p no:cacheprovider
+9,schema,engine,1,1,1,,0.76,22,pip install -q pytest && python -m pytest packages/engine/bench/bugbench/tests/test_shop.py -v --tb=short --junitxml=report.xml -p no:cacheprovider

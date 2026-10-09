@@ -133,7 +133,8 @@ def _reasoning_tokens(usage: dict) -> Optional[int]:
 
 def _chat_nebius_http(messages: list, model_id: str, tools: Optional[list],
                       url: str, api_key: str, max_tokens: int,
-                      thinking: Optional[bool] = None) -> dict:
+                      thinking: Optional[bool] = None,
+                      response_format: Optional[dict] = None) -> dict:
     """POST chat/completions with max_tokens; record usage; return message."""
     import nodus_backends as nb  # vendored normaliser only
 
@@ -149,6 +150,12 @@ def _chat_nebius_http(messages: list, model_id: str, tools: Optional[list],
         # A system "/no_think" is ignored by Token Factory's Nemotron 3; the
         # chat template switch is what actually stops the reasoning.
         payload["chat_template_kwargs"] = {"enable_thinking": bool(thinking)}
+    if response_format:
+        # Measured 2026-10-08: Token Factory enforces a strict json_schema on
+        # Nemotron 3 Super at decode time (asked for forbidden values, it still
+        # answered inside the enum, 3/3); json_object and vLLM's guided_json
+        # are accepted but not enforced.
+        payload["response_format"] = response_format
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -198,7 +205,8 @@ def _chat_nebius_http(messages: list, model_id: str, tools: Optional[list],
 
 def chat_nebius(messages: list, model: str, tools: Optional[list] = None,
                 max_tokens: Optional[int] = None,
-                thinking: Optional[bool] = None) -> dict:
+                thinking: Optional[bool] = None,
+                response_format: Optional[dict] = None) -> dict:
     """One chat turn against Nebius Token Factory. Returns an Ollama-style message."""
     assert_nebius_track(model)
     cfg = _cfg.load()
@@ -212,6 +220,7 @@ def chat_nebius(messages: list, model: str, tools: Optional[list] = None,
     return _chat_nebius_http(
         messages, nebius_model_id(model), tools,
         cfg.nebius_chat_url, api_key, cap, thinking=thinking,
+        response_format=response_format,
     )
 
 

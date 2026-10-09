@@ -285,3 +285,25 @@ def test_second_contention_run_moved_a_gpu_job_off_a_busy_l40s_and_timed_it():
     for ext in (".md", ".html", "_rerender.html"):
         text = (EVIDENCE / f"report_20261005T001234Z{ext}").read_text(encoding="utf-8")
         assert not re.search(r"computeinstance-|project-e0|\b\d{1,3}(?:\.\d{1,3}){3}\b", text)
+
+
+def test_token_factory_enforces_a_strict_json_schema_and_nothing_else():
+    """docs/FIX_LOOP.md, typed slot-fill: asked for forbidden values, only the
+    strict json_schema request kept the replies inside the schema."""
+    lines = (EVIDENCE / "schema_probe_20261008.txt").read_text(encoding="utf-8").splitlines()
+    by = {}
+    for line in lines:
+        name = line.split()[0]
+        by.setdefault(name, []).append("IN-SCHEMA" in line)
+    assert by["json_schema"] == [True, True, True]
+    for other in ("none", "json_object", "guided_json"):
+        assert by[other] == [False, False, False]
+
+
+def test_typed_slot_fill_is_as_usable_and_shorter():
+    rows = list(csv.DictReader((EVIDENCE / "slotfill_ab_20261008.csv").open(encoding="utf-8")))
+    for mode in ("text", "schema"):
+        rs = [r for r in rows if r["mode"] == mode]
+        assert len(rs) == 40 and all(r["usable"] == "1" for r in rs)
+    mean = lambda m: sum(int(r["out_tokens"]) for r in rows if r["mode"] == m) / 40  # noqa: E731
+    assert round(mean("text"), 1) == 55.9 and mean("schema") == 22.0
