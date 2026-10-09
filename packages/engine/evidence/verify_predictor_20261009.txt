@@ -1,0 +1,21 @@
+patches from real-model runs: 91 -> {'rejected': 18, 'verified': 65, 'refused_before_vm': 8}
+reaching a verification VM (existing pre-check passed): 83
+  bugbench  test_cart_total_counts_every_item              verified 12  rejected  0
+  bugbench  test_century_divisible_by_400_is_leap          verified 13  rejected  0
+  bugbench  test_days_between_ignores_order                verified 13  rejected  0
+  bugbench  test_discount_takes_a_percentage               verified 12  rejected  0
+  bugbench  test_short_text_is_not_truncated               verified 12  rejected  1
+  bugbench  test_slug_collapses_punctuation_and_spaces     verified  2  rejected  2
+  nodus     test_connect_mcp_falls_back_to_mock_without_launcher verified  0  rejected  3
+  nodus     test_connect_mcp_forwards_org_id_env           verified  0  rejected  3
+  nodus     test_drive_underscore_prefix                   verified  1  rejected  9
+
+[bugbench] 67 patches, 64 verified | leave-one-bug-out: model AUC 0.14, accuracy 0.84 | always-majority accuracy 0.96
+        shuffled labels, same protocol: AUC 0.41 (95% of shuffles in 0.06-0.88) -> the model is inside the noise
+[nodus] 16 patches, 1 verified | leave-one-bug-out: model AUC 0.30, accuracy 0.81 | always-majority accuracy 0.94
+        shuffled labels, same protocol: AUC 0.21 (95% of shuffles in 0.07-0.30) -> the model is inside the noise
+[both] 83 patches, 65 verified | leave-one-bug-out: model AUC 0.77, accuracy 0.90 | always-majority accuracy 0.78
+        shuffled labels, same protocol: AUC 0.46 (95% of shuffles in 0.27-0.63) -> the model is above the noise
+[both + suite id] AUC 0.84, accuracy 0.94
+[suite id ALONE, no patch feature] AUC 0.83 - the pooled signal is which suite the bug is from (nodus's failures are Windows-only tests no patch can fix), not anything about the patch
+csv: evidence/verify_predictor_20261009.csv

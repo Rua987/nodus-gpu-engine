@@ -190,6 +190,45 @@ model chose `-v --tb=short --junitxml` every time. Free text stays the default
 until it is run on the live film; a schema request that fails falls back to the
 template like any other slot-fill error.
 
+### Could a small model predict "this patch will verify"? Not on this data
+
+Asked 2026-10-09, after the typed-decision (Jev) question: train a small
+classifier on logged states, so a patch unlikely to verify never costs a
+verification VM. `bench/verify_predictor.py` tests the one decision whose label
+is ground truth - the patch passed or it did not - offline, on the real-model
+runs kept in `out/thinking_ab` (83 patches that passed the existing pre-checks;
+`evidence/verify_predictor_20261009.{txt,csv}`).
+
+Features known before the VM: lines added / removed, hunks, files, characters,
+touches a test file, edits only test files, line numbers had to be relocated,
+reasoning setting. Leave-one-bug-out (a bug never in both train and test), a
+logistic regression, against trivial baselines and against the same protocol
+with shuffled labels:
+
+| scope | patches (verified) | model AUC | shuffled labels | majority accuracy |
+|---|---|---|---|---|
+| bugbench | 67 (64) | 0.14 | 0.06-0.88 → inside the noise | 0.96 |
+| nodus | 16 (1) | 0.30 | 0.07-0.30 → inside the noise | 0.94 |
+| both | 83 (65) | 0.77 | 0.27-0.63 | 0.78 |
+| **suite id alone** | | **0.83** | | |
+
+- **Inside a suite there is nothing to learn here.** Bugbench has 3 rejected
+  patches out of 67, two of them on one bug; with so few negatives the protocol
+  cannot tell a model from a coin (a shuffled-label model scores anywhere from
+  0.06 to 0.88). Absence of signal is not proof of none - the data cannot answer.
+- **The pooled 0.77 is the suite, not the patch.** The `nodus` failures are
+  Windows-only tests no patch can fix, so their patches are rejected whatever
+  they say; knowing only which suite a bug is from scores 0.83, higher than the
+  model that sees the patch. It would look like a result and be a confound.
+- **What it says about the proposal.** The labels worth having are execution
+  outcomes, and there are too few and too repetitive (the same 6 + 3 bugs,
+  replayed) to train on. Labelling with the heuristic rules teaches the rules;
+  labelling with Nemotron Ultra teaches Ultra's opinion, and a "calibrated 0.9"
+  would measure agreement with Ultra.
+- **The cheap step that does not need a model:** keep, for every fix attempt,
+  the patch, its features and the outcome, in `evidence/` - until 2026-10-09
+  the patches were not versioned, so even this experiment needs a local `out/`.
+
 ## Why a patch was not produced
 
 Three causes that used to share one name:
@@ -362,6 +401,8 @@ Caveats, so the table is not over-read:
 - Hunks with no file header are not recovered. Guessing the target file would
   apply the diff to the wrong one. (A header that is present but lost its
   `--- `/`+++ ` prefixes is a different case, and is restored.)
+- No model predicts verification: tried once, offline, and the data is too small
+  and too repetitive to say yes or no (see *Could a small model predict...*).
 - A shard whose output is still cut at 4 MiB loses the failures past the cut.
   The report says so; it does not recover them (`report.xml` is not read back).
 - The typed slot-fill enforces the *form* of the options, not that they suit
