@@ -263,8 +263,8 @@ python -m pytest -q
 python -m nge.demo_nebius --mock --watch --watch-delay 2.0 --heuristic-plan
 ```
 
-On a clean install the tests report about 490 passed and 26 skipped: the skipped ones need the optional
-cloud SDKs (`nebius`, `cryptography`, `patch-ng`), which the mock path does not. The last command plays
+On a clean install the tests report 532 passed and 21 skipped: the skipped ones need the optional cloud
+SDKs (`nebius`, `cryptography`) or the MCP client, which the mock path does not. The last command plays
 the full loop on a simulated fleet (~85 s) and prints the path of an HTML report;
 open it in a browser. Expected: a migration `nb-h100-02 → nb-h100-03` and 2 of 3 failures fixed and
 verified. Recorded runs, including the live Nebius ones, are in `packages/engine/evidence/` with their

@@ -66,7 +66,7 @@ with its provenance; `tests/test_evidence.py` keeps the citations honest.
 ```bash
 cd packages/engine
 pip install -r requirements.txt
-python -m pytest -q                 # 555 tests; ~26 skip without the optional cloud SDKs
+python -m pytest -q                 # 555 tests; 21 skip without the optional cloud SDKs
 python -m nge.demo_nebius --mock    # -> out/report_<ts>.md  +  .html (self-contained)
 ```
 

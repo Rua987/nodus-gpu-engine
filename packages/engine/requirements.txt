@@ -1,6 +1,9 @@
 # Nodus-GPU Engine - noyau (chemin mock, CI-friendly, sans reseau)
 requests>=2.31
 pytest>=7.4
+# applies the model's patches in the verification step and the held-out check
+# of the live film; without it the film prints "held-out: not checked"
+patch-ng>=1.17
 
 # Extras optionnels (chemin live) - installer a la main si besoin :
 #   pip install torch            # planificateur local 324M (packages/nodus)
