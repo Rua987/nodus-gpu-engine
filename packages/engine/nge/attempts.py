@@ -32,7 +32,9 @@ from typing import Dict, Iterable, List, Optional
 ROOT = "attempts"
 
 # the obstacle, named - what a self-repair turn would be told about
-CATEGORIES = ("fixed", "regression", "target_still_failing", "output_cut", "no_output",
+CATEGORIES = ("fixed", "regression", "target_still_failing", "did_not_apply", "no_change",
+              "output_cut",
+              "no_output",
               "blocked", "context_invented", "truncated", "unparsed", "empty",
               "model_unavailable", "error", "no_patch")
 
@@ -64,6 +66,10 @@ def category(row: dict, test_events: Iterable[dict]) -> str:
     if row.get("regressions"):
         return "regression"
     why = row.get("reason") or ""
+    if "did not apply" in why:
+        return "did_not_apply"
+    if "changes nothing" in why:
+        return "no_change"
     if "cut at the sandbox size limit" in why:
         return "output_cut"
     if "no output" in why:
@@ -93,7 +99,9 @@ def archive(out_dir, run_id: str, rows: List[dict], failures: List[dict],
     root.mkdir(parents=True, exist_ok=True)
     by_test = {f.get("test"): f for f in failures}
     counts: Dict[str, int] = {}
-    with (root / "index.jsonl").open("a", encoding="utf-8") as index:
+    # newline="\n": an archive is a copy - on Windows text mode would turn the
+    # patch's LF into CRLF, which is not the patch that was applied
+    with (root / "index.jsonl").open("a", encoding="utf-8", newline="\n") as index:
         for row in rows:
             test = row["test"]
             tev = [e for e in events if e.get("test") == test]
@@ -106,14 +114,14 @@ def archive(out_dir, run_id: str, rows: List[dict], failures: List[dict],
             f = by_test.get(test) or {}
             (here / "failure.txt").write_text(
                 f"test: {test}\nerror: {f.get('error', '')}\n\n{f.get('context') or ''}",
-                encoding="utf-8")
+                encoding="utf-8", newline="\n")
             if row.get("patch"):
-                (here / "diff.patch").write_text(row["patch"], encoding="utf-8")
+                (here / "diff.patch").write_text(row["patch"], encoding="utf-8", newline="\n")
             if row.get("stdout") or row.get("stderr") or row.get("exit_code") is not None:
                 (here / "pytest.log").write_text(
                     f"# exit code: {row.get('exit_code')}\n# --- stdout ---\n"
                     f"{row.get('stdout') or ''}\n# --- stderr ---\n{row.get('stderr') or ''}",
-                    encoding="utf-8")
+                    encoding="utf-8", newline="\n")
             rec = {
                 "test": test, "run": run_id, "n": n,
                 "verdict": _verdict(row, cat), "category": cat,
@@ -127,7 +135,8 @@ def archive(out_dir, run_id: str, rows: List[dict], failures: List[dict],
                 "events": [e.get("kind") for e in tev],
                 "dir": here.relative_to(root).as_posix(),
             }
-            (here / "attempt.json").write_text(json.dumps(rec, indent=2), encoding="utf-8")
+            (here / "attempt.json").write_text(json.dumps(rec, indent=2), encoding="utf-8",
+                                               newline="\n")
             index.write(json.dumps(rec) + "\n")
             counts[cat] = counts.get(cat, 0) + 1
     return {"dir": ROOT, "attempts": len(rows), "categories": counts}

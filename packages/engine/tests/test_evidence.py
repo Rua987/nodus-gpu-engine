@@ -331,3 +331,16 @@ def test_first_archived_live_run_and_its_index():
     (odd,) = [r for r in rows if r["category"] == "no_output"]
     assert odd["test"].endswith("test_discount_takes_a_percentage") and odd["patch_chars"] > 0
     assert all(r["source"] == "model" and r["max_tokens"] == 8192 for r in rows)
+
+
+
+def test_real_bugs_step_1_smoke_says_what_real_bugs_md_says():
+    rows = list(csv.DictReader((EVIDENCE / "swebench_smoke_20261018.csv").open(encoding="utf-8")))
+    assert len(rows) == 14
+    resolved = [(r["pass"], r["instance"]) for r in rows if r["resolved"] == "True"]
+    assert resolved == [("smoke_B_align", "pallets__flask-5014"),
+                        ("smoke_B_align2", "pallets__flask-5014")]
+    for r in rows:
+        if r["resolved"] == "True":
+            assert (r["reasoning"], r["alignment"] != "none") == ("off", True)
+    assert not [r for r in rows if r["instance"] == "psf__requests-5414" and r["resolved"] == "True"]

@@ -1,0 +1,15 @@
+pass,reasoning,max_tokens,alignment,instance,resolved,reason,applied,files_chosen,finish_reason,seconds
+smoke1,on,8192,none,pallets__flask-5014,False,no patch proposed,,['src/flask/blueprints.py'],length,41.2
+smoke1,on,8192,none,psf__requests-5414,False,no patch proposed,,"['requests/models.py', 'requests/adapters.py', 'requests/api.py']",length,47.1
+smoke_A,on,32768,none,pallets__flask-5014,False,patch did not apply,no,['src/flask/blueprints.py'],stop,58.8
+smoke_A,on,32768,none,psf__requests-5414,False,target test still failing,strict,"['requests/models.py', 'requests/adapters.py', 'requests/api.py']",stop,38.7
+smoke_B,off,8192,none,pallets__flask-5014,False,patch did not apply,no,['src/flask/blueprints.py'],stop,12.8
+smoke_B,off,8192,none,psf__requests-5414,False,target test still failing,strict,"['requests/models.py', 'requests/adapters.py', 'requests/api.py']",stop,16.4
+smoke_A_align,on,32768,retype,pallets__flask-5014,False,patch did not apply,no,['src/flask/blueprints.py'],stop,45.8
+smoke_A_align,on,32768,retype,psf__requests-5414,False,target test still failing,strict,"['requests/models.py', 'requests/adapters.py', 'requests/api.py']",stop,97.0
+smoke_B_align,off,8192,retype,pallets__flask-5014,True,resolved,strict,['src/flask/blueprints.py'],stop,10.2
+smoke_B_align,off,8192,retype,psf__requests-5414,False,target test still failing,strict,"['requests/models.py', 'requests/adapters.py', 'requests/api.py']",stop,11.5
+smoke_A_align2,on,32768,retype+balance,pallets__flask-5014,False,patch did not apply,no,['src/flask/blueprints.py'],stop,98.5
+smoke_A_align2,on,32768,retype+balance,psf__requests-5414,False,target test still failing,strict,"['requests/models.py', 'requests/adapters.py', 'requests/api.py']",stop,46.4
+smoke_B_align2,off,8192,retype+balance,pallets__flask-5014,True,resolved,strict,['src/flask/blueprints.py'],stop,10.5
+smoke_B_align2,off,8192,retype+balance,psf__requests-5414,False,"harness error: ContreeImageStateError: Image state ""None"" cannot have state EXECUTING, it only can be in [<ImageState.FAILED: 'FAILED'>, <ImageState.SUCCEEDED: 'SUCCEEDED'>]",,,,
