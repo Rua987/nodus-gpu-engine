@@ -1,0 +1,34 @@
+##### pallets__flask-5014
+[probe] pallets__flask-5014 (pallets/flask 2.3): FAIL_TO_PASS 1, PASS_TO_PASS 59, test files ['tests/test_blueprints.py']
+[probe] image swebench/sweb.eval.x86_64.pallets_1776_flask-5014:latest
+[probe] sandbox ready in 0.4 s
+[probe] one run: exit 0 in 14.4 s
+[probe] environment:
+  7ee9ceb71e868944a46e1ff00b506772a53a4f1d
+  53f698a0 SWE-bench
+  7ee9ceb7 Merge branch '2.2.x'
+  cac56a2b Merge pull request #5026 from pallets/werkzeug-compat
+  commit
+  -rw-r--r-- 1 root root 390 Oct 18 22:07 /tmp/gold.patch
+  -rw-r--r-- 1 root root 465 Oct 18 22:07 /tmp/test.patch
+[probe] FAIL_TO_PASS failing before: 1/1, passing with the gold patch: 1/1; PASS_TO_PASS passing: 59/59
+[probe] OK - the chain works end to end
+{"instance": "pallets__flask-5014", "image": "swebench/sweb.eval.x86_64.pallets_1776_flask-5014:latest", "base_commit": "7ee9ceb71e868944a46e1ff00b506772a53a4f1d", "create_s": 0.4, "run_s": 14.4, "head_parent": "7ee9ceb71e868944a46e1ff00b506772a53a4f1d", "base_commit_ok": true, "test_patch_applied": true, "gold_patch_applied": true, "f2p_failed_before": 1, "f2p_passed_after": 1, "p2p_passed_after": 59, "f2p": 1, "p2p": 59, "unparsed_ids": [], "ok": true}
+exit=0
+##### psf__requests-5414
+[probe] psf__requests-5414 (psf/requests 2.26): FAIL_TO_PASS 1, PASS_TO_PASS 130, test files ['tests/test_requests.py']
+[probe] image swebench/sweb.eval.x86_64.psf_1776_requests-5414:latest
+[probe] sandbox ready in 0.4 s
+[probe] one run: exit 0 in 26.5 s
+[probe] environment:
+  39d0fdd9096f7dceccbc8f82e1eda7dd64717a8e
+  e8269b7b SWE-bench
+  39d0fdd9 Update README.md (#5998)
+  c193d974 Merge pull request #5993 from davisagli/tox-parallel
+  commit
+  -rw-r--r-- 1 root root 511 Oct 18 22:08 /tmp/gold.patch
+  -rw-r--r-- 1 root root 516 Oct 18 22:08 /tmp/test.patch
+[probe] FAIL_TO_PASS failing before: 1/1, passing with the gold patch: 1/1; PASS_TO_PASS passing: 130/130
+[probe] OK - the chain works end to end
+{"instance": "psf__requests-5414", "image": "swebench/sweb.eval.x86_64.psf_1776_requests-5414:latest", "base_commit": "39d0fdd9096f7dceccbc8f82e1eda7dd64717a8e", "create_s": 0.4, "run_s": 26.5, "head_parent": "39d0fdd9096f7dceccbc8f82e1eda7dd64717a8e", "base_commit_ok": true, "test_patch_applied": true, "gold_patch_applied": true, "f2p_failed_before": 1, "f2p_passed_after": 1, "p2p_passed_after": 130, "f2p": 1, "p2p": 130, "unparsed_ids": [], "ok": true}
+exit=0
