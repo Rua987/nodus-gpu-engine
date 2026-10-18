@@ -9,7 +9,7 @@ Last rehearsal: **2026-10-05** — the six-clip video, every clip replayed; see 
 |------|---------|-------------------|------|
 | **A2 — recommended film** | `--mock --watch --heuristic-plan` | Keyword plan + `edit_file` → migrate → **auto-fixed 2/3** | €0 |
 | **A — 324M honesty** | `--mock --watch` | Plan 324M → migrate → often **autofix OFF** | €0 |
-| **A3 — live film (real patches)** | `--live --watch --heuristic-plan --scenario scenarios/bugbench_live.json` | Real Nemotron patches on 6 seeded bugs, verified in fresh Token Factory sandboxes, then re-checked on **hidden cases**: 5 or 6 of 6 verified, every verified one holds (4 runs: 21/24, 21/21). Nodes marked `cpu sandbox`, heal gated | ~1 ¢ |
+| **A3 — live film (real patches)** | `--live --watch --heuristic-plan --scenario scenarios/bugbench_live.json` | Real Nemotron patches on 6 seeded bugs, verified in fresh Token Factory sandboxes, then re-checked on **hidden cases**: 5 or 6 of 6 verified, every verified one holds (6 runs: 33/36, 33/33). Nodes marked `cpu sandbox`, heal gated | ~1 ¢ |
 | **B — live honesty** | `--live --shards 1` | Contree `cpu-fallback`, heal **gated**, Super usage | cents |
 
 **Pitch rule:** **A3** is the proof of « patch and verify » — real model, real sandboxes, hidden
@@ -129,7 +129,7 @@ needs GPU metrics the live sandboxes do not have. Narration in English, over eac
 | 5 | 2:10–2:32 | browser: `evidence/report_20261005T001234Z_rerender.html` | « On real Nebius L40S GPUs we started a load on one node — induced, and the report says so. The loop saw the busy GPU and the process on it, and moved the shard to a fresh VM: 26.8 seconds there, 20.3 here. » |
 | 6 | 2:32–2:45 | GitHub repo page | « Every claim here is checked by a test against the run's own log. Public, MIT — clone it and run it yourself. » |
 
-A3's outcome varies by run (four runs: 6/6 once; 5/6 three times — a diff citing code that
+A3's outcome varies by run (six runs: 6/6 three times; 5/6 three times — a diff citing code that
 does not exist twice, a patch cut at its token ceiling once). The end line follows the screen.
 
 Before recording: terminal font large (~20 pt), window maximised, notifications off, `cls`,

@@ -223,6 +223,8 @@ def test_hybrid_run_counted_a_cut_name_and_the_replay_shows_why():
     ("report_20261004T222054Z", "test_slug_collapses_punctuation_and_spaces"),
     ("report_20261004T222707Z", "test_discount_takes_a_percentage"),
     ("report_20261005T004845Z", None),                    # the rehearsal: 6/6
+    ("report_20261017T064106Z", None),                    # filmed take 1 (held-out after the run)
+    ("report_20261018T003231Z", None),                    # filmed take 2
 ])
 def test_live_bugbench_film_real_patches_pass_hidden_cases(stem, failed):
     """JUDGE_DRY_RUN mode A3 / Devpost: real Nemotron patches, verified in real
@@ -307,3 +309,10 @@ def test_typed_slot_fill_is_as_usable_and_shorter():
         assert len(rs) == 40 and all(r["usable"] == "1" for r in rs)
     mean = lambda m: sum(int(r["out_tokens"]) for r in rows if r["mode"] == m) / 40  # noqa: E731
     assert round(mean("text"), 1) == 55.9 and mean("schema") == 22.0
+
+
+def test_the_after_the_fact_held_out_check_says_it_is_one():
+    hold = json.loads((EVIDENCE / "report_20261017T064106Z.holdout.json").read_text(encoding="utf-8"))
+    assert hold["checked"] == "after the run, from the diffs in its HTML"
+    film = json.loads((EVIDENCE / "report_20261018T003231Z.holdout.json").read_text(encoding="utf-8"))
+    assert "checked" not in film                    # the film's own check carries no such note
