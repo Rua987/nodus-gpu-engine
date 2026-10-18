@@ -316,3 +316,18 @@ def test_the_after_the_fact_held_out_check_says_it_is_one():
     assert hold["checked"] == "after the run, from the diffs in its HTML"
     film = json.loads((EVIDENCE / "report_20261018T003231Z.holdout.json").read_text(encoding="utf-8"))
     assert "checked" not in film                    # the film's own check carries no such note
+
+
+def test_first_archived_live_run_and_its_index():
+    """FIX_LOOP, *Every attempt is archived*: 4/6 verified, 4/4 hold, and the
+    rejection that was a right fix patch-ng refused (exit 127, no output)."""
+    ev = _events("report_20261018T211503Z")
+    assert len(_kinds(ev, "fix_verified")) == 4
+    hold = json.loads((EVIDENCE / "report_20261018T211503Z.holdout.json").read_text(encoding="utf-8"))
+    assert hold["verified"] == hold["judged"] == hold["holdout_ok"] == 4
+    rows = [json.loads(l) for l in (EVIDENCE / "attempts_20261018.jsonl").read_text(
+        encoding="utf-8").splitlines() if l.strip()]
+    assert len(rows) == 6 and sum(r["verdict"] == "verified" for r in rows) == 4
+    (odd,) = [r for r in rows if r["category"] == "no_output"]
+    assert odd["test"].endswith("test_discount_takes_a_percentage") and odd["patch_chars"] > 0
+    assert all(r["source"] == "model" and r["max_tokens"] == 8192 for r in rows)

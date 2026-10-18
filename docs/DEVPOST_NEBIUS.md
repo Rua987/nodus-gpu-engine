@@ -69,7 +69,7 @@ A code-completion wrapper suggests a fix.
 **Nodus-GPU Engine runs the job:** local plan → sharded pytest on a fleet → migrate off a hot node **after scoring the destination** → patch in a fresh sandbox → re-run the suite → keep only what stays green.
 
 Live film (`--live`, six seeded bugs): **real Nemotron patches, verified in fresh Token Factory sandboxes, and every
-verified one also passes hidden cases the model never saw** (six runs: 33/36 verified, 33/33 hold).  
+verified one also passes hidden cases the model never saw** (seven runs: 37/42 verified, 37/37 hold).  
 Mock film (`--heuristic-plan`): the heal — GPU migrate `02 → 03` on simulated H100s — with canned patches, 2/3.  
 Live (`--live`): real **Nemotron @ Token Factory** + Contree sandboxes. Contree is **CPU today** (`probe_kind=cpu-fallback`); thermal heal is **gated** until real `nvidia-smi` — we refuse fake H100 metrics.  
 Real GPU: on Nebius AI Cloud **L40S** VMs it creates and deletes itself, the heal loop reads real `nvidia-smi`.
@@ -219,7 +219,7 @@ model reply is labelled cut, and a sandbox that cut its output never yields a "v
   checked by a test against the run's own event log (`packages/engine/tests/test_evidence.py`).
 - On six seeded bugs re-checked against held-out cases the model never saw, every patch the loop called
   verified was a real fix, and none broke another test — in the benchmark, and again in the live film
-  (33/33 across six runs).
+  (37/37 across seven runs).
 - The heal loop ran on real Nebius L40S GPUs it created and deleted itself: it migrated nothing by mistake
   on idle ones, and moved a GPU job off one that another process held (a load we induced and declared) —
   26.8 s there, 20.3 s on the fresh VM.

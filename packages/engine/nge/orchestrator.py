@@ -173,6 +173,8 @@ class NgeOrchestrator:
         self.routes: List[dict] = []
         self.remediations: List[dict] = []
         self.fixes: List[dict] = []
+        self._patch_meta: Dict[str, dict] = {}   # test -> how its patch was asked for
+        self._run_id = ""
 
     # -- event log ---------------------------------------------------------
     def _emit(self, kind: str, **fields) -> None:
@@ -903,6 +905,8 @@ class NgeOrchestrator:
 
         handlers.reset_state(self.config)
         self.events.clear()
+        self._patch_meta.clear()
+        self._run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         self.routes.clear()
         self.remediations.clear()
         self.fixes.clear()
@@ -1133,8 +1137,10 @@ class NgeOrchestrator:
         ``--mock``: the canned patch from the fixture catalogue.
         ``--local`` / ``--live``: ask the model (Nemotron Super tier) for a diff.
         """
+        meta = self._patch_meta.setdefault(failure["test"], {})
         if self.chat_fn is None:
             from nge import _fixtures
+            meta["source"] = "canned"
             return _fixtures.canned_patch(failure["test"])
 
         excerpt = self._source_excerpt(failure.get("context") or "")
@@ -1165,6 +1171,8 @@ class NgeOrchestrator:
                                          resolve_thinking)
         patch_cap = resolve_patch_max_tokens()
         patch_thinking = resolve_thinking("patch")
+        meta.update(source="model", model=model, max_tokens=patch_cap,
+                    thinking=patch_thinking, prompt_chars=len(prompt), calls=0)
         for attempt in (1, 2, 3, 4):
             if attempt > 1:
                 # Retrying instantly just spends the flaky window; wait it
@@ -1173,11 +1181,14 @@ class NgeOrchestrator:
                 # the second, and one needed a *fourth*. Nothing was recovered
                 # at five or six, so a fifth attempt buys nothing.
                 time.sleep(self.RETRY_DELAY_S * (attempt - 1))
+            meta["calls"] = attempt
             try:
                 msg = self._invoke_chat([{"role": "user", "content": prompt}],
                                         model, None, max_tokens=patch_cap,
                                         decision="triage",
                                         thinking=patch_thinking)
+                meta.update(finish_reason=(msg or {}).get("finish_reason"),
+                            reasoning_tokens=(msg or {}).get("reasoning_tokens"))
             except ModelUnavailableError as exc:
                 self._emit("model_unavailable", test=failure.get("test"),
                            attempt=attempt, model=getattr(exc, "model", model),
@@ -1411,14 +1422,37 @@ class NgeOrchestrator:
             from nge.fix_cause import annotate_fix
             row = {"test": f["test"], "patch": patch, "verified": verified,
                    "node": node, "stdout": res["stdout"],
-                   "regressions": regressions, "reason": why}
+                   "regressions": regressions, "reason": why,
+                   # kept for the attempt archive: patch-ng refuses a diff
+                   # with exit 127 and no output, which otherwise reads as
+                   # "nothing ran" (first archived live run, 2026-10-18)
+                   "exit_code": res.get("exit_code"), "stderr": res.get("stderr") or ""}
             row.update(annotate_fix(
                 f, reason=why, verified=verified, has_patch=True,
                 regressions=regressions, all_failures=failures))
             fixes.append(row)
             handlers.gpu_release(node_ids=[node])
         self.fixes = fixes
+        self._archive_attempts(fixes, failures, target)
         return fixes
+
+    def _archive_attempts(self, fixes: List[dict], failures: List[dict], target: str) -> None:
+        """Keep every attempt - kept, rejected or never produced - in
+        ``<out_dir>/attempts/`` (nge/attempts.py). No model call; a failure to
+        write must not cost the run its fixes."""
+        from nge import attempts
+        try:
+            summary = attempts.archive(
+                self.config.out_dir,
+                self._run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+                fixes, failures, self.events, self._patch_meta,
+                {"fleet_mode": self.config.fleet_mode, "sandbox_mode": self.config.sandbox_mode,
+                 "target": target})
+        except Exception as exc:
+            self._emit("attempts_archive_failed", error=f"{type(exc).__name__}: {exc}")
+            return
+        if summary:
+            self._emit("attempts_archived", **summary)
 
     # -- artifact -------------------------------------------------------
     def _write_report(self, task, pr, shard_results, failures, fixes=None) -> Path:

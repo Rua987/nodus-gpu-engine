@@ -190,6 +190,34 @@ model chose `-v --tb=short --junitxml` every time. Free text stays the default
 until it is run on the live film; a schema request that fails falls back to the
 template like any other slot-fill error.
 
+### Every attempt is archived
+
+Since 2026-10-18 each fix attempt - verified, rejected, refused before a VM, or
+never produced - is written to `<out_dir>/attempts/` (`nge/attempts.py`): one
+directory per test and run (`attempt.json`, `failure.txt`, `diff.patch`,
+`pytest.log` with the exit code and stderr), and one line per attempt in
+`attempts/index.jsonl`. Nothing is overwritten. `attempt.json` names the
+obstacle (`category`: `fixed`, `regression`, `target_still_failing`,
+`context_invented`, `truncated`, `unparsed`, `no_output`, ...) and keeps how the
+patch was asked for (model, `max_tokens`, reasoning on/off, calls, reasoning
+tokens, finish reason). No extra model call. `NGE_ARCHIVE_ATTEMPTS=0` turns it off.
+
+Why: a later attempt must be able to read what failed before (the shared state
+the Fermat formalisation needed before it worked; Anthropic, 2026), the
+experiments above lacked data, and on 2026-10-17 a take's patch files were
+overwritten by the next run (`out/fixes/` is shared).
+
+**What the first archived live run showed** (`report_20261018T211503Z`,
+`evidence/attempts_20261018.jsonl`): one patch rejected as « sandbox produced no
+output - nothing ran » had the right fix (`/ 10` → `/ 100`) with its context
+lines retyped four spaces too deep. The pre-check matches context ignoring
+whitespace, so it passed; `patch-ng` then refused the diff - exit 127, no output
+- and pytest never started. The verdict (rejected) is right; the reason shown
+is not. Not changed yet: re-indenting such context from the file, and naming
+« patch did not apply », alter what the loop verifies, so they wait for a
+measured run after the submission. The archive now keeps the exit code and
+stderr that tell the two apart.
+
 ### Could a small model predict "this patch will verify"? Not on this data
 
 Asked 2026-10-09, after the typed-decision (Jev) question: train a small
