@@ -344,3 +344,21 @@ def test_real_bugs_step_1_smoke_says_what_real_bugs_md_says():
         if r["resolved"] == "True":
             assert (r["reasoning"], r["alignment"] != "none") == ("off", True)
     assert not [r for r in rows if r["instance"] == "psf__requests-5414" and r["resolved"] == "True"]
+
+
+
+def test_real_bugs_step_2_is_three_of_twenty_one_validated():
+    """docs/REAL_BUGS.md, step 2: a task counts only if its historical fix
+    validates in our sandbox; 3 of the 21 that do were resolved."""
+    rows = list(csv.DictReader((EVIDENCE / "swebench_step2_20261019.csv").open(encoding="utf-8")))
+    assert len(rows) == 28
+    valid = [r for r in rows if r["validated"] == "True"]
+    assert len(valid) == 21
+    assert sorted(r["instance"] for r in valid if r["resolved"] == "True") == [
+        "pallets__flask-5014", "pytest-dev__pytest-6202", "pytest-dev__pytest-8399"]
+    # a resolution on a task that does not reproduce its bug does not count
+    (r1766,) = [r for r in rows if r["instance"] == "psf__requests-1766"]
+    assert r1766["resolved"] == "True" and r1766["validated"] == "False"
+    val = [json.loads(l) for l in (EVIDENCE / "swebench_validation_20261019.jsonl").read_text(
+        encoding="utf-8").splitlines() if l.strip()]
+    assert sum(1 for v in val if v.get("ok")) == 21

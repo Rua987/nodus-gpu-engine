@@ -1,7 +1,7 @@
 # Real bugs — measuring the loop on bugs we did not write
 
-> Started 2026-10-18. Steps 0 and 1 done (step 1 smoke-tested on 2 tasks); steps 2–3 after the
-> submission (2026-10-30).
+> Started 2026-10-18. Steps 0, 1 and 2 done: **3 of 21 validated real bugs resolved** (test-guided,
+> not a SWE-bench score). Step 3 after the submission (2026-10-30).
 
 Why: the live film is proven on six bugs we seeded ourselves (`bench/bugbench`), and
 it is saturated — 7 runs, 37/42 verified, 37/37 hold the hidden cases. No change to
@@ -88,12 +88,56 @@ What it showed:
 Not a result yet: two tasks, a handful of samples, one resolved task. The alignment lives
 in the adapter only - the engine's loop and the film are unchanged.
 
+## Step 2 — the first number: 3 of 21
+
+All 28 SWE-bench Verified tasks from the light projects (`psf/requests` 8, `pallets/flask` 1,
+`pytest-dev/pytest` 19), reasoning off for the patch, context alignment on - the setting that
+resolved a task in step 1. Each task was then **validated with its historical fix and no model**
+(`bench/swebench_probe.py`): a task counts only if, in our sandbox, its `FAIL_TO_PASS` tests fail
+before that fix and pass after it, with every `PASS_TO_PASS` test green. Epoch AI does the same
+(484 of Verified's 500 validate on its infrastructure).
+`evidence/swebench_step2_20261019.csv`, `evidence/swebench_validation_20261019.jsonl`.
+
+**Resolved: 3 of 21 validated tasks (14 %)** - `pallets__flask-5014`, `pytest-dev__pytest-6202`,
+`pytest-dev__pytest-8399`. About $0.09 of Nemotron for the 28; 15–40 s a task.
+
+Not validated (7): the bug does not reproduce here - `FAIL_TO_PASS` already passes before the fix
+(`requests-1724`, `-1766`, `-1921`; `-1766` was « resolved » and does not count); the tests do not
+run (`requests-2317`, 923 s); test ids our harness cannot find in the output (`requests-6028`,
+`pytest-5262`, `pytest-7521` - Verified lists `"[100%]"` as a test, and parameter ids differ).
+
+Why the 18 others failed (the attempt archive):
+
+| outcome | tasks |
+|---|---|
+| refused: the diff quotes code that is not in the file | 5 |
+| the diff changes nothing (no `+`/`-` line) | 4 |
+| wrong cause: applies, the test still fails | 3 |
+| refused, other | 3 |
+| refused: patches a file it was not shown | 1 |
+| regression | 1 |
+| the patch broke the suite: no test ran | 1 |
+
+What it says:
+- **The first limit is what the model is shown.** Half of the failures are diffs it could not
+  have written right: code quoted from outside the excerpt or another version of the project,
+  a file never shown. Better navigation (the right files, the whole function) comes before any
+  self-repair.
+- **« Changes nothing » is not only a reasoning-on habit**: 4 diffs with reasoning off wrote
+  the fix as context lines.
+- **Format repair was necessary for every success**: all three resolved diffs were written for
+  « line 1 » and applied only once aligned to the file (moved to lines 193/297, 287, 143).
+
+Harness work this showed, before a bigger series: validate before counting (now done by hand);
+read `PASS_TO_PASS` ids that the output spells differently; label « the suite did not run with
+the patch » (`pytest-10356` showed 0/79 and was reported « target test still failing »).
+
 ## Next steps (after 2026-10-30)
 
 | step | what | cost |
 |---|---|---|
 | 1. Adapter | done, smoke-tested (above) | — |
-| 2. First number | 20–30 tasks from light projects (requests, flask, pytest, pylint) | a few dollars of Nemotron |
+| 2. First number | done: 3/21 validated (above) | — |
 | 3. Use it | the attempt archive names why each failure failed; that decides which step of the self-repair plan (typed verdict, self-repair, best-of-N, test check) comes first | 0 |
 
 ## What this does not do

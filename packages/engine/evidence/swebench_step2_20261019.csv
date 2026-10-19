@@ -1,0 +1,29 @@
+instance,repo,validated,validation,resolved,outcome,files_chosen,f2p,hidden,p2p,seconds
+pallets__flask-5014,pallets/flask,True,ok,True,resolved,['src/flask/blueprints.py'],1,0,59,24.5
+psf__requests-1142,psf/requests,True,ok,False,did not apply: file not shown,"['requests/api.py', 'requests/sessions.py', 'requests/packages/urllib3/_collections.py']",1,0,5,22.8
+psf__requests-1724,psf/requests,False,bug not reproduced (FAIL_TO_PASS passes before the fix),False,did not apply: context not in the file,"['requests/sessions.py', 'requests/models.py', 'requests/packages/urllib3/_collections.py']",6,3,79,34.3
+psf__requests-1766,psf/requests,False,bug not reproduced (FAIL_TO_PASS passes before the fix),True,resolved,"['requests/auth.py', 'requests/models.py', 'requests/packages/urllib3/_collections.py']",6,3,79,35.9
+psf__requests-1921,psf/requests,False,bug not reproduced (FAIL_TO_PASS passes before the fix),False,did not apply: context not in the file,"['requests/sessions.py', 'requests/models.py', 'requests/packages/urllib3/_collections.py']",6,3,107,38.4
+psf__requests-2317,psf/requests,False,tests did not run,False,did not apply: file not shown,"['requests/sessions.py', 'requests/utils.py', 'requests/models.py']",8,4,133,923.3
+psf__requests-2931,psf/requests,True,ok,False,regression,"['requests/models.py', 'requests/utils.py', 'requests/api.py']",1,0,84,18.9
+psf__requests-5414,psf/requests,True,ok,False,target test still failing,"['requests/models.py', 'requests/adapters.py', 'requests/api.py']",1,0,130,12.8
+psf__requests-6028,psf/requests,False,test ids not found in pytest output,False,did not apply: context not in the file,['requests/utils.py'],2,1,185,17.5
+pytest-dev__pytest-10051,pytest-dev/pytest,True,ok,False,did not apply: context not in the file,['src/_pytest/logging.py'],1,0,15,16.1
+pytest-dev__pytest-10081,pytest-dev/pytest,True,ok,False,did not apply: other,"['src/_pytest/unittest.py', 'src/_pytest/skipping.py']",1,0,63,18.9
+pytest-dev__pytest-10356,pytest-dev/pytest,True,ok,False,suite did not run with the patch,"['src/_pytest/mark/structures.py', 'src/_pytest/nodes.py']",1,0,79,16.4
+pytest-dev__pytest-5262,pytest-dev/pytest,False,test ids not found in pytest output,False,did not apply: context not in the file,['src/_pytest/capture.py'],1,0,108,22.7
+pytest-dev__pytest-5631,pytest-dev/pytest,True,ok,False,diff changes nothing,"['src/_pytest/compat.py', 'src/_pytest/fixtures.py', 'src/_pytest/pytester.py']",1,0,15,13.9
+pytest-dev__pytest-5787,pytest-dev/pytest,True,ok,False,diff changes nothing,"['src/_pytest/reports.py', 'src/_pytest/_code/code.py']",2,1,123,15.5
+pytest-dev__pytest-5809,pytest-dev/pytest,True,ok,False,did not apply: context not in the file,['src/_pytest/pastebin.py'],1,0,3,17.0
+pytest-dev__pytest-5840,pytest-dev/pytest,True,ok,False,did not apply: context not in the file,"['src/_pytest/config/findpaths.py', 'src/_pytest/pathlib.py']",2,1,51,19.0
+pytest-dev__pytest-6197,pytest-dev/pytest,True,ok,False,target test still failing,"['src/_pytest/python.py', 'src/_pytest/config/findpaths.py']",2,1,145,19.8
+pytest-dev__pytest-6202,pytest-dev/pytest,True,ok,True,resolved,['src/_pytest/python.py'],1,0,72,15.8
+pytest-dev__pytest-7205,pytest-dev/pytest,True,ok,False,did not apply: other,['src/_pytest/setuponly.py'],10,5,16,20.2
+pytest-dev__pytest-7236,pytest-dev/pytest,True,ok,False,did not apply: context not in the file,"['src/_pytest/unittest.py', 'src/_pytest/debugging.py']",1,0,51,19.1
+pytest-dev__pytest-7324,pytest-dev/pytest,True,ok,False,target test still failing,['src/_pytest/mark/expression.py'],3,1,58,15.8
+pytest-dev__pytest-7432,pytest-dev/pytest,True,ok,False,diff changes nothing,['src/_pytest/skipping.py'],1,0,77,9.0
+pytest-dev__pytest-7490,pytest-dev/pytest,True,ok,False,diff changes nothing,"['src/_pytest/skipping.py', 'src/_pytest/runner.py']",2,1,78,15.3
+pytest-dev__pytest-7521,pytest-dev/pytest,False,test ids not found in pytest output,False,diff changes nothing,['src/_pytest/capture.py'],2,1,125,11.6
+pytest-dev__pytest-7571,pytest-dev/pytest,True,ok,False,did not apply: other,['src/_pytest/logging.py'],1,0,14,16.2
+pytest-dev__pytest-7982,pytest-dev/pytest,True,ok,False,did not apply: context not in the file,['src/_pytest/python.py'],1,0,78,20.0
+pytest-dev__pytest-8399,pytest-dev/pytest,True,ok,True,resolved,['src/_pytest/unittest.py'],1,0,59,18.4

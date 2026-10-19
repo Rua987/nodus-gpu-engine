@@ -259,7 +259,7 @@ def align_to_source(patch: str, sources: Dict[str, str]) -> Tuple[str, List[str]
 # -- one task -----------------------------------------------------------------
 
 def run_task(task: dict, sandbox_factory: Callable, chat: Callable, log=print,
-             align: bool = True) -> dict:
+             align: bool = True, retry_wait: float = 10.0) -> dict:
     """``sandbox_factory(image)`` -> object with put_files/exec/destroy and the id;
     ``chat(prompt, kind)`` -> message dict (kind: "pick" or "patch")."""
     from nge import llm_text
@@ -272,12 +272,23 @@ def run_task(task: dict, sandbox_factory: Callable, chat: Callable, log=print,
     t0 = time.perf_counter()
 
     def one(cmd: str, files: Dict[str, str], timeout: int = 900):
-        sbx, sid = sandbox_factory(image)
-        try:
-            sbx.put_files(sid, files)
-            return sbx.exec(sid, cmd, timeout=timeout)
-        finally:
-            sbx.destroy(sid)
+        # one retry on a sandbox error: a ContreeImageStateError mid-run cost a
+        # task in the step-1 smoke, and a fresh sandbox is cheap
+        for attempt in (1, 2):
+            sbx, sid = sandbox_factory(image)
+            try:
+                sbx.put_files(sid, files)
+                return sbx.exec(sid, cmd, timeout=timeout)
+            except Exception as exc:
+                if attempt == 2:
+                    raise
+                rec["events"].append(f"sandbox_retry:{type(exc).__name__}")
+                time.sleep(retry_wait)
+            finally:
+                try:
+                    sbx.destroy(sid)
+                except Exception:
+                    pass
 
     base = one(baseline_cmd(visible), {"/tmp/test.patch": task["test_patch"]})
     sec = sections(base.stdout)
@@ -426,6 +437,13 @@ def main(argv=None) -> int:
                        cache=out_dir / "verified.json")
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     rows = []
+    csv_path = Path(args.csv)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    fields = ["instance", "repo", "f2p", "visible", "hidden", "p2p", "visible_failing_before",
+              "files_chosen", "applied", "visible_fixed", "hidden_fixed", "p2p_passed", "resolved",
+              "reason", "finish_reason", "reasoning_tokens", "align_notes", "events", "seconds"]
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        csv.DictWriter(f, fieldnames=fields).writeheader()
     for task in tasks:
         print(f"[swebench] {task['instance_id']} ...", flush=True)
         try:
@@ -434,19 +452,12 @@ def main(argv=None) -> int:
             rec = {"instance": task["instance_id"], "repo": task["repo"], "resolved": False,
                    "reason": f"harness error: {type(exc).__name__}: {str(exc)[:200]}", "events": []}
         archive(out_dir, run_id, rec, rec.get("verify_stdout", "")[:4000], meta)
-        rows.append({k: rec.get(k) for k in (
-            "instance", "repo", "f2p", "visible", "hidden", "p2p", "visible_failing_before",
-            "files_chosen", "applied", "visible_fixed", "hidden_fixed", "p2p_passed", "resolved",
-            "reason", "finish_reason", "reasoning_tokens", "align_notes", "seconds")})
+        rows.append({k: rec.get(k) for k in fields})
+        with csv_path.open("a", newline="", encoding="utf-8") as f:
+            csv.DictWriter(f, fieldnames=fields).writerow(rows[-1])
         r = rows[-1]
         print(f"[swebench] {r['instance']}: {'RESOLVED' if r['resolved'] else 'not resolved'} - "
               f"{r['reason']} | files {r['files_chosen']} | applied {r['applied']} | {r['seconds']} s")
-    csv_path = Path(args.csv)
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    with csv_path.open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
-        w.writeheader()
-        w.writerows(rows)
     print(f"[swebench] resolved {sum(bool(r['resolved']) for r in rows)}/{len(rows)} "
           f"(test-guided repair, not a SWE-bench score) | csv {csv_path}")
     print(_usage.format_summary())

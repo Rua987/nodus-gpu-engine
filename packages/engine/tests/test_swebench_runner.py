@@ -225,3 +225,20 @@ def test_a_diff_with_no_change_lines_is_named_and_not_verified(tmp_path):
     sr.archive(tmp_path, "20261018T000000Z", rec, "FAILED ...", {"source": "model"})
     (row,) = attempts.load(tmp_path)
     assert row["category"] == "no_change"
+
+
+def test_a_sandbox_error_is_retried_once():
+    calls = {"n": 0}
+
+    class Flaky(FakeSandbox):
+        def exec(self, sid, cmd, timeout=0):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("ContreeImageStateError")
+            return super().exec(sid, cmd, timeout)
+    log = []
+    rec = sr.run_task(TASK, lambda image: (Flaky(log, PASS_ALL), "sid"),
+                      lambda prompt, kind: {"content": '{"files": ["src/lib/core.py"]}'}
+                      if kind == "pick" else {"content": GOOD, "finish_reason": "stop"},
+                      retry_wait=0)
+    assert rec["resolved"] and rec["events"] == ["sandbox_retry:RuntimeError"]
