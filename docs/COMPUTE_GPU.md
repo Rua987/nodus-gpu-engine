@@ -1,9 +1,10 @@
 # Nebius Compute GPU — plan et résultats
 
 > **Statut : Phases 0 à 4 faites.** Chaque VM a eu son **Go budget** explicite ; aucune sans.  
-> Dernière écriture : **2026-10-05** (**Phases 0 à 4 vertes** : `nvidia-smi` réel sur une L40S ; le heal en
+> Dernière écriture : **2026-10-19** (**Phases 0 à 4 vertes** : `nvidia-smi` réel sur une L40S ; le heal en
 > hybride sur 2 L40S, rien migré à tort ; puis **une vraie migration** hors d'une L40S occupée par une charge
-> **induite et déclarée**, mesurée : 26,8 s → 20,3 s pour le même shard. Surchauffe spontanée : jamais vue).  
+> **induite et déclarée**, mesurée : 26,8 s → 20,3 s pour le même shard, puis 25,4 s → 20,5 s au run 3,
+> filmé. Surchauffe spontanée : jamais vue).  
 > Lié : `ENGINE_BACKLOG.md` (M1/M2/M13) · `RISKS_TO_STRENGTHS.md` · `AUTORESEARCH_VISION.md` (perso).
 
 Objectif : `probe_kind=nvidia-smi` sur un **device NVIDIA réel**, pour que heal + placement deviennent une **preuve**, pas seulement un mock.
@@ -410,6 +411,27 @@ Ce qu'il ne prouve pas :
   placements suivants. Pas de migration à chaud (pas de reprise d'état).
 - **Un ralentissement général.** +32 % pour ce noyau et cette charge, une fois ; le partage
   du GPU entre deux processus dépend des deux. Seuils par SKU : toujours non faits.
+
+**Run 3 (Go « contention run 3, 3 L40S max 20 min », 2026-10-19 ~05:13–05:23 UTC, code `c0f9dcf`)** —
+la même commande, relancée pour la vidéo (le run 2 n'avait pas été filmé).
+[`evidence/report_20261019T052247Z.md`](../packages/engine/evidence/report_20261019T052247Z.md) (+ `.html`, montrable
+tel quel : le générateur corrigé après le run 2 l'a écrit, aucun re-rendu). Couvert par `tests/test_evidence.py`.
+0 instance / 0 disque après (vérifié à part, liste du projet). ≈ 22 min-VM, ≈ 0,6 $ (prix catalogue).
+
+| t (s) | événement |
+|---|---|
+| 162 | 2 VM L40S prêtes (venv compris) |
+| 174 | charge induite sur `cg-l40s-a-00` : 100 %, 324,8 W après 5 s |
+| 218 | shard 0 fini sur `-00` en **25,4 s** (exit 0) ; `nvidia-smi` : 100 %, 325,1 W, 60 °C, sur le GPU **`3040, ./nge_burn, 428 MiB`** → `busy` |
+| 226–379 | placement : aucun nœud éligible → une 3e VM ; `cg-l40s-a-02` choisie (score 161) |
+| 414 | **migration** `-00 → -02` ; le même shard y tourne en **20,5 s** (exit 0) |
+| 495 | shard témoin sur `-01`, nœud libre : **21,4 s** (exit 0) |
+
+Ce que le run 3 ajoute : le run 2 se reproduit. Même enchaînement, même processus identifié, et
+**+24 %** de temps sous charge (25,4 s contre 20,5 s ; +32 % au run 2). Les deux mesures à vide
+diffèrent cette fois de 0,8 s (20,5 et 21,4 s, deux fichiers de test différents) : l'écart sous
+charge reste au-delà de ce bruit. Les limites du run 2 valent toujours (charge à nous, heal
+réactif, une mesure par run).
 
 Tests : `tests/test_gpu_contention.py`, `tests/test_real_gpu_heal_gate.py`.
 

@@ -289,6 +289,28 @@ def test_second_contention_run_moved_a_gpu_job_off_a_busy_l40s_and_timed_it():
         assert not re.search(r"computeinstance-|project-e0|\b\d{1,3}(?:\.\d{1,3}){3}\b", text)
 
 
+def test_third_contention_run_reproduced_the_migration_on_camera():
+    """docs/COMPUTE_GPU.md, Phase 4, run 3 (filmed): the same chain as run 2 -
+    declared load, busy GPU held by ./nge_burn, a 3rd VM, migration - and the
+    same shard 25.4 s on the loaded node against 20.5 s on the fresh one."""
+    ev = _events("report_20261019T052247Z")
+    (load,) = _kinds(ev, "gpu_load_induced")
+    assert load["declared"] is True and load["node_id"] == "cg-l40s-a-00"
+    (p,) = _kinds(ev, "gpu_pressure")
+    assert p["health"] == "busy" and p["util_pct"] == 100.0 and "nge_burn" in p["gpu_processes"]
+    (rem,) = _kinds(ev, "gpu_remediation")
+    assert (rem["from"], rem["to"], rem["reason"]) == ("cg-l40s-a-00", "cg-l40s-a-02", "busy")
+    assert rem["exit_before"] == rem["exit_after"] == 0
+    assert rem["duration_before_s"] == 25.407 and rem["duration_after_s"] == 20.534
+    md = (EVIDENCE / "report_20261019T052247Z.md").read_text(encoding="utf-8")
+    assert "| 1 | `cg-l40s-a-01` | 0 | 21.375 | 0 |" in md
+    html = (EVIDENCE / "report_20261019T052247Z.html").read_text(encoding="utf-8")
+    # shown as is: the renderer fixed after run 2 wrote it
+    assert "BUSY then released" in html and "THROTTLED" not in html and "Token Factory" not in html
+    for text in (md, html):
+        assert not re.search(r"computeinstance-|project-e0|\b\d{1,3}(?:\.\d{1,3}){3}\b", text)
+
+
 def test_token_factory_enforces_a_strict_json_schema_and_nothing_else():
     """docs/FIX_LOOP.md, typed slot-fill: asked for forbidden values, only the
     strict json_schema request kept the replies inside the schema."""

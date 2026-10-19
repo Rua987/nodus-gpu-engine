@@ -74,7 +74,8 @@ Mock film (`--heuristic-plan`): the heal — GPU migrate `02 → 03` on simulate
 Live (`--live`): real **Nemotron @ Token Factory** + Contree sandboxes. Contree is **CPU today** (`probe_kind=cpu-fallback`); thermal heal is **gated** until real `nvidia-smi` — we refuse fake H100 metrics.  
 Real GPU: on Nebius AI Cloud **L40S** VMs it creates and deletes itself, the heal loop reads real `nvidia-smi`.
 Idle GPUs: nothing migrated by mistake. A GPU held by another process — a load we **induced and declared** — :
-the loop named the process, moved the shard to a fresh VM, and the same work went from **26.8 s to 20.3 s**.
+the loop named the process, moved the shard to a fresh VM, and the same work went from **26.8 s to 20.3 s**
+(run 2), then **25.4 s to 20.5 s** when we ran it again on camera (run 3).
 
 ---
 
@@ -104,7 +105,8 @@ Live film (real patches + hidden checks): `packages/engine/evidence/report_20261
 Mock film (2/3 + migrate): `packages/engine/evidence/report_20261003T233405Z.html`  
 Live Nebius proof (Contree + Super 0/3): `packages/engine/evidence/report_20260913T053458Z_honest.html` (a re-render of that run — provenance in `packages/engine/evidence/README.md`)  
 Live after the reasoning fix (real sandboxes, simulated fleet): `packages/engine/evidence/report_20261002T055558Z.html`  
-Real migration (3 × L40S, declared induced load, timed): `packages/engine/evidence/report_20261005T001234Z_rerender.html`
+Real migration (3 × L40S, declared induced load, timed; the run filmed for the video): `packages/engine/evidence/report_20261019T052247Z.html`  
+Same, the first time: `packages/engine/evidence/report_20261005T001234Z_rerender.html`
 Real GPUs (Compute fleet of 2 × L40S + Token Factory sandboxes): `packages/engine/evidence/report_20261004T031503Z_rerender.html`
 — the same run re-rendered so the heal decision shows in the story (provenance in the evidence README); it lists
 one failure that does not exist, `test_connect_mc`; why is under Challenges
@@ -133,7 +135,8 @@ We use **Nebius Token Factory** as the OpenAI-compatible endpoint and **NVIDIA N
   VMs deleted — `packages/engine/evidence/report_20261004T031503Z.md`. Then shards whose tests run CUDA
   on the VMs (a checked matmul built with the image's `nvcc`), a GPU burn started on one node and declared
   as induced: the loop read the busy GPU and the process on it, opened a third VM, migrated, and timed the
-  same shard 26.8 s → 20.3 s — `packages/engine/evidence/report_20261005T001234Z_rerender.html`.
+  same shard 26.8 s → 20.3 s — `packages/engine/evidence/report_20261005T001234Z_rerender.html`; run again
+  for the video: 25.4 s → 20.5 s — `packages/engine/evidence/report_20261019T052247Z.html`.
 
 Token Factory Contree nodes are **not** physical H100s. Live probes report `cpu-fallback`. That is a product fact, not a bug.
 
@@ -222,7 +225,7 @@ model reply is labelled cut, and a sandbox that cut its output never yields a "v
   (37/37 across seven runs).
 - The heal loop ran on real Nebius L40S GPUs it created and deleted itself: it migrated nothing by mistake
   on idle ones, and moved a GPU job off one that another process held (a load we induced and declared) —
-  26.8 s there, 20.3 s on the fresh VM.
+  26.8 s there, 20.3 s on the fresh VM; 25.4 s and 20.5 s when we ran it again.
 - Bugs found by measuring, not guessing: reasoning eating the token budget, `-x` hiding failures, a
   prompt placeholder copied into a command, and a 64 KiB output cut that invented a test.
 
@@ -243,7 +246,8 @@ both VMs deleted (`packages/engine/evidence/report_20261004T031503Z.md`). Buildi
 reads efficiency 0, which would have migrated shards off healthy nodes — fixed before any VM was created.
 
 Then a real migration: CUDA shards on the VMs, a GPU load induced and declared on one node, the shard moved and
-timed, 26.8 s → 20.3 s (`packages/engine/evidence/report_20261005T001234Z_rerender.html`).
+timed, 26.8 s → 20.3 s (`packages/engine/evidence/report_20261005T001234Z_rerender.html`), and again on
+camera, 25.4 s → 20.5 s (`packages/engine/evidence/report_20261019T052247Z.html`).
 
 Next: the heal is reactive — it re-runs a shard after reading the node, which only pays on long jobs; checking a
 node before placing work there, live migration with state, and per-SKU thresholds (H100-tuned today; an L40S
@@ -328,8 +332,8 @@ Do **not** invent “GPU $ saved”. We did not invoice that.
 2. Browser: **control room** HTML (cards + Story + diffs).  
 3. Optional 10 s: `--live` usage line + `heal gated` / `cpu-fallback`.  
 3b. Optional 10 s: the Compute probe report — `probe_kind=nvidia-smi`, `NVIDIA L40S`, `deleted: true` — or the
-    contention report `report_20261005T001234Z_rerender.html`: « induced load (declared) », « busy … on the GPU:
-    ./nge_burn », « migrate … 26.8 s there, 20.3 s here ».  
+    contention report `report_20261019T052247Z.html`: « induced load (declared) », « busy … on the GPU:
+    ./nge_burn », « migrate … 25.407 s there, 20.534 s here ».  
 4. Do **not** lead with taxonomy benches or AutoResearch.
 
 ---

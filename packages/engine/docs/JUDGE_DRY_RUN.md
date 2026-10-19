@@ -97,7 +97,7 @@ Open HTML: KPI `2/3`, migration row, diffs under Auto-fixes.
 | Question | Answer |
 |----------|--------|
 | Real Nebius? | « Mock for the film. `--live` = Token Factory Contree + Nemotron. Contree is CPU today; heal gated until real GPU metrics. » |
-| Real GPU at all? | « Yes, Nebius L40S VMs the engine creates and deletes. Idle, it migrated nothing. Then we started a GPU job on one node — induced, and the report says so — the loop saw the busy GPU and the process on it, moved the shard to a fresh VM: 26.8 s there, 20.3 s on the new one. A spontaneous overheat: never seen. » |
+| Real GPU at all? | « Yes, Nebius L40S VMs the engine creates and deletes. Idle, it migrated nothing. Then we started a GPU job on one node — induced, and the report says so — the loop saw the busy GPU and the process on it, moved the shard to a fresh VM: 26.8 s there, 20.3 s on the new one — and 25.4 s against 20.5 s when we ran it again on camera. A spontaneous overheat: never seen. » |
 | Why heuristic? | « To open the autofix gate for the film. 324M path is real too — often triage-only on this task. » |
 | Why not 3/3? | « One failure has no canned patch — we report it, we don't invent success. » |
 | Model down? | « Nano/Ultra 404/5xx → one hop to Super, logged. Never silent Super→Nano. » |
@@ -126,7 +126,7 @@ needs GPU metrics the live sandboxes do not have. Narration in English, over eac
 | 2 | 0:12–1:27 | terminal, **A3 live** (140–210 s real — Nemotron's latency varies; cut or speed the model waits up 3× in the editor and caption « 3× ») | start: « Live: Nemotron Super on Nebius Token Factory, six seeded bugs. Every node is a Token Factory sandbox — CPU, so the screen says heal gated. » · fixes: « Each failure goes to Nemotron, which writes a patch; it is applied in a fresh sandbox and the whole suite re-runs. » · end — **say the number on screen**: 6/6 → « All six verified, and every patch also passes hidden cases the model never saw. » · 5/6 → « Five of six verified, all five pass hidden cases the model never saw; the sixth did not make it — we keep only what we can prove. » |
 | 3 | 1:27–1:52 | terminal, **A2 mock**, `--mock --watch --watch-delay 0.8 --heuristic-plan` (36 s; trim to the migrate moment) | « The heal needs GPU metrics, so here it runs on simulated H100s: node 02 overheats, the engine scores a destination and moves the shard to 03. » |
 | 4 | 1:52–2:10 | browser: the HTML the A3 run printed | « Everything lands in one control room: the sandboxes, honestly marked CPU, the story of the run, and the diffs we kept. » |
-| 5 | 2:10–2:32 | browser: `evidence/report_20261005T001234Z_rerender.html` | « On real Nebius L40S GPUs we started a load on one node — induced, and the report says so. The loop saw the busy GPU and the process on it, and moved the shard to a fresh VM: 26.8 seconds there, 20.3 here. » |
+| 5 | 2:10–2:32 | the run-3 terminal (sped up), then browser: `evidence/report_20261019T052247Z.html` | « On real Nebius L40S GPUs we started a load on one node — induced, and the report says so. The loop saw the busy GPU and the process on it, and moved the shard to a fresh VM: 25.4 seconds there, 20.5 here. » |
 | 6 | 2:32–2:45 | GitHub repo page | « Every claim here is checked by a test against the run's own log. Public, MIT — clone it and run it yourself. » |
 
 A3's outcome varies by run (seven runs: 6/6 three times; 5/6 three times; 4/6 once — diffs citing
