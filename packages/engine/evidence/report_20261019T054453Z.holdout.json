@@ -1,0 +1,23 @@
+{
+  "verified": 4,
+  "judged": 4,
+  "holdout_ok": 4,
+  "rows": [
+    {
+      "test": "packages/engine/bench/bugbench/tests/test_dates.py::test_century_divisible_by_400_is_leap",
+      "holdout_ok": true
+    },
+    {
+      "test": "packages/engine/bench/bugbench/tests/test_dates.py::test_days_between_ignores_order",
+      "holdout_ok": true
+    },
+    {
+      "test": "packages/engine/bench/bugbench/tests/test_textkit.py::test_slug_collapses_punctuation_and_spaces",
+      "holdout_ok": true
+    },
+    {
+      "test": "packages/engine/bench/bugbench/tests/test_shop.py::test_discount_takes_a_percentage",
+      "holdout_ok": true
+    }
+  ]
+}

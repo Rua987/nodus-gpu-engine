@@ -9,7 +9,7 @@ Last rehearsal: **2026-10-05** — the six-clip video, every clip replayed; see 
 |------|---------|-------------------|------|
 | **A2 — recommended film** | `--mock --watch --heuristic-plan` | Keyword plan + `edit_file` → migrate → **auto-fixed 2/3** | €0 |
 | **A — 324M honesty** | `--mock --watch` | Plan 324M → migrate → often **autofix OFF** | €0 |
-| **A3 — live film (real patches)** | `--live --watch --heuristic-plan --scenario scenarios/bugbench_live.json` | Real Nemotron patches on 6 seeded bugs, verified in fresh Token Factory sandboxes, then re-checked on **hidden cases**: 5 or 6 of 6 verified, every verified one holds (7 runs: 37/42, 37/37). Nodes marked `cpu sandbox`, heal gated | ~1 ¢ |
+| **A3 — live film (real patches)** | `--live --watch --heuristic-plan --scenario scenarios/bugbench_live.json` | Real Nemotron patches on 6 seeded bugs, verified in fresh Token Factory sandboxes, then re-checked on **hidden cases**: 5 or 6 of 6 verified, every verified one holds (8 runs: 41/48, 41/41; until 2026-10-19 the sandbox re-run ran no test - fixed, 41/41 re-checked on the whole suite, FIX_LOOP). Nodes marked `cpu sandbox`, heal gated | ~1 ¢ |
 | **B — live honesty** | `--live --shards 1` | Contree `cpu-fallback`, heal **gated**, Super usage | cents |
 
 **Pitch rule:** **A3** is the proof of « patch and verify » — real model, real sandboxes, hidden
@@ -129,13 +129,21 @@ needs GPU metrics the live sandboxes do not have. Narration in English, over eac
 | 5 | 2:10–2:32 | the run-3 terminal (sped up), then browser: `evidence/report_20261019T052247Z.html` | « On real Nebius L40S GPUs we started a load on one node — induced, and the report says so. The loop saw the busy GPU and the process on it, and moved the shard to a fresh VM: 25.4 seconds there, 20.5 here. » |
 | 6 | 2:32–2:45 | GitHub repo page | « Every claim here is checked by a test against the run's own log. Public, MIT — clone it and run it yourself. » |
 
-A3's outcome varies by run (seven runs: 6/6 three times; 5/6 three times; 4/6 once — diffs citing
+A3's outcome varies by run (eight runs: 6/6 three times; 5/6 three times; 4/6 twice — diffs citing
 code that does not exist, patches cut at their token ceiling, and once a right fix whose context
 was mis-indented, so patch-ng refused it). The end line follows the screen; on 4/6, say « Four of
 six verified, all four pass hidden cases the model never saw; we keep only what we can prove. »
 
 Before recording: terminal font large (~20 pt), window maximised, notifications off, `cls`,
 `cd packages/engine`; run each command once to warm up; open the HTML files in tabs.
+
+## Rehearsal notes — 2026-10-19 (clip 2 refilmed, then refilmed again)
+
+- The take `report_20261019T054453Z` (4/6, 4/4 hold) is **not for the film**: reading its archived
+  attempts showed the sandbox re-run behind each « fix OK » had run no test (FIX_LOOP, *The re-run
+  must have run the tests*). Fixed the same day; clip 2 is refilmed on the fixed engine, where
+  « re-tested green » means pytest ran the whole suite.
+- Clip 5 is the run-3 contention report, `evidence/report_20261019T052247Z.html` (25.4 s → 20.5 s).
 
 ## Rehearsal notes — 2026-10-05 (the six-clip video)
 

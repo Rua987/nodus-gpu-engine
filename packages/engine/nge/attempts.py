@@ -34,7 +34,7 @@ ROOT = "attempts"
 # the obstacle, named - what a self-repair turn would be told about
 CATEGORIES = ("fixed", "regression", "target_still_failing", "did_not_apply", "no_change",
               "output_cut",
-              "no_output",
+              "no_output", "tests_not_run",
               "blocked", "context_invented", "truncated", "unparsed", "empty",
               "model_unavailable", "error", "no_patch")
 
@@ -72,6 +72,8 @@ def category(row: dict, test_events: Iterable[dict]) -> str:
         return "no_change"
     if "cut at the sandbox size limit" in why:
         return "output_cut"
+    if "did not run the tests" in why:
+        return "tests_not_run"
     if "no output" in why:
         return "no_output"
     if "blocked" in why or "jail" in why:

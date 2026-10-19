@@ -132,6 +132,34 @@ of our code. Probed, not assumed: only `diff` is present. So the fix sandbox
 gets the same treatment as a shard — the payload, the requirements, PYTHONPATH
 — and applies patches with `patch-ng`, which pip can install.
 
+## The re-run must have run the tests (fixed 2026-10-19)
+
+Found by the attempt archive, not by a test. The verification re-run is
+`python -m patch_ng … fix.patch && pytest …`, and the import path was put in front of
+the whole line - but an assignment before a command reaches that command only: it went
+to patch-ng, never to pytest. In a Token Factory sandbox the suite died collecting
+(`ModuleNotFoundError: No module named 'dates'`, exit 2); the output was not empty and
+held no `FAILED` line, so **every patch that applied was called verified**. That was
+true of every live film, 2026-10-04 to 2026-10-19: their « verified » meant « the patch
+applied ».
+
+Fixed twice: the import path goes before every Python step, and a re-run counts only if
+pytest says the tests ran - exit 0 or 1 and its closing count. Exit 2 (collection
+error), 4 or 5 (no test) now reads `the re-run did not run the tests (exit N…)`,
+category `tests_not_run`; a test that errors in setup is not fixed either. Same command,
+same diff, real sandboxes, before and after: exit 2 with 3 collection errors, then
+exit 1 with `5 failed, 11 passed` - the five other bugs (`evidence/verify_cmd_probe_20261019.txt`).
+
+What still stands: the held-out check ran locally with a real pytest, so « every
+verified patch also passes hidden cases » was true. `bench/suite_recheck.py` replays the
+half that was missing - the target passes, nothing else breaks - on the diffs the films'
+HTML kept: **41/41** across the eight runs (`evidence/suite_recheck_20261019.csv`). The
+numbers hold; the sandbox step behind them did not, until now.
+
+Why no test caught it: the mock sandbox simulates the re-run from `NGE_FIX_TEST` and
+imports nothing, and the unit test checked that `PYTHONPATH=` was *in* the command, not
+*where*. Both now look at the pytest step itself (`tests/test_fix_sandbox.py`).
+
 ## Model output is repaired before use, not trusted
 
 Each of these silently lost a correct patch in a live run:

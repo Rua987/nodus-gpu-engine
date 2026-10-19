@@ -3,7 +3,7 @@
 [![engine-tests](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Rua987/nodus-gpu-engine/actions/workflows/ci.yml)
 [![python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)](packages/engine/pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-588%20passing-brightgreen)](packages/engine/tests)
+[![tests](https://img.shields.io/badge/tests-596%20passing-brightgreen)](packages/engine/tests)
 
 **Agentic engineering platform — Nebius "Coding & Agentic Engineering" track.**
 
@@ -66,7 +66,7 @@ with its provenance; `tests/test_evidence.py` keeps the citations honest.
 ```bash
 cd packages/engine
 pip install -r requirements.txt
-python -m pytest -q                 # 588 tests; 21 skip without the optional cloud SDKs
+python -m pytest -q                 # 596 tests; 21 skip without the optional cloud SDKs
 python -m nge.demo_nebius --mock    # -> out/report_<ts>.md  +  .html (self-contained)
 ```
 
@@ -91,6 +91,9 @@ python -m nge.demo_nebius --mock --watch    # live fleet view: util/temp bars, m
    the **whole suite** and keep only what fixes its target *without breaking
    anything else*. A patch that repairs one test and breaks another is
    rejected and named. Unverifiable failures are flagged for a human.
+   Until 2026-10-19 the live re-run ran no test (the import path reached the patch
+   tool, not pytest) - found by reading our own attempt archive, fixed, and every
+   patch the live films kept re-checked on the whole suite after the fact: 41/41.
    See [`docs/FIX_LOOP.md`](docs/FIX_LOOP.md) for the evidence behind each
    rule — including the patch that fixed its target while breaking 28 tests.
 3. **Multi-tier Nemotron routing** — `nge/router.py`: Ultra 550b (plan),

@@ -4,7 +4,7 @@
 > not a SWE-bench score). Step 3 after the submission (2026-10-30).
 
 Why: the live film is proven on six bugs we seeded ourselves (`bench/bugbench`), and
-it is saturated — 7 runs, 37/42 verified, 37/37 hold the hidden cases. No change to
+it is saturated — 8 runs, 41/48 kept, 41/41 hold the hidden cases. No change to
 the loop can show a gain there, and seeded bugs say little about real ones.
 
 ## The exercise: test-guided repair on SWE-bench Verified

@@ -68,8 +68,10 @@ Nebius Token Factory · NVIDIA Nemotron 3 (Ultra / Super / Nano) · Token Factor
 A code-completion wrapper suggests a fix.  
 **Nodus-GPU Engine runs the job:** local plan → sharded pytest on a fleet → migrate off a hot node **after scoring the destination** → patch in a fresh sandbox → re-run the suite → keep only what stays green.
 
-Live film (`--live`, six seeded bugs): **real Nemotron patches, verified in fresh Token Factory sandboxes, and every
-verified one also passes hidden cases the model never saw** (seven runs: 37/42 verified, 37/37 hold).  
+Live film (`--live`, six seeded bugs): **real Nemotron patches, each kept one re-checked on hidden cases the model
+never saw and on the whole suite** (eight runs: 41/48 kept, 41/41 hold, 41/41 break nothing). Until 2026-10-19 the
+sandbox re-run behind « verified » ran no test - our own attempt archive caught it; fixed, and every kept patch
+re-checked after the fact (`docs/FIX_LOOP.md`).  
 Mock film (`--heuristic-plan`): the heal — GPU migrate `02 → 03` on simulated H100s — with canned patches, 2/3.  
 Live (`--live`): real **Nemotron @ Token Factory** + Contree sandboxes. Contree is **CPU today** (`probe_kind=cpu-fallback`); thermal heal is **gated** until real `nvidia-smi` — we refuse fake H100 metrics.  
 Real GPU: on Nebius AI Cloud **L40S** VMs it creates and deletes itself, the heal loop reads real `nvidia-smi`.
@@ -222,7 +224,7 @@ model reply is labelled cut, and a sandbox that cut its output never yields a "v
   checked by a test against the run's own event log (`packages/engine/tests/test_evidence.py`).
 - On six seeded bugs re-checked against held-out cases the model never saw, every patch the loop called
   verified was a real fix, and none broke another test — in the benchmark, and again in the live film
-  (37/37 across seven runs).
+  (41/41 across eight runs, the whole suite re-checked after the fact: see *What we learned*).
 - The heal loop ran on real Nebius L40S GPUs it created and deleted itself: it migrated nothing by mistake
   on idle ones, and moved a GPU job off one that another process held (a load we induced and declared) —
   26.8 s there, 20.3 s on the fresh VM; 25.4 s and 20.5 s when we ran it again.
@@ -235,6 +237,10 @@ model reply is labelled cut, and a sandbox that cut its output never yields a "v
   patches it was a tie, and we wrote that down instead of claiming a win.
 - A green exit code is not a verdict. A sandbox that ran nothing, a shard told to stop at the first
   failure, an output cut at 64 KiB — each looked like success until the failure sets were compared.
+- Archive every attempt, including the ones that "worked". Reading the archived re-runs of our own live
+  film, we found the sandbox check had run no test for weeks: the import path reached the patch tool, not
+  pytest. Every kept patch held when re-checked (41/41), but only because the patches were good - the check
+  now has to see pytest's own count before it says verified.
 - Real metrics can lie like fake ones. An idle GPU reads efficiency 0; the fix for CPU sandboxes had to
   be generalised before the first real VM.
 

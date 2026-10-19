@@ -43,6 +43,12 @@ _TEST_ID = r"[^\s;&|`$(){}<>'\"\\]+"
 # `FAILED <nodeid>`, which is exactly what the first working live run
 # produced - 3 real failures that parsed as zero.
 _FAILED_RE = re.compile(rf"^FAILED\s+({_TEST_ID})(?:\s+-\s+(.*))?$", re.M)
+# a test that errored in setup: `ERROR <nodeid>` (a file that failed to
+# collect prints `ERROR <path>` with no `::` and stops the run - see below)
+_ERROR_RE = re.compile(rf"^ERROR\s+({_TEST_ID}::{_TEST_ID})(?:\s+-\s+(.*))?$", re.M)
+# pytest's closing count ("3 failed, 40 passed in 2.1s", "1 passed"): printed
+# only when tests ran
+_PYTEST_COUNT_RE = re.compile(r"\b\d+ (?:passed|failed)\b")
 _NO_MESSAGE = "(no message; see shard output)"
 # files a unified diff touches: "--- a/path" / "+++ b/path"
 _PATCH_FILE_RE = re.compile(r"^(?:---|\+\+\+)\s+[ab]/(\S+)", re.M)
@@ -695,9 +701,31 @@ class NgeOrchestrator:
             parts = [seg for seg in body.split("&&")
                      if "pip install" not in seg]
             body = "&&".join(parts).strip() or body
-        if source_root and "PYTHONPATH=" not in body:
-            body = f"PYTHONPATH={shlex.quote(source_root)} {body}"
+        if source_root:
+            # An assignment before a command reaches that command only. Put in
+            # front of `python -m patch_ng ... && pytest ...` it gave the import
+            # path to patch-ng and none to pytest: every live verification
+            # re-run died collecting (ModuleNotFoundError, exit 2) and, with no
+            # FAILED line, read as green (attempt archive, 2026-10-18/19).
+            # Each segment that runs Python gets it.
+            segs = [s.strip() for s in body.split("&&")]
+            body = " && ".join(
+                s if "PYTHONPATH=" in s or not NgeOrchestrator._runs_python(s)
+                else f"PYTHONPATH={shlex.quote(source_root)} {s}"
+                for s in segs)
         return f"{install} && {body}"
+
+    @staticmethod
+    def _runs_python(segment: str) -> bool:
+        """True when ``segment`` (leading VAR=value assignments aside) starts
+        python or pytest."""
+        try:
+            toks = shlex.split(segment)
+        except ValueError:
+            return False
+        head = next((t for t in toks if not re.match(r"^[A-Za-z_]\w*=", t)), "")
+        name = head.rsplit("/", 1)[-1]
+        return name == "pytest" or re.match(r"^python(\d+(\.\d+)?)?$", name) is not None
 
     @staticmethod
     def _pytest_args(cmd: str) -> List[str]:
@@ -1381,7 +1409,10 @@ class NgeOrchestrator:
                 command=cmd, node_id=node, files=files, timeout=300,
             )
             out = _complete_stdout(res)
-            after = {m.group(1) for m in _FAILED_RE.finditer(out)}
+            # a test that errors (setup, or the whole file at collection) has
+            # not passed either
+            after = ({m.group(1) for m in _FAILED_RE.finditer(out)}
+                     | {m.group(1) for m in _ERROR_RE.finditer(out)})
             # a regression past the cut would be invisible: no verdict on that
             cut = bool(res.get("truncated"))
             # A shard that was skipped or died (exit 126/127) never produced a
@@ -1399,14 +1430,22 @@ class NgeOrchestrator:
             # list" is vacuous - the shape of the `git: not found` bug, where
             # an empty stdout looked exactly like a clean pass.
             ran = bool(out.strip())
-            target_fixed = ran and f["test"] not in after
+            # Output is not enough either: a suite that dies collecting prints
+            # plenty and no FAILED line. pytest exits 0 or 1 only when the
+            # tests ran (2: interrupted / collection errors, 4: usage, 5: no
+            # test collected), and then it prints its count.
+            exit_code = res.get("exit_code")
+            tests_ran = (ran and exit_code in (0, 1)
+                         and _PYTEST_COUNT_RE.search(out) is not None)
+            target_fixed = tests_ran and f["test"] not in after
             verified = (target_fixed and not regressions
                         and not res.get("blocked") and not cut)
             if regressions:
                 self._emit("fix_regression", test=f["test"], broke=regressions)
             self._emit("fix_verified" if verified else "fix_rejected",
                        test=f["test"], node=node,
-                       target_fixed=target_fixed, regressions=len(regressions),
+                       target_fixed=target_fixed, tests_ran=tests_ran,
+                       regressions=len(regressions),
                        **({"output_truncated": True} if cut else {}))
             if regressions:
                 why = "broke " + ", ".join(regressions)
@@ -1414,6 +1453,12 @@ class NgeOrchestrator:
                 why = "re-tested green in a fresh sandbox"
             elif not ran:
                 why = "sandbox produced no output - nothing ran"
+            elif not tests_ran:
+                why = (f"the re-run did not run the tests (exit {exit_code}"
+                       + (", collection error" if "ERROR collecting" in out
+                          or "error during collection" in out
+                          or "errors during collection" in out else "")
+                       + ")")
             elif cut:
                 why = ("re-run output cut at the sandbox size limit - "
                        "regressions past the cut cannot be ruled out")

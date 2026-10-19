@@ -384,3 +384,30 @@ def test_real_bugs_step_2_is_three_of_twenty_one_validated():
     val = [json.loads(l) for l in (EVIDENCE / "swebench_validation_20261019.jsonl").read_text(
         encoding="utf-8").splitlines() if l.strip()]
     assert sum(1 for v in val if v.get("ok")) == 21
+
+
+def test_eighth_live_run_its_vacuous_re_run_and_the_after_the_fact_suite_check():
+    """FIX_LOOP, *The re-run must have run the tests*: the films' sandbox
+    re-run ran no test until 2026-10-19; every patch they kept, re-run against
+    the whole suite after the fact, fixes its test and breaks nothing."""
+    ev = _events("report_20261019T054453Z")
+    assert len(_kinds(ev, "fix_verified")) == 4
+    hold = json.loads((EVIDENCE / "report_20261019T054453Z.holdout.json").read_text(encoding="utf-8"))
+    assert hold["verified"] == hold["judged"] == hold["holdout_ok"] == 4
+    rows = [json.loads(l) for l in (EVIDENCE / "attempts_20261019.jsonl").read_text(
+        encoding="utf-8").splitlines() if l.strip()]
+    assert len(rows) == 6 and sum(r["verdict"] == "verified" for r in rows) == 4
+    # "verified" with pytest's exit 2: the suite died collecting
+    assert {r["exit_code"] for r in rows if r["verdict"] == "verified"} == {2}
+    assert sorted(r["category"] for r in rows if r["verdict"] != "verified") == [
+        "context_invented", "no_output"]
+    probe = (EVIDENCE / "verify_cmd_probe_20261019.txt").read_text(encoding="utf-8")
+    assert "== old: exit=2" in probe and "3 errors in" in probe
+    assert "== new: exit=1" in probe and "5 failed, 11 passed" in probe
+    recheck = list(csv.DictReader((EVIDENCE / "suite_recheck_20261019.csv").open(encoding="utf-8")))
+    assert len(recheck) == 41 and len({r["run"] for r in recheck}) == 8
+    assert all(r["verified"] == "True" and r["regressions"] == "" for r in recheck)
+    # the re-check covers exactly the patches the films' own logs called verified
+    for run in {r["run"] for r in recheck}:
+        logged = sorted(e["test"].split("::")[-1] for e in _kinds(_events(f"report_{run}"), "fix_verified"))
+        assert sorted(r["test"] for r in recheck if r["run"] == run) == logged

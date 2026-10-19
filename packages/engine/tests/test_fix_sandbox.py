@@ -44,7 +44,24 @@ def test_fix_command_uses_an_applier_the_image_actually_has(tmp_path, monkeypatc
     assert "patch_ng" in cmd, "needs an applier that pip can install"
     assert "pip install" in cmd and "patch-ng" in cmd
     assert "requirements-ci.txt" in cmd, "same deps as a shard"
-    assert "PYTHONPATH=" in cmd, "same import path as a shard"
+    # the import path must reach pytest itself: in front of the patch-ng step
+    # it reached patch-ng only, and every live re-run died collecting
+    pytest_seg = next(s for s in cmd.split("&&") if "pytest" in s)
+    assert "PYTHONPATH=packages/nodus" in pytest_seg, "same import path as a shard"
+
+
+def test_the_import_path_reaches_every_python_step():
+    o = NgeOrchestrator
+    cmd = o._ensure_runner("python -m patch_ng --strip 1 fix.patch && NGE_FIX_TEST=t "
+                           "python -m pytest tests -q", "src/lib", extra=("patch-ng",))
+    segs = [s.strip() for s in cmd.split("&&")]
+    assert segs[0].startswith("pip install -q pytest")
+    assert segs[1] == "PYTHONPATH=src/lib python -m patch_ng --strip 1 fix.patch"
+    assert segs[2] == "PYTHONPATH=src/lib NGE_FIX_TEST=t python -m pytest tests -q"
+    # a shard command that already says where to import from is left alone
+    keep = o._ensure_runner("PYTHONPATH=x pytest tests -q", "src/lib")
+    assert keep.endswith("&& PYTHONPATH=x pytest tests -q")
+    assert not o._runs_python("cd src") and o._runs_python("A=1 /usr/bin/python3.11 -m x")
 
 
 def test_fix_sandbox_receives_the_whole_payload(tmp_path, monkeypatch):
@@ -223,14 +240,14 @@ def test_the_module_source_reaches_the_model(tmp_path):
 TF = "packages/nodus/tests/test_x.py"
 
 
-def _fix_run(tmp_path, monkeypatch, stdout, failures=None):
+def _fix_run(tmp_path, monkeypatch, stdout, failures=None, exit_code=1):
     """Run one fix attempt whose sandbox returns `stdout`."""
     seen = {}
 
     def spy(command, node_id=None, files=None, **kw):
         if "fix.patch" in command:
             seen["cmd"] = command
-            return {"sandbox_id": "s", "node_id": node_id, "exit_code": 1,
+            return {"sandbox_id": "s", "node_id": node_id, "exit_code": exit_code,
                     "ok": False, "stdout": stdout, "stderr": "",
                     "duration_s": 0.1, "artifacts": {}}
         return {"sandbox_id": "s", "node_id": node_id, "exit_code": 0,
@@ -321,6 +338,47 @@ def test_empty_output_is_not_a_pass(tmp_path, monkeypatch):
     assert fixes[0]["reason"] == "sandbox produced no output - nothing ran"
     ev = [e for e in o.events if e["kind"] == "fix_rejected"][0]
     assert ev["target_fixed"] is False, "absence of failures is not a pass"
+
+
+# the verification re-run of the live film, as archived on 2026-10-19: pytest
+# never found the modules (no import path), printed errors and no FAILED line
+COLLECTION_ERRORS = """
+==================================== ERRORS ====================================
+________________________ ERROR collecting test_x.py ________________________
+ImportError while importing test module '/packages/nodus/tests/test_x.py'.
+E   ModuleNotFoundError: No module named 'x'
+=========================== short test summary info ============================
+ERROR packages/nodus/tests/test_x.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.21s
+"""
+
+
+def test_a_suite_that_dies_collecting_is_not_a_pass(tmp_path, monkeypatch):
+    """The live films' sandbox verification: output, no FAILED line, exit 2 -
+    and every patch that applied was called verified."""
+    o, fixes, _ = _fix_run(tmp_path, monkeypatch, COLLECTION_ERRORS, exit_code=2)
+    assert fixes[0]["verified"] is False
+    assert fixes[0]["reason"] == "the re-run did not run the tests (exit 2, collection error)"
+    ev = [e for e in o.events if e["kind"] == "fix_rejected"][0]
+    assert ev["target_fixed"] is False and ev["tests_ran"] is False
+
+
+def test_no_test_collected_is_not_a_pass(tmp_path, monkeypatch):
+    _, fixes, _ = _fix_run(tmp_path, monkeypatch, "no tests ran in 0.01s", exit_code=5)
+    assert fixes[0]["verified"] is False
+    assert fixes[0]["reason"] == "the re-run did not run the tests (exit 5)"
+
+
+def test_a_target_that_errors_in_setup_is_not_fixed(tmp_path, monkeypatch):
+    out = f"ERROR {TF}::test_a - fixture 'db' not found\n5 passed, 1 error in 0.3s"
+    _, fixes, _ = _fix_run(tmp_path, monkeypatch, out, exit_code=1)
+    assert fixes[0]["verified"] is False
+
+
+def test_a_clean_re_run_is_still_verified(tmp_path, monkeypatch):
+    _, fixes, _ = _fix_run(tmp_path, monkeypatch, "6 passed in 0.3s", exit_code=0)
+    assert fixes[0]["verified"] is True, fixes[0].get("reason")
 
 
 # -- the model sometimes answers nothing at all ------------------------------

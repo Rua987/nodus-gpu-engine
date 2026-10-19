@@ -1,0 +1,24 @@
+# The fix-verification re-run, before and after the 2026-10-19 fix, in real
+# Token Factory sandboxes (python:3.11-slim), with the diff Nemotron wrote for
+# test_century_divisible_by_400_is_leap in the live film 20261019T054453Z
+# (archived attempt 20261019T054241Z-1). No model call.
+# Script: the same command the orchestrator builds, old and new _ensure_runner.
+
+== old: exit=2
+   cmd: pip install -q pytest patch-ng && PYTHONPATH=packages/engine/bench/bugbench python -m patch_ng --strip 1 fix.patch && NGE_FIX_TEST=test_century_divisible_by_400_is_leap python -m pytest packages/engine/bench/bugbench/tests -q --tb=short -p no:cacheprovider
+   E   ModuleNotFoundError: No module named 'dates'
+   E   ModuleNotFoundError: No module named 'shop'
+   E   ModuleNotFoundError: No module named 'textkit'
+   ERROR packages/engine/bench/bugbench/tests/test_dates.py
+   ERROR packages/engine/bench/bugbench/tests/test_shop.py
+   ERROR packages/engine/bench/bugbench/tests/test_textkit.py
+   !!!!!!!!!!!!!!!!!!! Interrupted: 3 errors during collection !!!!!!!!!!!!!!!!!!!!
+   3 errors in 0.07s
+== new: exit=1
+   cmd: pip install -q pytest patch-ng && PYTHONPATH=packages/engine/bench/bugbench python -m patch_ng --strip 1 fix.patch && PYTHONPATH=packages/engine/bench/bugbench NGE_FIX_TEST=test_century_divisible_by_400_is_leap python -m pytest packages/engine/bench/bugbench/tests -q --tb=short -p no:cacheprovider
+   FAILED packages/engine/bench/bugbench/tests/test_dates.py::test_days_between_ignores_order
+   FAILED packages/engine/bench/bugbench/tests/test_shop.py::test_discount_takes_a_percentage
+   FAILED packages/engine/bench/bugbench/tests/test_shop.py::test_cart_total_counts_every_item
+   FAILED packages/engine/bench/bugbench/tests/test_textkit.py::test_slug_collapses_punctuation_and_spaces
+   FAILED packages/engine/bench/bugbench/tests/test_textkit.py::test_short_text_is_not_truncated
+   5 failed, 11 passed in 0.04s
