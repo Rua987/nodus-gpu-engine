@@ -411,3 +411,18 @@ def test_eighth_live_run_its_vacuous_re_run_and_the_after_the_fact_suite_check()
     for run in {r["run"] for r in recheck}:
         logged = sorted(e["test"].split("::")[-1] for e in _kinds(_events(f"report_{run}"), "fix_verified"))
         assert sorted(r["test"] for r in recheck if r["run"] == run) == logged
+
+
+def test_the_filmed_live_run_on_the_fixed_check_ran_the_whole_suite_each_time():
+    """JUDGE_DRY_RUN, clip 2: 5/6 verified, 5/5 hold, and every verified
+    re-run is pytest's own exit 1 with the five other bugs failing."""
+    ev = _events("report_20261019T062658Z")
+    verified = [e for e in _kinds(ev, "fix_verified")]
+    assert len(verified) == 5 and all(e["tests_ran"] is True for e in verified)
+    hold = json.loads((EVIDENCE / "report_20261019T062658Z.holdout.json").read_text(encoding="utf-8"))
+    assert hold["verified"] == hold["judged"] == hold["holdout_ok"] == 5
+    rows = [json.loads(l) for l in (EVIDENCE / "attempts_20261019_film.jsonl").read_text(
+        encoding="utf-8").splitlines() if l.strip()]
+    assert {r["exit_code"] for r in rows if r["verdict"] == "verified"} == {1}
+    (odd,) = [r for r in rows if r["verdict"] != "verified"]
+    assert odd["category"] == "context_invented" and odd["test"].endswith("test_discount_takes_a_percentage")
