@@ -153,7 +153,9 @@ exit 1 with `5 failed, 11 passed` - the five other bugs (`evidence/verify_cmd_pr
 What still stands: the held-out check ran locally with a real pytest, so « every
 verified patch also passes hidden cases » was true. `bench/suite_recheck.py` replays the
 half that was missing - the target passes, nothing else breaks - on the diffs the films'
-HTML kept: **41/41** across the eight runs (`evidence/suite_recheck_20261019.csv`). The
+HTML kept: **41/41** across the eight runs (`evidence/suite_recheck_20261019.csv`). The reasoning
+benchmark of 2026-10-01 (`bench/thinking_ab.py`, Token Factory sandboxes, the same re-run) had the
+same hole; its twelve reports are still on disk: **59/59** (`evidence/suite_recheck_bench_20261019.csv`). The
 numbers hold; the sandbox step behind them did not, until now.
 
 Why no test caught it: the mock sandbox simulates the re-run from `NGE_FIX_TEST` and

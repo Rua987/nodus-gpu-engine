@@ -22,7 +22,7 @@ Source: `nebiusglobalaihackathon.devpost.com/rules`. **Deadline: 2026-10-30, 10:
 | Track chosen | Coding and Agentic Engineering — « agents that write, run, and test code in Token Factory » |
 | Text description of features and functionality | the *About the project* blocks below |
 | Demo video **under 3 minutes**, **public on YouTube** | **done** — https://youtu.be/g5iLfAx28KY (2:06, public, checked 2026-10-19: playable, not unlisted, 126 s) |
-| Code repo **public**, open-source licence file | MIT `LICENSE` present; repo **private today — must be made public** (history scanned 2026-10-04: no key, no account id, no ip) |
+| Code repo **public**, open-source licence file | **done** — public, MIT `LICENSE` (history scanned 2026-10-04: no key, no account id, no ip) |
 | README with setup instructions | `README.md` (*Quick start*, no credentials) |
 | Free testing access for judges | the mock demo needs no key and no network (*Testing instructions*) |
 | Highlight Nemotron, Token Factory, other Nebius tools | *Technological Implementation* below |
@@ -52,7 +52,12 @@ Source: `nebiusglobalaihackathon.devpost.com/rules`. **Deadline: 2026-10-30, 10:
 **Project name**  
 Nodus-GPU Engine
 
-**Tagline** (≤ 1 line)  
+**Elevator pitch** (Devpost, ≤ 200 chars — this one is 196, the video's opening line)  
+An agentic loop on Nebius Token Factory and NVIDIA Nemotron: it runs your tests, has Nemotron patch each failure, re-runs the whole suite in a fresh sandbox, and keeps only the fixes it can prove.
+
+**Thumbnail** (3:2): `nodus-gpu-engine-thumbnail.png`, 1500×1000, cut from the video (the live run's control room, 5/6).
+
+**Tagline** (≤ 1 line, older)  
 Not a chatbot: a control loop that plans, shards tests, migrates off a hot node, and keeps only green patches.
 
 **Track**  
@@ -202,6 +207,8 @@ model reply is labelled cut, and a sandbox that cut its output never yields a "v
 - Reversible `nebius:` chat backend: `max_tokens`, usage (incl. `reasoning_tokens`), reasoning on/off per call class, `ModelUnavailableError`.  
 - Fleet: `mock` (synthetic H100 telemetry for the film) · `nebius` (Contree) · `compute`: Nebius AI Cloud GPU VMs the engine creates, reads over SSH (`nvidia-smi`) and deletes — a one-VM probe, then a hybrid heal run on 2 × L40S. Labelled VMs, a self-power-off in cloud-init, and a refusal to start while one is left over.  
 - Mock autofix uses canned patches so the verify loop is deterministic for judges; live slot-fill/triage hits Super.
+- Live fix loop: Nemotron Super writes a unified diff from the failure and the exact source text; `patch-ng` applies it in a fresh Token Factory sandbox and pytest re-runs the **whole** suite; a kept patch is then re-checked on held-out cases the model never saw. Every attempt — kept, refused, never produced — is archived with its diff, its re-run log and the reason it ended where it did.
+- Evidence discipline: each run's own event log is kept in the repo, and every number we quote is asserted by a test against it (`tests/test_evidence.py`, ~600 tests in CI).
 
 ---
 
@@ -222,10 +229,9 @@ model reply is labelled cut, and a sandbox that cut its output never yields a "v
 
 - One closed loop on a real repo — plan, test, heal, patch, prove — with every judge-facing claim
   checked by a test against the run's own event log (`packages/engine/tests/test_evidence.py`).
-- On six seeded bugs re-checked against held-out cases the model never saw, every patch the loop called
-  verified was a real fix, and none broke another test — in the benchmark, and again in the live film
-  (46/46 across nine runs; for the first eight the whole suite was re-checked after the fact: see
-  *What we learned*).
+- On six seeded bugs re-checked against held-out cases the model never saw and against the whole suite,
+  every patch the loop called verified was a real fix and none broke another test: 59/59 in the benchmark,
+  46/46 across nine live runs (all but the last re-checked after the fact: see *What we learned*).
 - The heal loop ran on real Nebius L40S GPUs it created and deleted itself: it migrated nothing by mistake
   on idle ones, and moved a GPU job off one that another process held (a load we induced and declared) —
   26.8 s there, 20.3 s on the fresh VM; 25.4 s and 20.5 s when we ran it again.
@@ -240,14 +246,14 @@ model reply is labelled cut, and a sandbox that cut its output never yields a "v
   failure, an output cut at 64 KiB — each looked like success until the failure sets were compared.
 - Archive every attempt, including the ones that "worked". Reading the archived re-runs of our own live
   film, we found the sandbox check had run no test for weeks: the import path reached the patch tool, not
-  pytest. Every kept patch held when re-checked (41/41), but only because the patches were good - the check
-  now has to see pytest's own count before it says verified.
+  pytest. Every kept patch held when re-checked (41/41 in the films, 59/59 in the benchmark), but only because
+  the patches were good - the check now has to see pytest's own count before it says verified.
 - Real metrics can lie like fake ones. An idle GPU reads efficiency 0; the fix for CPU sandboxes had to
   be generalised before the first real VM.
 
 ## “What’s next” (honest, short)
 
-Done since the first draft: the engine's own probe created a Nebius AI Cloud **L40S** VM, read `nvidia-smi` (27 °C, 67.8 W, classified `datacenter`) and deleted it — 192 s end to end, evidence in `packages/engine/evidence/compute_probe_20261003T231022Z.json`. Its first live run failed (a Windows CRLF bug, and a VM that outlived a killed process); both causes are fixed and documented.
+Where it stands: the engine's own probe created a Nebius AI Cloud **L40S** VM, read `nvidia-smi` (27 °C, 67.8 W, classified `datacenter`) and deleted it — 192 s end to end, evidence in `packages/engine/evidence/compute_probe_20261003T231022Z.json`. Its first live run failed (a Windows CRLF bug, and a VM that outlived a killed process); both causes are fixed and documented.
 Then the heal loop ran on real GPUs: two L40S VMs, real `nvidia-smi` in each heal decision, nothing migrated by mistake,
 both VMs deleted (`packages/engine/evidence/report_20261004T031503Z.md`). Building it caught a flaw first: an idle GPU
 reads efficiency 0, which would have migrated shards off healthy nodes — fixed before any VM was created.
@@ -255,6 +261,11 @@ reads efficiency 0, which would have migrated shards off healthy nodes — fixed
 Then a real migration: CUDA shards on the VMs, a GPU load induced and declared on one node, the shard moved and
 timed, 26.8 s → 20.3 s (`packages/engine/evidence/report_20261005T001234Z_rerender.html`), and again on
 camera, 25.4 s → 20.5 s (`packages/engine/evidence/report_20261019T052247Z.html`).
+
+First contact with real bugs: SWE-bench Verified tasks from small projects (requests, flask, pytest), run in Token Factory
+sandboxes on each task's own image. Test-guided — the model sees the failing tests, so this is **not** a SWE-bench score:
+**3 of 21** validated tasks resolved (`docs/REAL_BUGS.md`). The archive says why the rest failed — mostly code the model
+was never shown — so repository navigation comes before any self-repair.
 
 Next: the heal is reactive — it re-runs a shard after reading the node, which only pays on long jobs; checking a
 node before placing work there, live migration with state, and per-SKU thresholds (H100-tuned today; an L40S

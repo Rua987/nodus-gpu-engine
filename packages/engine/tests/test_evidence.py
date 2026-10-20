@@ -426,3 +426,13 @@ def test_the_filmed_live_run_on_the_fixed_check_ran_the_whole_suite_each_time():
     assert {r["exit_code"] for r in rows if r["verdict"] == "verified"} == {1}
     (odd,) = [r for r in rows if r["verdict"] != "verified"]
     assert odd["category"] == "context_invented" and odd["test"].endswith("test_discount_takes_a_percentage")
+
+
+def test_every_benchmark_patch_called_verified_passes_the_whole_suite():
+    """FIX_LOOP: the 2026-10-01 reasoning benchmark ran the same empty re-run;
+    its 59 "verified" patches, re-checked on the whole suite, all hold."""
+    bench = list(csv.DictReader((EVIDENCE / "thinking_ab_bugbench_20261001.csv").open(encoding="utf-8")))
+    rows = list(csv.DictReader((EVIDENCE / "suite_recheck_bench_20261019.csv").open(encoding="utf-8")))
+    assert len(rows) == sum(int(b["verified"]) for b in bench) == 59
+    assert len({r["run"] for r in rows}) == 12
+    assert all(r["verified"] == "True" and r["regressions"] == "" for r in rows)
