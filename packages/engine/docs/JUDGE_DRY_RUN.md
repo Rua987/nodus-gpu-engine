@@ -137,6 +137,16 @@ six verified, all four pass hidden cases the model never saw; we keep only what 
 Before recording: terminal font large (~20 pt), window maximised, notifications off, `cls`,
 `cd packages/engine`; run each command once to warm up; open the HTML files in tabs.
 
+## The published video — 2026-10-19
+
+https://youtu.be/g5iLfAx28KY — 2:06, public. Cut from two Clipchamp exports with ffmpeg (order fixed, the duplicate
+GPU report and dead time removed, captions added), narration by Kokoro (local TTS, Apache-2.0),
+loudness normalised to -16 LUFS. Every spoken key phrase was checked against the frame on screen
+at that moment: « CPU only… heal gated » (0:22), « Six failures » (0:28), « Five of six verified »
+(0:44), the held-out lines `5/5` (0:47–0:51, from the same run's first export), the Auto-fixes
+table (0:58), the CPU cards (1:03), node 02 throttling (1:17), the migrate to 03 (1:21),
+« 25.4 seconds there, 20.5 here » (1:44), the MIT page (2:01).
+
 ## Rehearsal notes — 2026-10-19 (clip 2 refilmed, then refilmed again)
 
 - The take `report_20261019T054453Z` (4/6, 4/4 hold) is **not for the film**: reading its archived

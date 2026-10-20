@@ -7,6 +7,8 @@
 
 **Agentic engineering platform — Nebius "Coding & Agentic Engineering" track.**
 
+**Demo video (2 min):** https://youtu.be/g5iLfAx28KY
+
 A deterministic local planner decides *what* to do, Nemotron (tier-routed) decides
 the *hard parts*, and a fleet of Nebius GPUs + Token Factory sandboxes actually
 *runs the work* — isolated, monitored, and re-provisioned by the engine itself

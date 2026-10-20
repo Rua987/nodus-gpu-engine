@@ -21,7 +21,7 @@ Source: `nebiusglobalaihackathon.devpost.com/rules`. **Deadline: 2026-10-30, 10:
 | Runs on Token Factory or AI Cloud, uses an NVIDIA open model | yes — Nemotron 3 on Token Factory, sandboxes, and AI Cloud GPU VMs |
 | Track chosen | Coding and Agentic Engineering — « agents that write, run, and test code in Token Factory » |
 | Text description of features and functionality | the *About the project* blocks below |
-| Demo video **under 3 minutes**, **public on YouTube** | **to do** — film ~85 s + optional shots (checklist below) |
+| Demo video **under 3 minutes**, **public on YouTube** | **done** — https://youtu.be/g5iLfAx28KY (2:06, public, checked 2026-10-19: playable, not unlisted, 126 s) |
 | Code repo **public**, open-source licence file | MIT `LICENSE` present; repo **private today — must be made public** (history scanned 2026-10-04: no key, no account id, no ip) |
 | README with setup instructions | `README.md` (*Quick start*, no credentials) |
 | Free testing access for judges | the mock demo needs no key and no network (*Testing instructions*) |
@@ -39,7 +39,7 @@ Source: `nebiusglobalaihackathon.devpost.com/rules`. **Deadline: 2026-10-30, 10:
 | About the project | in order: *Inspiration*, *What it does*, *How we built it*, *Challenges*, *Accomplishments*, *What we learned*, *What's next* |
 | Built with | `python` `nvidia-nemotron` `nebius-token-factory` `nebius-ai-cloud` `contree-sandboxes` `pytorch` `mcp` |
 | Try it out | https://github.com/Rua987/nodus-gpu-engine |
-| Video demo link | the public YouTube URL |
+| Video demo link | https://youtu.be/g5iLfAx28KY |
 | Track | Coding and Agentic Engineering |
 | Testing instructions | *Testing instructions* block |
 | How you used Nemotron / Token Factory / Nebius | *Technological Implementation* section |
