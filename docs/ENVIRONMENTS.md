@@ -25,7 +25,7 @@ From a fresh clone and an empty venv, on Windows:
 
 ```bash
 pip install -r requirements.txt     # requests + pytest only — torch is optional
-python -m pytest -q                 # 532 pass, 21 clean skips (nebius x13, cryptography x6, mcp, nodus_agent) - 2026-10-17, clean venv
+python -m pytest -q                 # 575 pass, 21 clean skips (nebius x13, cryptography x6, mcp, nodus_agent) - 2026-10-20, fresh clone + clean venv
 python -m nge.demo_nebius --mock    # runs, produces its artefact
 python -m nge.fetch_ckpt            # 988 MB, SHA256-verified, writes .nodus_plan_ckpt
 ```
