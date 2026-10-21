@@ -47,6 +47,59 @@ Source: `nebiusglobalaihackathon.devpost.com/rules`. **Deadline: 2026-10-30, 10:
 
 ---
 
+## About the project — plain-English version (the one pasted on Devpost, 2026-10-21)
+
+The long blocks further down stay as the detailed record; on the form, the user asked for language a
+non-engineer reads easily. ~550 words instead of ~1,460; same facts, same caveats (the induced GPU load,
+not a SWE-bench score, our own bug). Headings are `##` on the form.
+
+### Inspiration
+
+AI coding assistants suggest a fix and stop there. Nobody checks whether the fix really works, or whether it quietly breaks something else. We wanted an agent that does the whole job — and only keeps what it can prove.
+
+### What it does
+
+You give Nodus-GPU Engine a project with failing tests. It:
+
+1. Runs the tests, spread across several machines.
+2. Sends each failure to NVIDIA Nemotron, on Nebius Token Factory, which writes a fix.
+3. Tries each fix in a fresh, isolated sandbox and runs **all** the tests again.
+4. Keeps the fix only if that test now passes and nothing else broke.
+5. Watches the machines too: if one is overloaded, it moves the work to another.
+
+At the end you get one report: what failed, what was fixed, what was refused and why.
+
+### How we built it
+
+- **Nebius Token Factory** runs the AI (NVIDIA Nemotron 3 Super writes the fixes) and the sandboxes where every fix is tested.
+- **Nebius AI Cloud** gives real NVIDIA L40S GPUs: the engine creates them, reads their real temperature and load, and deletes them when it is done.
+- A small planning model runs locally, so the big cloud models are used only where they matter.
+- Every result we quote comes from a real run kept in the repository, and is checked by an automatic test (about 600 tests).
+
+### Challenges we ran into
+
+- **The AI spent its whole budget thinking** and sent back empty answers. We measured it, and turned the thinking off where it did not help.
+- **"It passed" was not always true.** A cut-off log, or a check that silently ran nothing, can look like success. We found one such case in our own pipeline by reading the record of every attempt — and fixed it.
+- **Real GPUs behave differently from simulated ones.** An idle GPU looks "inefficient"; we had to teach the engine not to move work away from healthy machines.
+
+### Accomplishments that we're proud of
+
+- On six bugs we planted, every fix the engine kept was a real fix — confirmed on hidden tests the AI never saw and on the full test suite: 46 out of 46, across nine live runs.
+- On real Nebius L40S GPUs, we kept one GPU busy with a job of our own (on purpose, and the report says so). The engine noticed, moved the work to a fresh machine, and measured the difference: 25.4 s on the busy GPU, 20.5 s on the new one.
+- Every number on this page is backed by a test in the repository.
+
+### What we learned
+
+- Don't trust "green": check that the tests really ran.
+- Keep a record of every attempt, even the ones that worked. That is how we caught our own bug.
+- Measure before changing anything, and write down what did not work.
+
+### What's next for Nodus-GPU Engine
+
+We tried it on real bugs from well-known open-source projects (SWE-bench Verified): it fixed 3 out of 21. The AI was shown the failing tests, so this is not an official SWE-bench score. The main limit is clear — the AI often did not see the right piece of code — so better code search comes next.
+
+---
+
 ## Fields (short)
 
 **Project name**  
