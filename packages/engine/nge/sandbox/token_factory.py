@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 import os
+import re
 import time
 from typing import Dict, Optional, Tuple
 
@@ -70,7 +71,12 @@ def _transient_contree(exc: BaseException) -> bool:
         return True
     if any(s in name for s in ("Connection", "Connect", "Transport", "Network")):
         return True
-    if "429" in msg or "503" in msg or "502" in msg or "504" in msg:
+    # A 500 is transient too: the scheduled CI live run of 2026-10-20 died in
+    # 4 s on `500 Internal Server Error` from the sandbox files endpoint, while
+    # uploading the shard's files - before anything had run - and the same
+    # call passed a day earlier. Matched as a whole status, not any "500" in
+    # the text.
+    if re.search(r"(?<!\d)(?:429|500|502|503|504)(?!\d)", msg) or "internal server error" in msg:
         return True
     return False
 
@@ -85,6 +91,7 @@ class TokenFactorySandbox(Sandbox):
         self._sdk = None
         self._sessions: Dict[str, object] = {}     # sid -> ConTree session
         self._pending: Dict[str, dict] = {}        # sid -> files to seed on next exec
+        self._images: Dict[str, object] = {}       # sid -> image, to restart a session
         self._n = 0
         self.last_retries = 0                      # attempts beyond the first
 
@@ -109,6 +116,7 @@ class TokenFactorySandbox(Sandbox):
             img = sdk.images.use(ref)                 # quickstart path, no import perm
         except Exception:
             img = sdk.images.docker(ref)              # fall back to tag/import
+        self._images[sid] = img
         self._sessions[sid] = img.session()
         self._pending[sid] = {}
         return sid
@@ -142,6 +150,13 @@ class TokenFactorySandbox(Sandbox):
                 if attempt < attempts and _transient_contree(exc):
                     self.last_retries = attempt
                     time.sleep(delay * attempt)
+                    # A run that failed half-way leaves its session mid-state:
+                    # retried as is, it raised ContreeImageStateError ("state
+                    # None cannot have state EXECUTING") - live, 2026-10-20.
+                    # Retry from a fresh session of the same image.
+                    img = self._images.get(sandbox_id)
+                    if img is not None:
+                        sess = img.session()
                     continue
                 if pending:
                     self._pending[sandbox_id] = dict(pending)
@@ -181,6 +196,7 @@ class TokenFactorySandbox(Sandbox):
     def destroy(self, sandbox_id: str) -> None:
         sess = self._sessions.pop(sandbox_id, None)
         self._pending.pop(sandbox_id, None)
+        self._images.pop(sandbox_id, None)
         for meth in ("close", "delete", "stop"):
             fn = getattr(sess, meth, None)
             if callable(fn):
