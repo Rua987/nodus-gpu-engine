@@ -100,52 +100,64 @@ We tried it on real bugs from well-known open-source projects (SWE-bench Verifie
 
 ---
 
-## Page 3 — plain-English versions (the ones pasted on Devpost, 2026-10-21)
+## Additional info — answers (Devpost page 3, 2026-10-21)
 
-### Testing instructions (plain-English)
+Personal fields (submitter type, organisation, country, Canada, IRL city, age, not an employee, learning level,
+career value) and the 1–10 ratings are the submitter's own answers; the ratings below are suggestions with
+their reasons.
 
-No account or key needed — about 2 minutes.
+**Track:** Coding and Agentic Engineering
 
-```bash
-git clone https://github.com/Rua987/nodus-gpu-engine
-cd nodus-gpu-engine/packages/engine
-pip install -r requirements.txt
-python -m pytest -q
-python -m nge.demo_nebius --mock --watch --watch-delay 2.0 --heuristic-plan
-```
+**New or existing prior to August 26, 2026:** Existing — explanation:
 
-What you should see:
+Nodus-GPU Engine itself — the engine, the fleet, the fix loop, the sandbox and GPU integration, everything in `packages/engine` — was built during the hackathon: every commit in the repository is from September 2026 or later. It reuses our earlier open-source Nodus runtime (MIT, vendored unmodified) and its small local planner. Everything Nebius- and NVIDIA-related is new: Nemotron through Token Factory, Token Factory sandboxes for every test and every patch check, and Nebius AI Cloud GPU VMs for the real-GPU runs.
 
-- Tests: 579 passed, 21 skipped (the skipped ones need optional cloud libraries).
-- The demo plays the whole loop on simulated machines (about 85 s): one machine overheats and its work moves from `nb-h100-02` to `nb-h100-03`; 2 of 3 failures are fixed and verified. It ends by printing the path of an HTML report — open it in a browser.
+**Public code repository:** https://github.com/Rua987/nodus-gpu-engine
 
-The live version, on real Nebius services, needs a Token Factory key (see the README). Every recorded real run is in `packages/engine/evidence/`.
+**Working demo:** https://youtu.be/g5iLfAx28KY
 
-### How we used Nebius and NVIDIA (plain-English)
+**Which model(s) did you use, and why that size/variant?**
 
-- **NVIDIA Nemotron 3 Super**, through Nebius Token Factory, writes every fix and sorts the failures. Nemotron Nano and Ultra have smaller roles.
-- **Token Factory sandboxes**: every test run and every fix check happens in a fresh, isolated sandbox.
-- **Nebius AI Cloud**: real NVIDIA L40S GPUs that the engine creates and deletes itself. It reads their real temperature and load to decide when to move work.
-- We measured how Nemotron uses its token budget and tuned it for each kind of task.
-- We also ran it on real open-source bugs (SWE-bench Verified) inside Token Factory sandboxes: 3 of 21 fixed — the AI saw the failing tests, so this is not an official score.
+NVIDIA Nemotron 3 Super (nvidia/nemotron-3-super-120b-a12b) does the real work: it triages the failures and writes the code patches. Writing a correct patch needs a large model, and its mixture-of-experts design (about 12B active parameters) keeps each call fast and cheap — a full live run with six patches costs about one cent. Nemotron 3 Nano (30B-A3B) and Ultra (550B-A55B) are wired in as roles — Nano for quick health checks, Ultra for planning — but a small local planner usually plans, so Super made nearly all the billed calls. If Nano or Ultra is unavailable, the call falls back once to Super, and the log says so.
 
-### Feedback (plain-English)
+**Nemotron output quality (suggested 7/10):**
 
-What worked well:
+What worked: once the token budget was right, Super's patches were real fixes — every patch our loop kept on our seeded bugs (46 of 46) also passed hidden tests it never saw and the whole test suite. It followed strict JSON schemas perfectly. What fell short: it reasons inside max_tokens, so our first answers came back empty; some diffs quote code that is not in the file, or mis-indent the surrounding lines while the fix itself is right; on real open-source bugs (SWE-bench Verified, test-guided) it fixed 3 of 21, mostly because it had not been shown the right code.
 
-- Token Factory speaks the same language as the OpenAI API, so plugging it in was easy.
-- Nemotron 3 Super was a solid model for fixing bugs once we gave it enough room.
-- Creating a real L40S GPU through the AI Cloud Python SDK took under a minute.
+**Fine-tune, prompt-engineer, or out of the box?**
 
-What was hard, and what would help:
+Out of the box, no fine-tuning. Prompt engineering plus strict checks around the model: it gets the failing test output and the exact, line-numbered source text, and must answer with a unified diff. Reasoning is turned off for short replies and kept for patches, a choice we measured. Typed replies use a strict json_schema. Nothing the model writes is trusted as is: a patch that quotes code not in the file is refused, hunks are moved to their real line, and a patch is kept only if the whole test suite passes in a fresh sandbox.
 
-- **Nemotron thinks inside the same token limit as its answer.** Our first answers came back empty: the whole budget went to thinking. A separate thinking budget, or a clear note in the docs, would help.
-- **Model names are case-sensitive and not consistent** (`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` but `nvidia/nemotron-3-super-120b-a12b`). We had to list them through the API.
-- **Some options are silently ignored** (`guided_json`). An error would save time. The strict `json_schema` option, on the other hand, works very well.
-- **Sandboxes cut output at 64 KB by default**, silently unless you check a flag. It once made us count a test that does not exist. A warning would help.
-- **Sandbox files**: text passed as a string is read as a file path, not as content; and a sandbox runs only one command. Fine once known, but surprising.
-- **On 2026-10-20 the sandbox file service returned "500 Internal Server Error"** for a while. We now retry, but a public status page would help.
-- **AI Cloud console**: Token Factory and AI Cloud project IDs look alike but are different; service accounts have no downloadable credentials file; the two balances are separate. An automatic "delete this VM after N minutes" option would let us drop our own safety nets.
+**Compared to other models:**
+
+We did not run a controlled comparison against other models for this task, so we won't claim a ranking. What we measured is Nemotron against itself: reasoning on and off, token budgets, typed versus free-text replies. On real bugs, most failures came from code the model was not shown rather than from wrong fixes — the next gain is better code search, not a different model.
+
+**Most valuable Nebius capabilities, and how:**
+
+1) Token Factory's OpenAI-compatible API: Nemotron with no deployment to manage, and usage that reports reasoning tokens — which is how we found and fixed our token-budget problem. 2) Token Factory sandboxes: every test shard and every patch check runs in a fresh, isolated sandbox; that is what lets us say a fix was verified, not just proposed. We also ran real open-source bugs on their own Docker images inside them. 3) Nebius AI Cloud Compute: through the Python SDK the engine creates NVIDIA L40S GPU VMs, reads real nvidia-smi telemetry over SSH, moves work off a busy GPU, and deletes the VMs (about $0.6 per run). Inference itself ran on Token Factory, not on our own GPUs.
+
+**Recommend Nemotron on Nebius (suggested 8/10):**
+
+Drop-in OpenAI-compatible API, cheap and fast, and sandboxes next to the model make an agent loop simple to build. Not a 10 because of rough edges: reasoning that silently eats max_tokens, a parameter accepted but ignored (guided_json), a 64 KiB output cut that is easy to miss, and an occasional 500 from the sandbox file service that broke one of our scheduled CI runs.
+
+**Experience vs previous environments (suggested 8/10):**
+
+No GPU to manage for inference, and a full live run costs about a cent; having sandboxes on the same platform beat wiring our own containers. Setting up AI Cloud credentials took longer than it should: project ids that look alike across Token Factory and AI Cloud, and no downloadable service-account credentials file.
+
+**Features or improvements that would have helped:**
+
+- A separate reasoning budget per request, or a clear signal when reasoning used up max_tokens.
+- An error, not silence, for unsupported parameters such as guided_json.
+- Sandboxes: a larger default output limit or a visible warning when output is cut; clearer handling of str versus bytes files; retry of transient 500s inside the SDK.
+- AI Cloud: a time-to-live per VM, a downloadable service-account credentials file, and clearer separation of Token Factory and AI Cloud ids and balances.
+
+**What do you most hope to see from the Nemotron team next?**
+
+Nemotron models tuned for code editing — exact, well-formed diffs that copy the surrounding lines verbatim — and a reasoning-token budget separate from the answer budget.
+
+**Tavily:** No
+
+**AI tools used:** Claude Code (Anthropic) as the coding assistant for the engine, tests and docs; NVIDIA Nemotron via Nebius Token Factory inside the product; Kokoro (open-source text-to-speech) for the video narration; Clipchamp for video editing.
 
 ---
 
