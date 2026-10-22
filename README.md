@@ -21,6 +21,38 @@ GPU fleet (Nebius)   ──▶  provision / monitor / migrate  [ infrastructure 
 Token Factory        ──▶  isolated exec + capability jail [ execution   ]
 ```
 
+## How we use NVIDIA Nemotron and Nebius
+
+**NVIDIA Nemotron, through Nebius Token Factory**
+
+- **Nemotron 3 Super** (`nvidia/nemotron-3-super-120b-a12b`) reads each failing test and the exact,
+  line-numbered source text, and writes the fix as a unified diff. **Nano** (30B-A3B) and **Ultra**
+  (550B-A55B) hold the health-check and planning roles; a failing call falls back once to Super, logged.
+- **The engine helps Nemotron land good patches and throws out bad ones** — it never applies a diff blindly:
+  a diff that quotes code not in the file is refused before any sandbox runs; a hunk written at the wrong
+  line is moved to its real line; reasoning is off for short replies and kept for patches (measured, see
+  [`docs/FIX_LOOP.md`](docs/FIX_LOOP.md)); a patch is kept only if the **whole** test suite passes in a fresh
+  sandbox, then it is re-checked on hidden tests the model never saw. On our six seeded bugs, 46 of 46 kept
+  patches were real fixes, across nine live runs.
+
+**Where Token Factory accelerated our workflow**
+
+- One OpenAI-compatible endpoint: no model to host, and `usage` reports reasoning tokens — which is how we
+  found Nemotron's reasoning eating the whole `max_tokens` budget, and fixed it.
+- Sandboxes next to the model: every test shard and every patch check gets a fresh, isolated sandbox in
+  seconds, with no containers of our own. A full live run with six patches takes a few minutes and costs
+  about one cent.
+- Real open-source bugs (SWE-bench Verified) ran on their own Docker images inside those sandboxes, with no
+  local Docker — see [`docs/REAL_BUGS.md`](docs/REAL_BUGS.md).
+
+**Other Nebius services**
+
+- **Nebius AI Cloud Compute**: through the Python SDK the engine creates NVIDIA **L40S** GPU VMs, reads real
+  `nvidia-smi` over SSH for every heal decision, moves work off a busy GPU (25.4 s → 20.5 s, under a load we
+  induced and declared), and deletes the VMs — see [`docs/COMPUTE_GPU.md`](docs/COMPUTE_GPU.md).
+
+Full judge-facing detail: [`packages/engine/docs/NEBIUS_TRACK.md`](packages/engine/docs/NEBIUS_TRACK.md).
+
 > **The 324M planner needs its weights.** They are ~988 MB and not in git, so
 > without them the planner step falls back to a hand-written keyword heuristic
 > — a real fallback, but *not* the model. Every run says which one produced the
