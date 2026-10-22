@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS ACCEPTANCE ORACLE
+🏛️ NODUS ACCEPTANCE ORACLE
 ⚡ Conformité à l'INTENTION : l'artefact fait-il ce que l'HUMAIN a demandé ?
 🔥 Le verdict externe bat le verdict de soi — des exemples que le modèle n'a PAS écrits.
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Le trou que ça comble (le plafond de vérification suivant) :
     mutation testing prouve « tes tests ont des dents » — mais sur TON impl. Un

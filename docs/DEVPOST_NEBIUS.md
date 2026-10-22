@@ -102,7 +102,7 @@ We tried it on real bugs from well-known open-source projects (SWE-bench Verifie
 
 ## Additional info — answers (Devpost page 3, 2026-10-21)
 
-Personal fields (submitter type, organisation, country, Canada, IRL city, age, not an employee, learning level,
+Solo submitter, no organisation (`N/A`). Personal fields (submitter type, organisation, country, Canada, IRL city, age, not an employee, learning level,
 career value) and the 1–10 ratings are the submitter's own answers; the ratings below are suggestions with
 their reasons.
 
@@ -110,7 +110,7 @@ their reasons.
 
 **New or existing prior to August 26, 2026:** Existing — explanation:
 
-Nodus-GPU Engine itself — the engine, the fleet, the fix loop, the sandbox and GPU integration, everything in `packages/engine` — was built during the hackathon: every commit in the repository is from September 2026 or later. It reuses our earlier open-source Nodus runtime (MIT, vendored unmodified) and its small local planner. Everything Nebius- and NVIDIA-related is new: Nemotron through Token Factory, Token Factory sandboxes for every test and every patch check, and Nebius AI Cloud GPU VMs for the real-GPU runs.
+Nodus-GPU Engine itself — the engine, the fleet, the fix loop, the sandbox and GPU integration, everything in `packages/engine` — was built during the hackathon: every commit in the repository is from September 2026 or later. It reuses our earlier open-source Nodus runtime (MIT, vendored, its code unchanged) and its small local planner. Everything Nebius- and NVIDIA-related is new: Nemotron through Token Factory, Token Factory sandboxes for every test and every patch check, and Nebius AI Cloud GPU VMs for the real-GPU runs.
 
 **Public code repository:** https://github.com/Rua987/nodus-gpu-engine
 
@@ -157,7 +157,7 @@ Nemotron models tuned for code editing — exact, well-formed diffs that copy th
 
 **Tavily:** No
 
-**AI tools used:** Claude Code (Anthropic) as the coding assistant for the engine, tests and docs; NVIDIA Nemotron via Nebius Token Factory inside the product; Kokoro (open-source text-to-speech) for the video narration; Clipchamp for video editing.
+**AI tools used:** Claude Code (Anthropic) and Cursor as coding assistants for the engine, tests and docs; NVIDIA Nemotron via Nebius Token Factory inside the product; Kokoro (open-source text-to-speech) for the video narration; Clipchamp for video editing.
 
 ---
 

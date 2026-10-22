@@ -10,7 +10,7 @@ Ce modèle intègre la couche 'SpinozistAttention' inspirée par NODUS lui-même
 2. Illusion Filter : Un débruitage (denoising) sur les scores d'attention pour éliminer le 'bruit' (les illusions).
 3. Geometric Necessity : Une modulation de l'attention par l'alignement géométrique pur.
 
-Auteur: Temple IAM & NODUS (via ses Lumières)
+Auteur: Rua987 & NODUS (via ses Lumières)
 """
 
 import math

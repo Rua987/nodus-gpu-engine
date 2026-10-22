@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS KNOWLEDGE
+🏛️ NODUS KNOWLEDGE
 ⚡ Pont mémoire : le cerveau qui AGIT retient ses découvertes réutilisables
 🔥 Écrit en fin de tâche · rappelé par PERTINENCE · ré-injecté sur tâches voisines
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Idée :
     L'agent ReAct (qui a les outils) ne retenait rien de substantiel ; la mémoire

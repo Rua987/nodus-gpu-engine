@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS FALSIFY
+🏛️ NODUS FALSIFY
 ⚡ Reverse-NODUS : chercher un CONTRE-EXEMPLE exécuté, pas faire confiance à des cas fixes
 🔥 Comble l'angle mort prouvé : des cas/tests fixes partagent les angles morts du modèle
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Le trou que ça comble (prouvé au sol) :
     Les gates (acceptation/mutation) ne vérifient QUE ce qu'on leur donne. Si les

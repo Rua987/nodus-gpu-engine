@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS AMPLIFY
+🏛️ NODUS AMPLIFY
 ⚡ Amplification OPT-IN : best-of-N de run_agent, gardé par les oracles au sol
 🔥 Récolte pass@k — N tentatives fraîches, on garde la 1re CERTIFIÉE
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Câble `nodus_search.best_of_n` sur l'agent réel :
     generate(i) = un run_agent COMPLET dans une tentative fraîche (isolée).

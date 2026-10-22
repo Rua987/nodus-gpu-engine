@@ -34,7 +34,7 @@ Input → Embedding → [Block × N] → LM Head → Output
 
 Où chaque Block = Attention + MLP
 
-Auteur: Temple IAM (style Karpathy fonctionnel pur)
+Auteur: Rua987 (style Karpathy fonctionnel pur)
 """
 
 import math

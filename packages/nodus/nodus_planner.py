@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS PLANNER
+🏛️ NODUS PLANNER
 ⚡ Couche de planification : un plan explicite avant l'exécution
 🔥 Tâche complexe → plan N étapes → exécution guidée
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Architecture:
     Fonctions PURES uniquement (pas d'appel LLM ici) pour rester

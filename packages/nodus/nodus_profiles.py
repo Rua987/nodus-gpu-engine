@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS PROFILES
+🏛️ NODUS PROFILES
 ⚡ Agents spécialisés : CODE · DEBUG · DOCS · TEST · RESEARCH · SECURITY · GENERAL
 🔥 Un routeur choisit le bon profil selon la tâche
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Architecture:
     Fonctions PURES + données immuables (pas d'appel LLM ici).

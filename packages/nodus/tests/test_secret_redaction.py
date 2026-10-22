@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - Tests rédaction de secrets (nodus_tools)
+🏛️ Tests rédaction de secrets (nodus_tools)
 ⚡ Coverage target: 100% sur redact_secrets / _redact_result / dispatch_tool hook
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 """
 
 import sys

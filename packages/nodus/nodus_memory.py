@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS MEMORY
+🏛️ NODUS MEMORY
 ⚡ Mémoire persistante inter-sessions pour l'agent NODUS
 🔥 Charge au démarrage · Sauvegarde à la fin · Markdown lisible
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Architecture:
     Fichier .nodus_memory.md stocké dans le cwd de la tâche.

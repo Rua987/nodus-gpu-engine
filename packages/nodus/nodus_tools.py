@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS TOOLS
+🏛️ NODUS TOOLS
 ⚡ Port des outils Claude Code (src/tools/) en Python pur pour Ollama
 🔥 BashTool · FileReadTool · FileEditTool · FileWriteTool · GlobTool · GrepTool · WebFetchTool · BraveSearchTool
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Architecture:
     Chaque outil = une fonction pure tool_<name>() + son schéma JSON Schema.
@@ -797,7 +797,7 @@ def tool_web_fetch(url: str, max_chars: int = MAX_FETCH_CHARS) -> ToolResult:
         current_host = host_hdr
         for _hop in range(MAX_FETCH_REDIRECTS + 1):
             headers = {
-                "User-Agent": "NODUS-Agent/1.0 (Temple IAM)",
+                "User-Agent": "NODUS-Agent/1.0 (+https://github.com/Rua987/nodus-gpu-engine)",
                 "Host": current_host,
             }
             resp = requests.get(

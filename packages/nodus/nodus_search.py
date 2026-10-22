@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS SEARCH
+🏛️ NODUS SEARCH
 ⚡ AMPLIFICATION : transformer le vérificateur en signal de recherche
 🔥 pass@1 → pass@k — récolter ce que le modèle réussit PARFOIS, certifié au sol
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 L'idée (le seul amplificateur qui marche vraiment) :
     Un modèle a un pass@1 (réussir du 1er coup) et un pass@k (≥1 essai sur k

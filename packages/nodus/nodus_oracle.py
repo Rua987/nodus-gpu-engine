@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS ORACLE
+🏛️ NODUS ORACLE
 ⚡ Vérification SÉMANTIQUE : des tests avec des DENTS, pas du théâtre
 🔥 « Les tests passent » est gameable ; un test qui ne peut JAMAIS échouer ne prouve RIEN
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Le problème (la frontière butée toute la session) :
     `verify_commands` re-lance les tests et exige exit 0. Mais un modèle peut

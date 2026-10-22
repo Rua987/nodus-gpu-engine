@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS PERCEPTUAL ORACLE
+🏛️ NODUS PERCEPTUAL ORACLE
 ⚡ Vérification du MÉDIA : une image rendue est-elle la bonne — au sol ?
 🔥 Même épistémologie que le mutation testing : un seuil ne certifie que s'il
    REJETTE une image fausse. On perturbe la référence ; la comparaison DOIT chuter.
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Le problème (frontière du média) :
     L'agent rend une image (Blender, ffmpeg…). `verify` prouve que le fichier

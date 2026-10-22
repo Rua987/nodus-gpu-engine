@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - Tests anti-SSRF par redirection (nodus_tools.tool_web_fetch)
+🏛️ Tests anti-SSRF par redirection (nodus_tools.tool_web_fetch)
 ⚡ GAP : la garde _is_blocked_url ne validait QUE l'URL initiale. Avec
    allow_redirects=True, un serveur public renvoyant 30x vers
    http://169.254.169.254/ (métadonnées cloud) ou http://127.0.0.1/ était

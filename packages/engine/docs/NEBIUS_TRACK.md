@@ -17,7 +17,7 @@ applicative DSL down to GPU resource management.
 - **Nemotron** (via **Nebius Token Factory**, OpenAI-compatible endpoint),
   **tier-routed** by `nge/router.py`: Ultra 550b for planning/orchestration,
   Super 120b for slot-fill/triage, Nano 30b for fast telemetry checks.
-- **temple-iam-gpu-agents** is repurposed as the **infrastructure arm**:
+- The earlier **GPU agents** project is repurposed as the **infrastructure arm**:
   provision / allocate / monitor / release a fleet of **Nebius cloud GPUs**.
   The orchestrator runs a **feedback loop** — when a node throttles or drops
   below an efficiency floor, the engine re-provisions and migrates that shard

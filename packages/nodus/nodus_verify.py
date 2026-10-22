@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS VERIFY
+🏛️ NODUS VERIFY
 ⚡ Vérification de POST-CONDITION : la réalité, pas la promesse
 🔥 Le modèle prétend "j'ai écrit le fichier" → on VÉRIFIE qu'il existe
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Idée :
     Tant que NODUS fait confiance à la CLAIM du modèle, un modèle faible ou

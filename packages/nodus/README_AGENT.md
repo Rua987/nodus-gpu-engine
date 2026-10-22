@@ -310,4 +310,4 @@ Couverture : les 22 modules cœur de l'agent sont maintenus à **100%**
 
 ---
 
-**🏛️ Plus Ultra! DATTEBAYO! ⚡** — Copyright © 2024 Temple IAM
+**🏛️ Plus Ultra! DATTEBAYO! ⚡** — Copyright © 2024 Rua987

@@ -49,7 +49,7 @@ Token Factory        ──▶  isolated exec + capability jail [ execution   ]
 | Path | What |
 |------|------|
 | [`packages/engine/`](packages/engine/) | **The project.** All new code (`nge`): Nebius backend, tier router, GPU fleet + Token Factory sandbox layers, capability jail, orchestrator, demo. |
-| [`packages/nodus/`](packages/nodus/) | **Vendored, unmodified** snapshot of <https://github.com/Rua987/nodus> — the Nodus runtime (ReAct executor, `bridge/`, backends, MCP). The `nebius:` backend is added by a reversible monkey-patch, never an edit. See [`docs/VENDORING.md`](docs/VENDORING.md). |
+| [`packages/nodus/`](packages/nodus/) | **Vendored** snapshot (code unmodified) of <https://github.com/Rua987/nodus> — the Nodus runtime (ReAct executor, `bridge/`, backends, MCP). The `nebius:` backend is added by a reversible monkey-patch, never an edit. See [`docs/VENDORING.md`](docs/VENDORING.md). |
 
 
 The auto-fix loop's verification rules each come from a live run that broke without them — including a patch that repaired its target test while breaking 28 others, twelve of them path-security checks. The evidence is in [`docs/FIX_LOOP.md`](docs/FIX_LOOP.md), and
@@ -135,6 +135,6 @@ LLM benches require `--i-know-cost`.
 ## License
 
 MIT — see [`LICENSE`](LICENSE). The vendored `packages/nodus/` subtree is a snapshot of
-[Rua987/nodus](https://github.com/Rua987/nodus), also MIT (Copyright (c) 2024 Temple IAM), with its own
+[Rua987/nodus](https://github.com/Rua987/nodus), also MIT (Copyright (c) 2024 Rua987), with its own
 [`packages/nodus/LICENSE`](packages/nodus/LICENSE). (That note used to sit at the end of `LICENSE`,
 which stopped GitHub from recognising the file as MIT.)

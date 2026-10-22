@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - Tests nodus_agent.py
+🏛️ Tests nodus_agent.py
 ⚡ Coverage target: 100%
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 """
 
 import os

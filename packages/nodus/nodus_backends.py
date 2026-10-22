@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS BACKENDS
+🏛️ NODUS BACKENDS
 ⚡ Multi-backend : Ollama (local) · DeepSeek · Anthropic (Claude)
 🔥 Même boucle ReAct, modèle local OU API capable
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 SÉCURITÉ : les clés API ne sont JAMAIS hardcodées ni passées en clair.
     Lecture depuis .{provider}_api_key (fichier) ou variable d'environnement.
@@ -263,7 +263,7 @@ def _chat_openrouter(messages: list, model: str, tools: Optional[list]) -> dict:
         )
     real_model = _openrouter_model_id(model)
     extra_headers = {
-        "HTTP-Referer": "https://temple-iam.local",
+        "HTTP-Referer": "https://github.com/Rua987/nodus-gpu-engine",
         "X-Title": "NODUS Agent",
     }
     return _chat_openai_compatible(

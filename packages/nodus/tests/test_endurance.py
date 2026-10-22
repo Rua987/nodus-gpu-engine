@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - Tests d'ENDURANCE (persistance sur tâche longue)
+🏛️ Tests d'ENDURANCE (persistance sur tâche longue)
 ⚡ Garantie anti-régression : l'agent ne baille JAMAIS en cours de route
 🔥 Déterministe — modèle scripté qui tente d'abandonner, outils & verify réels
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 La persistance est une propriété de la BOUCLE. On la teste sans modèle réel :
 _chat est mocké pour simuler un modèle qui essaie d'abandonner (narration,

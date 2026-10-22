@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS REFLECT
+🏛️ NODUS REFLECT
 ⚡ Auto-amélioration DÉTERMINISTE : analyse la trace, pas l'introspection LLM
 🔥 Erreurs répétées · max_rounds · shortcuts → leçons actionnables
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Architecture:
     Méta-cognition par règles pures sur la trace d'exécution.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS MCP CLIENT
+🏛️ NODUS MCP CLIENT
 ⚡ Registre multi-serveurs MCP : namespacing anti-shadow, pin anti-rug-pull,
    scan anti-poisoning sur les descriptions d'outils.
 🔥 P3 : brancher de VRAIS serveurs MCP (stdio, SDK mcp 1.x).

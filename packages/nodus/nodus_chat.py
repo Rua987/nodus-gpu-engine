@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS CHAT
+🏛️ NODUS CHAT
 ⚡ REPL interactif au-dessus de la boucle ReAct NODUS
 🔥 Tape une tâche · NODUS l'exécute · garde le contexte · recommence
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Architecture:
     chat_loop()        → boucle REPL (I/O injectable pour les tests)

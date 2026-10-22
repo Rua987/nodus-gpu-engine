@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - Tests nodus_tools.py
+🏛️ Tests nodus_tools.py
 ⚡ Coverage target: 100%
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 """
 
 import socket
@@ -1535,8 +1535,8 @@ def _brave_ok(results=None):
     if results is None:
         results = [
             {
-                "title": "Temple IAM",
-                "url": "https://temple-iam.com",
+                "title": "Example Corp",
+                "url": "https://example.com",
                 "description": "Site officiel",
             }
         ]
@@ -1549,10 +1549,10 @@ def _brave_ok(results=None):
 class TestToolBraveSearch:
     def test_returns_formatted_results(self):
         with patch("nodus_tools.requests.get", return_value=_brave_ok()):
-            r = tool_brave_search("Temple IAM", api_key="fake-key")
+            r = tool_brave_search("Example Corp", api_key="fake-key")
         assert r.success is True
-        assert "Temple IAM" in r.output
-        assert "https://temple-iam.com" in r.output
+        assert "Example Corp" in r.output
+        assert "https://example.com" in r.output
         assert "Site officiel" in r.output
 
     def test_multiple_results_numbered(self):

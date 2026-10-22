@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS POLICY
+🏛️ NODUS POLICY
 ⚡ Régime de comportement ADAPTÉ AU BACKEND : local lâche, cloud serré
 🔥 Le faible boucle par besoin (gratuit, on tolère) ; le fort boucle par
    évitement de décision (payant, on l'INTERDIT)
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Idée (analogie cerveau/main de l'utilisateur, poussée à sa conclusion) :
     Un modèle LOCAL (Ollama) est faible : il relit parce qu'il perd le fil,

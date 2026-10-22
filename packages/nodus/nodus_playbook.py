@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS PLAYBOOK
+🏛️ NODUS PLAYBOOK
 ⚡ Mémoire de CHEMINS : retenir la recette qui a marché, la rejouer
 🔥 Tâche réussie → chemin distillé → injecté sur les tâches similaires
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Idée (vision "il apprend et devient plus efficace") :
     La réflexion apprend des ÉCHECS. Le playbook, lui, capitalise les

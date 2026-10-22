@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS AGENT
+🏛️ NODUS AGENT
 ⚡ ReAct loop avec outils (port de Claude Code) sur Ollama
 🔥 Think → Act (tool) → Observe → Think → … → Answer
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Usage rapide:
     from nodus_agent import run_agent

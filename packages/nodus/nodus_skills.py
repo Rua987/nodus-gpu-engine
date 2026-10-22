@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏛️ TEMPLE IAM - NODUS SKILLS
+🏛️ NODUS SKILLS
 ⚡ Compétences TRANSFÉRÉES : le maître (Claude) méta-code NODUS de l'intérieur
 🔥 Savoir curé, autoritaire, présent dès le 1er tour — pas appris après échec
 
-Copyright © 2024 Temple IAM - All Rights Reserved
+Copyright © 2024 Rua987 - MIT License
 
 Idée :
     La réflexion (nodus_reflect) apprend LENTEMENT des échecs observés.
