@@ -5,10 +5,10 @@ No install, no key, no network. Open a ready workspace:
 **[Open in GitHub Codespaces](https://codespaces.new/Rua987/nodus-gpu-engine?quickstart=1)**
 (free with any GitHub account; the engine is installed when the workspace opens, about a minute)
 
-Then, in the workspace's terminal:
+Then, in the workspace's terminal (it opens in `packages/engine`; the first line makes sure of it):
 
 ```bash
-cd packages/engine
+cd /workspaces/nodus-gpu-engine/packages/engine
 python -m pytest -q                                                   # the test suite, about 30 s
 python -m nge.demo_nebius --mock --watch --watch-delay 1.0 --heuristic-plan
 python -m http.server 8000 --directory out                            # to read the report
@@ -19,7 +19,7 @@ python -m http.server 8000 --directory out                            # to read 
    suite passes again. Expected: **2 of 3 failures fixed and verified** (the third has no canned patch,
    and the engine says so).
 2. The last command serves the reports; a browser tab opens on port 8000 (or use the *Ports* tab).
-   Click the newest `report_*.html`: the control room of the run you just made.
+   Click the newest `report_*.html` (the `.html`, not the `.md`): the control room of the run you just made.
 
 ## The real runs
 

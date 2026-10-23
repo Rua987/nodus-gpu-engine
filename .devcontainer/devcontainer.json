@@ -9,6 +9,10 @@
     "8000": { "label": "Control room reports", "onAutoForward": "openBrowser" }
   },
   "customizations": {
-    "codespaces": { "openFiles": ["TRY_IT.md"] }
+    "codespaces": { "openFiles": ["TRY_IT.md"] },
+    "vscode": {
+      // new terminals start where every command in TRY_IT.md runs
+      "settings": { "terminal.integrated.cwd": "${containerWorkspaceFolder}/packages/engine" }
+    }
   }
 }
