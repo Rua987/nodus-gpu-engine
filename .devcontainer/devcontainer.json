@@ -1,0 +1,14 @@
+{
+  // One click from the README or Devpost: a browser workspace with the engine
+  // installed. The mock demo needs no key and no network; see TRY_IT.md.
+  "name": "Nodus-GPU Engine (test build)",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install -r packages/engine/requirements.txt",
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": { "label": "Control room reports", "onAutoForward": "openBrowser" }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": ["TRY_IT.md"] }
+  }
+}

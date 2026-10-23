@@ -9,6 +9,8 @@
 
 **Demo video (2 min):** https://youtu.be/g5iLfAx28KY
 
+**Try it in your browser — no install, no key:** [Open in GitHub Codespaces](https://codespaces.new/Rua987/nodus-gpu-engine?quickstart=1), then follow [`TRY_IT.md`](TRY_IT.md) (three commands, about two minutes).
+
 A deterministic local planner decides *what* to do, Nemotron (tier-routed) decides
 the *hard parts*, and a fleet of Nebius GPUs + Token Factory sandboxes actually
 *runs the work* — isolated, monitored, and re-provisioned by the engine itself
